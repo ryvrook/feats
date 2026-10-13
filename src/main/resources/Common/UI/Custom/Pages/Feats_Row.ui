@@ -1,0 +1,70 @@
+$C = "../Common.ui";
+
+@NameStyle = LabelStyle(FontSize: 16, TextColor: #d3d6db, RenderBold: true, VerticalAlignment: Center);
+@DescStyle = LabelStyle(FontSize: 13, TextColor: #96a9be, Wrap: true);
+@TierStyle = LabelStyle(FontSize: 11, TextColor: #cd7f32, RenderUppercase: true, RenderBold: true, HorizontalAlignment: End, VerticalAlignment: Center, LetterSpacing: 1);
+@ProgressStyle = LabelStyle(FontSize: 12, TextColor: #878e9c, VerticalAlignment: Center);
+
+Group {
+  Anchor: (Height: 78, Bottom: 6);
+  Padding: (Full: 8);
+  Background: #000000(0.22);
+  LayoutMode: Left;
+
+  Group #IconBox {
+    Anchor: (Width: 56, Height: 56, Right: 12);
+    LayoutMode: MiddleCenter;
+    Background: #000000(0.3);
+
+    ItemIcon #Icon {
+      Anchor: (Width: 44, Height: 44);
+    }
+  }
+
+  Group {
+    FlexWeight: 1;
+    LayoutMode: Top;
+
+    Group {
+      LayoutMode: Left;
+      Anchor: (Height: 20);
+
+      Label #Name {
+        Style: @NameStyle;
+        FlexWeight: 1;
+      }
+
+      Group #Check {
+        Visible: false;
+        Anchor: (Width: 16, Height: 16, Right: 6);
+        Background: "../Common/IconCheckGreen.png";
+      }
+
+      Label #Tier {
+        Style: @TierStyle;
+        Anchor: (Width: 80);
+      }
+    }
+
+    Label #Desc {
+      Style: @DescStyle;
+      Anchor: (Height: 18, Bottom: 4);
+    }
+
+    Group {
+      LayoutMode: Left;
+      Anchor: (Height: 14);
+
+      $C.@ProgressBar #Bar {
+        Anchor: (Width: 220, Height: 6, Top: 4);
+        Value: 0;
+      }
+
+      Label #Progress {
+        Style: @ProgressStyle;
+        Anchor: (Left: 12);
+        FlexWeight: 1;
+      }
+    }
+  }
+}

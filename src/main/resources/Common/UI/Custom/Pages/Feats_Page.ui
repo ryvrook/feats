@@ -1,0 +1,91 @@
+$C = "../Common.ui";
+
+@HeaderStyle = LabelStyle(FontSize: 13, TextColor: #96a9be, RenderUppercase: true, RenderBold: true, LetterSpacing: 0.5);
+@ValueStyle = LabelStyle(FontSize: 20, TextColor: #d3d6db, RenderBold: true, FontName: "Secondary");
+@MutedStyle = LabelStyle(FontSize: 12, TextColor: #878e9c);
+
+$C.@PageOverlay {}
+
+$C.@Container {
+  Anchor: (Width: 1060, Height: 720);
+
+  #Title {
+    Group {
+      $C.@Title {
+        @Text = "Feats";
+      }
+    }
+  }
+
+  #Content {
+    LayoutMode: Left;
+
+    // ---------- Left column: summary + categories ----------
+    Group #Sidebar {
+      Anchor: (Width: 250, Right: 12);
+      LayoutMode: Top;
+
+      Group #Summary {
+        LayoutMode: Top;
+        Padding: (Full: 12);
+        Anchor: (Bottom: 12);
+        Background: (TexturePath: "../Common/ContainerBackgroundSecondary.png", Border: 23);
+
+        Label #PlayerName {
+          Style: @HeaderStyle;
+          Anchor: (Bottom: 6);
+        }
+
+        Label #UnlockedText {
+          Style: @ValueStyle;
+          Anchor: (Bottom: 6);
+        }
+
+        $C.@ProgressBar #TotalBar {
+          Anchor: (Width: 220, Height: 6, Bottom: 8);
+          Value: 0;
+        }
+
+        Label #PointsText {
+          Style: @MutedStyle;
+        }
+      }
+
+      Group #Categories {
+        LayoutMode: TopScrolling;
+        ScrollbarStyle: $C.@TranslucentScrollbarStyle;
+        FlexWeight: 1;
+      }
+    }
+
+    // ---------- Right column: feat list ----------
+    Group #Main {
+      FlexWeight: 1;
+      LayoutMode: Top;
+
+      Group #ListHeader {
+        LayoutMode: Left;
+        Anchor: (Height: 26, Bottom: 6);
+
+        Label #CategoryTitle {
+          Style: (FontSize: 17, TextColor: #d3d6db, RenderBold: true, RenderUppercase: true, VerticalAlignment: Center);
+          FlexWeight: 1;
+        }
+
+        Label #CategoryCount {
+          Style: (...@MutedStyle, VerticalAlignment: Center, HorizontalAlignment: End);
+          Anchor: (Width: 160);
+        }
+      }
+
+      Group #List {
+        FlexWeight: 1;
+        LayoutMode: TopScrolling;
+        ScrollbarStyle: $C.@DefaultScrollbarStyle;
+        Padding: (Right: 8);
+      }
+    }
+  }
+}
+
+$C.@BackButton {}
