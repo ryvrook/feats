@@ -62,6 +62,22 @@ public final class FeatsTracker {
     private final Map<UUID, List<String>> sharedNotice = new ConcurrentHashMap<>();
     /** Hands out the rewards of feats unlocked while the player was offline, see {@link #catchUp}. */
     private volatile Consumer<Unlock> deferredRewards;
+    /**
+     * What the tracker needs to know about each counter key, worked out once per key. The registry never
+     * changes after start, so an entry never goes stale. Bounded like the {@link Classify} memos.
+     */
+    private final Map<String, KeyInfo> keyInfo = new ConcurrentHashMap<>();
+    /** Running kill streaks, in memory only. See {@link #countKill}. */
+    private final KillStreaks streaks = new KillStreaks();
+
+    /** Keys whose info is remembered. Past this a key is looked up each time instead. */
+    static final int KEY_INFO_LIMIT = 16_384;
+
+    /**
+     * Whether a counter is kept at all and which feats read it. Totals are always kept, per id keys only
+     * when a feat watches them or a stats row shows them.
+     */
+    private record KeyInfo(boolean persisted, List<Feat> watchers) {}
 
     /** One unload waiting for its save. A new instance per unload so a late finish never removes a newer one. */
     private record Pending(PlayerProgress progress) {}
@@ -176,12 +192,34 @@ public final class FeatsTracker {
         this.pausePlaytime = pause;
     }
 
-    /** One isEmpty check for nearly every event, a hash lookup only while someone is paused. */
+    /**
+     * One isEmpty check for nearly every event, a hash lookup only while someone is paused. Time played
+     * and the longest session are wall clock time, so with PausePlaytimeWhenDisabled off they keep
+     * counting for paused players.
+     */
     private boolean gated(UUID uuid, String key) {
         if (paused.isEmpty() || !paused.contains(uuid)) {
             return false;
         }
-        return pausePlaytime || !StatKeys.PLAYTIME.equals(key);
+        return pausePlaytime || !(StatKeys.PLAYTIME.equals(key) || StatKeys.LONGEST_SESSION.equals(key));
+    }
+
+    /** The cached facts about a counter key. One map lookup on the hot path. */
+    private KeyInfo info(String key) {
+        KeyInfo hit = keyInfo.get(key);
+        if (hit != null) {
+            return hit;
+        }
+        List<Feat> watchers = registry.dependingOn(key);
+        KeyInfo fresh = new KeyInfo(!StatKeys.isPerId(key) || !watchers.isEmpty() || StatKeys.isDisplayed(key),
+                watchers);
+        if (keyInfo.size() < KEY_INFO_LIMIT) {
+            KeyInfo raced = keyInfo.putIfAbsent(key, fresh);
+            if (raced != null) {
+                return raced;
+            }
+        }
+        return fresh;
     }
 
     /** Loads (or creates) progress for a player, caching it until {@link #unload}. */
@@ -674,15 +712,22 @@ public final class FeatsTracker {
         if (gated(uuid, key)) {
             return; // Creative mode or a disabled world
         }
-        if (!isPersisted(key)) {
+        KeyInfo info = info(key);
+        if (!info.persisted()) {
             return; // a per item counter no feat or stats row reads
         }
         PlayerProgress progress = loaded.get(uuid);
         if (progress == null) {
             return; // not ready yet, ignore events fired before PlayerReady
         }
-        progress.add(key, amount);
-        evaluate(uuid, progress, registry.dependingOn(key), null, Source.PLAY);
+        List<Feat> unlockedNow;
+        long now;
+        synchronized (progress) {
+            progress.add(key, amount);
+            now = info.watchers().isEmpty() ? 0L : System.currentTimeMillis();
+            unlockedNow = collectUnlocks(progress, info.watchers(), now, null);
+        }
+        finish(uuid, progress, unlockedNow, now, null, Source.PLAY);
     }
 
     /**
@@ -690,24 +735,78 @@ public final class FeatsTracker {
      * and checks the feats that read it. Paused like {@link #increment}.
      */
     public void raiseTo(UUID uuid, String key, long value) {
-        if (uuid == null || gated(uuid, key) || !isPersisted(key)) {
+        if (uuid == null || gated(uuid, key)) {
+            return;
+        }
+        KeyInfo info = info(key);
+        if (!info.persisted()) {
             return;
         }
         PlayerProgress progress = loaded.get(uuid);
-        if (progress != null && progress.raiseTo(key, value)) {
-            evaluate(uuid, progress, registry.dependingOn(key), null, Source.PLAY);
+        if (progress == null) {
+            return;
         }
+        List<Feat> unlockedNow;
+        long now;
+        synchronized (progress) {
+            if (!progress.raiseTo(key, value)) {
+                return;
+            }
+            now = info.watchers().isEmpty() ? 0L : System.currentTimeMillis();
+            unlockedNow = collectUnlocks(progress, info.watchers(), now, null);
+        }
+        finish(uuid, progress, unlockedNow, now, null, Source.PLAY);
     }
 
+    /**
+     * Adds the same amount to every key of one event, such as the five keys of one ore block, then checks
+     * the feats that read any of them. The counters move under one hold of the player's monitor and the
+     * feats are checked in the same pass, so the work is one map lookup per key and one lock per event.
+     * The end state is the same as calling {@link #increment} once per key.
+     */
     public void incrementAll(UUID uuid, List<String> keys, long amount) {
-        for (String key : keys) {
-            increment(uuid, key, amount);
+        if (amount <= 0 || uuid == null || keys.isEmpty()) {
+            return;
         }
+        PlayerProgress progress = loaded.get(uuid);
+        if (progress == null) {
+            return; // not ready yet, ignore events fired before PlayerReady
+        }
+        boolean anyPaused = !paused.isEmpty() && paused.contains(uuid);
+        List<Feat> unlockedNow = null;
+        long now = 0L;
+        synchronized (progress) {
+            int n = keys.size();
+            for (int i = 0; i < n; i++) {
+                String key = keys.get(i);
+                if (anyPaused && gated(uuid, key)) {
+                    continue; // Creative mode or a disabled world
+                }
+                KeyInfo info = info(key);
+                if (info.persisted()) {
+                    progress.add(key, amount);
+                }
+            }
+            for (int i = 0; i < n; i++) {
+                String key = keys.get(i);
+                if (anyPaused && gated(uuid, key)) {
+                    continue;
+                }
+                KeyInfo info = info(key);
+                if (info.persisted() && !info.watchers().isEmpty()) {
+                    if (now == 0L) {
+                        now = System.currentTimeMillis();
+                    }
+                    unlockedNow = collectUnlocks(progress, info.watchers(), now, unlockedNow);
+                }
+            }
+        }
+        finish(uuid, progress, unlockedNow, now, null, Source.PLAY);
     }
 
     /** True when at least one feat is defined against the given counter key. */
     public boolean isWatched(String key) {
-        return !registry.dependingOn(key).isEmpty();
+        return !info(key).watchers().isEmpty();
     }
 
     /**
@@ -715,7 +814,34 @@ public final class FeatsTracker {
      * are only kept when a feat watches them or a stats row shows them.
      */
     public boolean isPersisted(String key) {
-        return !StatKeys.isPerId(key) || isWatched(key) || StatKeys.isDisplayed(key);
+        return info(key).persisted();
+    }
+
+    // ---- kill streaks ----------------------------------------------------
+
+    /** The running kill streaks, so the plugin can forget a player who stayed away. */
+    public KillStreaks killStreaks() {
+        return streaks;
+    }
+
+    /**
+     * Counts one kill towards the player's running streak and raises their best streak to match. Kills
+     * and deaths both follow the pause, so while a player is in Creative mode or a disabled world their
+     * streak neither grows nor ends. A player who is not loaded keeps their streak as it is.
+     */
+    public void countKill(UUID uuid) {
+        if (uuid == null || gated(uuid, StatKeys.KILL_STREAK) || !loaded.containsKey(uuid)) {
+            return;
+        }
+        raiseTo(uuid, StatKeys.KILL_STREAK, streaks.kill(uuid));
+    }
+
+    /** Ends the player's running kill streak unless they are paused, see {@link #countKill}. Their best streak stays. */
+    public void countDeath(UUID uuid) {
+        if (uuid == null || gated(uuid, StatKeys.KILL_STREAK)) {
+            return;
+        }
+        streaks.died(uuid);
     }
 
     /** Adds to a bookkeeping counter that no feat reads, without evaluating anything. */
@@ -759,11 +885,47 @@ public final class FeatsTracker {
         if (progress == null) {
             return;
         }
-        if (progress.raiseTo(prefix + id, 1)) {
-            evaluate(uuid, progress, registry.dependingOn(prefix + id), null, Source.PLAY);
+        String key = prefix + id;
+        if (progress.raiseTo(key, 1)) {
+            evaluate(uuid, progress, registry.dependingOn(key), null, Source.PLAY);
             progress.add(totalKey, 1);
             evaluate(uuid, progress, registry.dependingOn(totalKey), null, Source.PLAY);
         }
+    }
+
+    /**
+     * Unlocks every candidate that is now satisfied and adds it to {@code into}, which is created on the
+     * first unlock. Call it while holding the progress monitor so the checks and the unlocks see one
+     * consistent set of counters.
+     */
+    private static List<Feat> collectUnlocks(PlayerProgress progress, List<Feat> candidates, long now,
+                                             List<Feat> into) {
+        for (int i = 0, n = candidates.size(); i < n; i++) {
+            Feat feat = candidates.get(i);
+            if (progress.isUnlocked(feat.id())) {
+                continue;
+            }
+            if (feat.isSatisfied(progress) && progress.unlock(feat.id(), now)) {
+                if (into == null) {
+                    into = new ArrayList<>(2);
+                }
+                into.add(feat);
+            }
+        }
+        return into;
+    }
+
+    /** Announces fresh unlocks outside the monitor and follows the meta feats they move. */
+    private void finish(UUID uuid, PlayerProgress progress, List<Feat> unlockedNow, long now, Announcements budget,
+                        Source source) {
+        if (unlockedNow == null) {
+            return;
+        }
+        announce(uuid, progress, unlockedNow, now, budget, source);
+        // Meta feats ("unlock N feats") chain off this counter.
+        progress.add(StatKeys.FEATS_UNLOCKED, unlockedNow.size());
+        evaluate(uuid, progress, registry.dependingOn(StatKeys.FEATS_UNLOCKED), budget, source);
+        raiseServerFeats(uuid, progress, unlockedNow, source);
     }
 
     /**
@@ -775,27 +937,12 @@ public final class FeatsTracker {
         if (candidates.isEmpty()) {
             return;
         }
-        List<Feat> newlyUnlocked = null;
         long now = System.currentTimeMillis();
-        for (Feat feat : candidates) {
-            if (progress.isUnlocked(feat.id())) {
-                continue;
-            }
-            if (feat.isSatisfied(progress) && progress.unlock(feat.id(), now)) {
-                if (newlyUnlocked == null) {
-                    newlyUnlocked = new ArrayList<>(2);
-                }
-                newlyUnlocked.add(feat);
-            }
+        List<Feat> newlyUnlocked;
+        synchronized (progress) {
+            newlyUnlocked = collectUnlocks(progress, candidates, now, null);
         }
-        if (newlyUnlocked == null) {
-            return;
-        }
-        announce(uuid, progress, newlyUnlocked, now, budget, source);
-        // Meta feats ("unlock N feats") chain off this counter.
-        progress.add(StatKeys.FEATS_UNLOCKED, newlyUnlocked.size());
-        evaluate(uuid, progress, registry.dependingOn(StatKeys.FEATS_UNLOCKED), budget, source);
-        raiseServerFeats(uuid, progress, newlyUnlocked, source);
+        finish(uuid, progress, newlyUnlocked, now, budget, source);
     }
 
     // ---- world milestones and server firsts --------------------------------

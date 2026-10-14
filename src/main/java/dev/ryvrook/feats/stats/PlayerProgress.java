@@ -17,11 +17,15 @@ import java.util.function.Predicate;
 /**
  * Everything Feats remembers about one player, which is raw counters plus unlocked feat ids.
  * Instances are shared between world threads, so all mutation is synchronized.
+ *
+ * <p>Counters are kept as mutable holders rather than boxed longs, so bumping a counter that already
+ * exists allocates nothing. Callers that touch several counters for one event can hold the monitor of
+ * this object around the whole batch, every method here locks on it.
  */
 public final class PlayerProgress {
     private final UUID uuid;
     private String username;
-    private final Map<String, Long> stats = new HashMap<>();
+    private final Map<String, Counter> stats = new HashMap<>();
     private final Map<String, Long> unlocked = new LinkedHashMap<>();
     /**
      * Server milestones this player shares in without having raised them, feat id to when the milestone
@@ -39,6 +43,12 @@ public final class PlayerProgress {
     private String title;
     /** False when the player muted their own toasts, sounds and big titles with /feats notify off. */
     private boolean notify = true;
+    /**
+     * Epoch millis the player's current session began, or 0 when they are not online. Only read back
+     * when Feats reloads while the player stays connected, so a reload does not split their session. A
+     * normal join always starts afresh, which also clears a value left behind by a crash.
+     */
+    private long sessionStart;
     private volatile boolean dirty;
     /** Tells a feat id that the running registry knows. Unlocks of removed or parked feats stay in the file but are not counted. */
     private static volatile java.util.function.Predicate<String> knownFeat = id -> true;
@@ -65,8 +75,18 @@ public final class PlayerProgress {
         }
     }
 
+    /** One counter value. Only touched under the progress monitor. */
+    private static final class Counter {
+        long value;
+
+        Counter(long value) {
+            this.value = value;
+        }
+    }
+
     public synchronized long get(String key) {
-        return stats.getOrDefault(key, 0L);
+        Counter c = stats.get(key);
+        return c == null ? 0L : c.value;
     }
 
     /** Adds to a counter and returns the new value. */
@@ -74,16 +94,26 @@ public final class PlayerProgress {
         if (amount == 0) {
             return get(key);
         }
-        long value = stats.merge(key, amount, Long::sum);
+        Counter c = stats.get(key);
         dirty = true;
-        return value;
+        if (c == null) {
+            stats.put(key, new Counter(amount));
+            return amount;
+        }
+        c.value += amount;
+        return c.value;
     }
 
     /** Raises a counter to at least {@code value} and returns true if it changed. */
     public synchronized boolean raiseTo(String key, long value) {
-        long current = get(key);
+        Counter c = stats.get(key);
+        long current = c == null ? 0L : c.value;
         if (value > current) {
-            stats.put(key, value);
+            if (c == null) {
+                stats.put(key, new Counter(value));
+            } else {
+                c.value = value;
+            }
             dirty = true;
             return true;
         }
@@ -112,9 +142,9 @@ public final class PlayerProgress {
         if (unlocked.remove(featId) == null) {
             return false;
         }
-        long count = stats.getOrDefault(StatKeys.FEATS_UNLOCKED, 0L);
-        if (count > 0 && !serverFeat.test(featId)) {
-            stats.put(StatKeys.FEATS_UNLOCKED, count - 1);
+        Counter count = stats.get(StatKeys.FEATS_UNLOCKED);
+        if (count != null && count.value > 0 && !serverFeat.test(featId)) {
+            count.value--;
         }
         if (featId.equals(title)) {
             title = null;
@@ -125,7 +155,12 @@ public final class PlayerProgress {
 
     /** Sets a counter to an exact value. Negative values become zero. */
     public synchronized void set(String key, long value) {
-        stats.put(key, Math.max(0L, value));
+        Counter c = stats.get(key);
+        if (c == null) {
+            stats.put(key, new Counter(Math.max(0L, value)));
+        } else {
+            c.value = Math.max(0L, value);
+        }
         dirty = true;
     }
 
@@ -139,6 +174,20 @@ public final class PlayerProgress {
         String next = featId == null || featId.isEmpty() ? null : featId;
         if (!Objects.equals(next, title)) {
             title = next;
+            dirty = true;
+        }
+    }
+
+    /** When the current session began in epoch millis, 0 when none is recorded. */
+    public synchronized long sessionStart() {
+        return sessionStart;
+    }
+
+    /** Records when the current session began, 0 to clear it once the player leaves. */
+    public synchronized void setSessionStart(long epochMillis) {
+        long next = Math.max(0L, epochMillis);
+        if (next != sessionStart) {
+            sessionStart = next;
             dirty = true;
         }
     }
@@ -259,7 +308,9 @@ public final class PlayerProgress {
     }
 
     public synchronized Map<String, Long> statsSnapshot() {
-        return Collections.unmodifiableMap(new HashMap<>(stats));
+        Map<String, Long> copy = new HashMap<>(Math.max(16, stats.size() * 2));
+        stats.forEach((key, c) -> copy.put(key, c.value));
+        return Collections.unmodifiableMap(copy);
     }
 
     public synchronized Map<String, Long> unlockedSnapshot() {
@@ -314,7 +365,7 @@ public final class PlayerProgress {
 
     public synchronized Document toDocument() {
         Document statsDoc = new Document();
-        stats.forEach(statsDoc::append);
+        stats.forEach((key, c) -> statsDoc.append(key, c.value));
         Document unlockedDoc = new Document();
         unlocked.forEach(unlockedDoc::append);
         Document doc = new Document()
@@ -337,6 +388,9 @@ public final class PlayerProgress {
         if (title != null) {
             doc.append("Title", title);
         }
+        if (sessionStart > 0) {
+            doc.append("SessionStart", sessionStart);
+        }
         if (!notify) {
             doc.append("Notify", false);
         }
@@ -349,7 +403,7 @@ public final class PlayerProgress {
         if (statsObj instanceof Document statsDoc) {
             for (Map.Entry<String, Object> e : statsDoc.entrySet()) {
                 if (e.getValue() instanceof Number n) {
-                    progress.stats.put(e.getKey(), n.longValue());
+                    progress.stats.put(e.getKey(), new Counter(n.longValue()));
                 }
             }
         }
@@ -384,6 +438,9 @@ public final class PlayerProgress {
         }
         if (doc.get("Title") instanceof String t && !t.isEmpty()) {
             progress.title = t;
+        }
+        if (doc.get("SessionStart") instanceof Number n && n.longValue() > 0) {
+            progress.sessionStart = n.longValue();
         }
         if (doc.get("Notify") instanceof Boolean b) {
             progress.notify = b;

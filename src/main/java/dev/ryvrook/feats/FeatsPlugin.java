@@ -9,7 +9,6 @@ import com.hypixel.hytale.component.system.EntityEventSystem;
 import com.hypixel.hytale.event.EventPriority;
 import com.hypixel.hytale.event.IEventDispatcher;
 import com.hypixel.hytale.protocol.GameMode;
-import com.hypixel.hytale.math.vector.Transform;
 import com.hypixel.hytale.server.core.HytaleServer;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
@@ -51,18 +50,23 @@ import dev.ryvrook.feats.systems.InteractionSystem;
 import dev.ryvrook.feats.systems.InventorySystem;
 import dev.ryvrook.feats.systems.PickupSystem;
 import dev.ryvrook.feats.systems.PlaceBlockSystem;
+import dev.ryvrook.feats.systems.TameSystem;
 import dev.ryvrook.feats.systems.UseBlockSystem;
 import dev.ryvrook.feats.systems.ZoneDiscoverySystem;
 import dev.ryvrook.feats.track.FeatsTracker;
 import dev.ryvrook.feats.track.MemoryTracker;
 import dev.ryvrook.feats.track.PlacedBlocks;
+import dev.ryvrook.feats.track.PlayerSampler;
 import dev.ryvrook.feats.track.PortalTracker;
 import dev.ryvrook.feats.track.RecentDrops;
 import dev.ryvrook.feats.track.RecentPlacements;
+import dev.ryvrook.feats.track.SessionClock;
 import dev.ryvrook.feats.track.UnlockNotifier;
-import org.joml.Vector3d;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -87,10 +91,11 @@ import java.util.logging.Level;
  * folder, so it works in singleplayer worlds and on dedicated servers alike.
  */
 public final class FeatsPlugin extends JavaPlugin {
-    private static final double MAX_STEP_PER_SECOND = 64.0; // ignore teleports and world changes
     private static final long CHAT_GAP_MILLIS = 5_000L; // at most one counted chat message per 5 seconds
     private static final long OFFLINE_KEEP_MILLIS = 60L * 60 * 1000; // anti farming memory outlives a relog by an hour
     private static final long IO_DRAIN_SECONDS = 10L;
+    /** How often the running session of everyone online is written to the longest session record. */
+    private static final int SESSION_RECORD_TICKS = 300;
 
     private final Config<FeatsConfig> config;
     private FeatRegistry registry;
@@ -106,8 +111,11 @@ public final class FeatsPlugin extends JavaPlugin {
     /** When each player left. Their placement ring, drops and chat timer are dropped an hour later. */
     private final Map<UUID, Long> offlineSince = new ConcurrentHashMap<>();
 
-    private final Map<UUID, Vector3d> lastPositions = new ConcurrentHashMap<>();
-    private final Map<UUID, Double> distanceRemainder = new ConcurrentHashMap<>();
+    /** Session start times for the longest session record. */
+    private final SessionClock sessions = new SessionClock();
+    /** The once a second distance, world bounds and Memories pass, one task per world. */
+    private PlayerSampler sampler;
+    private int ticks;
     private ScheduledFuture<?> ticker;
     private ScheduledFuture<?> autosave;
     private LeaderboardExporter exporter;
@@ -394,6 +402,11 @@ public final class FeatsPlugin extends JavaPlugin {
         ecs.registerSystem(new DamageSystem(tracker));
         ecs.registerSystem(new DeathSystem(tracker));
         try {
+            ecs.registerSystem(new TameSystem(tracker));
+        } catch (LinkageError | RuntimeException e) {
+            getLogger().at(Level.WARNING).withCause(e).log("Feats taming tracking is not supported on this server");
+        }
+        try {
             ecs.registerSystem(new GameModeSystem());
         } catch (LinkageError | RuntimeException e) {
             getLogger().at(Level.WARNING).withCause(e).log("Feats cannot see game mode changes on this server");
@@ -417,6 +430,7 @@ public final class FeatsPlugin extends JavaPlugin {
             getLogger().at(Level.WARNING).withCause(e).log("Feats portal tracking is not supported on this server");
         }
         memories = new MemoryTracker(tracker, getLogger());
+        sampler = new PlayerSampler(tracker, memories, getLogger());
         try {
             flags = new FlagWatcher(tracker, useBlocks, getLogger());
         } catch (LinkageError | RuntimeException e) {
@@ -491,6 +505,7 @@ public final class FeatsPlugin extends JavaPlugin {
         }
         exporting = false;
         if (tracker != null) {
+            recordSessions(System.currentTimeMillis()); // the record so far, and the start stays in the file for a reload
             tracker.saveAll();
         }
         if (world != null && world.isDirty()) {
@@ -571,12 +586,15 @@ public final class FeatsPlugin extends JavaPlugin {
         readScope(uuid, ref, store);
         boolean firstReadyThisSession = !tracker.isLoaded(uuid);
         PlayerProgress progress = tracker.load(uuid, playerRef.getUsername());
-        lastPositions.remove(uuid);
+        sampler.resetPosition(uuid);
         // The player is in the world now, so feats already met when their file loaded can announce themselves.
         tracker.catchUp(uuid);
         if (!firstReadyThisSession) {
             return; // PlayerReady fires again on world changes, so only the first one counts
         }
+        long joinedAt = System.currentTimeMillis();
+        sessions.start(uuid, joinedAt);
+        progress.setSessionStart(joinedAt); // read back only if Feats reloads during this session
         tracker.increment(uuid, StatKeys.JOINS, 1);
         if (config().welcomeHint()) {
             int unlocked = progress.unlockedCount();
@@ -673,7 +691,10 @@ public final class FeatsPlugin extends JavaPlugin {
             }
             for (PlayerRef ref : universe.getPlayers()) {
                 try {
-                    tracker.load(ref.getUuid(), ref.getUsername());
+                    PlayerProgress progress = tracker.load(ref.getUuid(), ref.getUsername());
+                    // Carry on the session the old instance saved, so a reload does not split it.
+                    progress.setSessionStart(sessions.resume(ref.getUuid(), progress.sessionStart(),
+                            System.currentTimeMillis()));
                     tracker.catchUp(ref.getUuid()); // already in a world, so toasts can go out straight away
                     World world = ref.getWorldUuid() == null ? null : universe.getWorld(ref.getWorldUuid());
                     if (world != null) {
@@ -700,14 +721,18 @@ public final class FeatsPlugin extends JavaPlugin {
             return;
         }
         UUID uuid = playerRef.getUuid();
+        tracker.raiseTo(uuid, StatKeys.LONGEST_SESSION, sessions.end(uuid, System.currentTimeMillis()));
+        PlayerProgress leaving = tracker.loadedProgress(uuid);
+        if (leaving != null) {
+            leaving.setSessionStart(0); // the session is over, the leaving save clears it from the file
+        }
         tracker.unload(uuid);
         creative.remove(uuid);
         worldOf.remove(uuid);
         tracker.setPaused(uuid, false);
-        lastPositions.remove(uuid);
-        distanceRemainder.remove(uuid);
+        sampler.forget(uuid);
         placements.forget(uuid);
-        // The placement ring, the drop memory and the chat timer survive a relog, see pruneOffline.
+        // The placement ring, the drop memory, the kill streak and the chat timer survive a relog, see pruneOffline.
         offlineSince.put(uuid, System.currentTimeMillis());
     }
 
@@ -782,44 +807,67 @@ public final class FeatsPlugin extends JavaPlugin {
 
     // ---- periodic work ---------------------------------------------------
 
+    /**
+     * Runs once a second on the engine scheduler. Playtime is counted here. Everything that reads the
+     * player entity is handed to the world thread, one task per world for all of its players, rather than
+     * one task per player.
+     */
     private void tick() {
         try {
             boolean trackDistance = config().trackDistance();
+            boolean recordSessions = ++ticks % SESSION_RECORD_TICKS == 0;
+            long now = System.currentTimeMillis();
+            Map<World, List<PlayerRef>> byWorld = null;
             for (PlayerRef ref : Universe.get().getPlayers()) {
                 UUID uuid = ref.getUuid();
                 if (!tracker.isLoaded(uuid)) {
                     continue;
                 }
                 tracker.increment(uuid, StatKeys.PLAYTIME, 1);
-                if (trackDistance) {
-                    trackDistance(ref, uuid);
+                if (recordSessions) {
+                    tracker.raiseTo(uuid, StatKeys.LONGEST_SESSION, sessions.seconds(uuid, now));
                 }
-                memories.poll(ref);
+                World world = worldOf(ref);
+                if (world != null) {
+                    if (byWorld == null) {
+                        byWorld = new HashMap<>(4);
+                    }
+                    byWorld.computeIfAbsent(world, w -> new ArrayList<>()).add(ref);
+                }
+            }
+            if (byWorld != null) {
+                for (Map.Entry<World, List<PlayerRef>> e : byWorld.entrySet()) {
+                    List<PlayerRef> players = e.getValue();
+                    try {
+                        e.getKey().execute(() -> sampler.sampleWorld(players, trackDistance));
+                    } catch (RuntimeException rejected) {
+                        // the world is closing, its players are sampled again once they are elsewhere
+                    }
+                }
             }
         } catch (Exception e) {
             getLogger().at(Level.WARNING).withCause(e).log("Feats tick failed");
         }
     }
 
-    private void trackDistance(PlayerRef ref, UUID uuid) {
-        Transform transform = ref.getTransform();
-        if (transform == null || transform.getPosition() == null) {
-            return;
+    /** The world a player's entity lives in, or null while they are between worlds. */
+    private static World worldOf(PlayerRef ref) {
+        try {
+            Ref<EntityStore> entity = ref.getReference();
+            EntityStore store = entity != null ? entity.getStore().getExternalData() : null;
+            return store != null ? store.getWorld() : null;
+        } catch (RuntimeException e) {
+            return null;
         }
-        Vector3d now = new Vector3d(transform.getPosition());
-        Vector3d last = lastPositions.put(uuid, now);
-        if (last == null) {
-            return;
-        }
-        double step = last.distance(now);
-        if (step < 0.25 || step > MAX_STEP_PER_SECOND || Double.isNaN(step)) {
-            return;
-        }
-        double total = distanceRemainder.merge(uuid, step, Double::sum);
-        long whole = (long) Math.floor(total);
-        if (whole >= 1) {
-            distanceRemainder.put(uuid, total - whole);
-            tracker.increment(uuid, StatKeys.DISTANCE, whole);
+    }
+
+    /** Raises the longest session record of everyone online to their running session. */
+    private void recordSessions(long now) {
+        for (PlayerProgress progress : tracker.loadedPlayers()) {
+            UUID uuid = progress.uuid();
+            if (sessions.isRunning(uuid)) {
+                tracker.raiseTo(uuid, StatKeys.LONGEST_SESSION, sessions.seconds(uuid, now));
+            }
         }
     }
 
@@ -882,6 +930,7 @@ public final class FeatsPlugin extends JavaPlugin {
             UUID uuid = e.getKey();
             placedBlocks.forget(uuid);
             drops.forget(uuid);
+            tracker.killStreaks().forget(uuid);
             lastChatAt.remove(uuid);
             return true;
         });

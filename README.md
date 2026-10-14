@@ -2,7 +2,7 @@
 
 Achievements and lifetime statistics for Hytale servers.
 
-Feats is a server plugin that adds 218 achievements, called feats, across nine categories. Each feat has a
+Feats is a server plugin that adds 327 achievements, called feats, across nine categories. Each feat has a
 rarity tier worth points, and unlocks arrive as in game toasts with a sound and a chat line. The `/feats`
 command opens a browser with progress for every feat, a Statistics tab with lifetime totals and a points
 leaderboard. Everything runs on the server, so it works in singleplayer worlds and on dedicated servers, and
@@ -10,12 +10,15 @@ players join with an unmodified client.
 
 ## Features
 
-- **218 feats** with progress bars, from "Break your first block" to "Travel 200 kilometres".
+- **327 feats** with progress bars, from "Break your first block" to "Travel 500 kilometres".
 - **Nine categories**, namely Exploration, Mining, Building, Crafting, Combat, Survival, Nature, Chapter I and Misc.
-- **Four tiers**. Bronze is worth 10 points, Silver 25, Gold 50 and Platinum 100, for 7,870 points in total.
+- **Four tiers**. Bronze is worth 10 points, Silver 25, Gold 50 and Platinum 100, for 15,075 points in total.
 - **Hidden feats** show as `???` until you earn them.
-- **Multi step feats** such as Goblinologist, which asks for one of every kind of goblin.
-- **Meta feats** that unlock at 10, 25, 50 and 100 feats earned.
+- **Multi step feats** such as Goblinologist, which asks for one of every kind of goblin, and Full Net, which
+  asks for 15 different kinds of fish.
+- **Long ladders** that carry every counter on to Platinum, such as 25,000 kills, 500 kilometres travelled
+  and a million blocks broken.
+- **Meta feats** that unlock at 10, 25, 50, 100, 150 and 250 feats earned.
 - **Unlock toasts** using the game's own notification system and the Memories unlock sound, plus a big title in
   the middle of the screen for Platinum feats.
 - **Chat announcements** of Silver and better unlocks to other online players, with a configurable minimum tier.
@@ -43,10 +46,15 @@ Devastated Lands and the Oceans. The zone ladder follows that since 1.3.0. New H
 Sightseer for 2, Cartographer for 3, Pathfinder for 4 and Master Explorer for all 5. The tiers stay Bronze,
 Bronze, Silver, Gold and Platinum. Players who already meet a lower target get the feat on their next join.
 
+Version 1.4.0 adds Circumnavigator at 500 kilometres, Vault Breaker at 2,500 chests and four feats for getting
+around. Sea Legs asks for a kilometre swum, Wingspan for 5 kilometres on a Scrap Glider, Bedrock Bound for
+reaching the bottom of the world and Head in the Clouds for standing at the top.
+
 ## Chapter I
 
-The Chapter I tab holds 80 feats worth 3,075 points for the content that arrived with Hytale 0.7.0. Version
-1.2.0 adds the endgame, from the Ancient Gateway to the Gobliterator on hard mode.
+The Chapter I tab holds 105 feats worth 4,650 points for the content that arrived with Hytale 0.7.0. Version
+1.2.0 adds the endgame, from the Ancient Gateway to the Gobliterator on hard mode, and 1.4.0 carries the
+Chapter I ladders further.
 
 - **Goblins and the Void.** A goblin ladder from Goblin Slayer at 50 defeats up to Goblin Warlord, Goblinologist
   for one of every kind of goblin, Know the Void for every kind of Voidspawn, spiders, Void Spectres, Void
@@ -77,6 +85,52 @@ Memories are a server wide race in Hytale 0.7.0. Once any player hands a Memory 
 can record that one. Solo and in co-op this is fair, but on a busy shared server a player may never reach the
 higher Memory feats such as Living Memory at 100.
 
+## New in 1.4.0
+
+Version 1.4.0 adds 109 personal feats worth 7,205 points and three server firsts. Most of them carry an
+existing ladder on to a new Gold or Platinum step, a handful are sets that ask for one of everything, and a few
+follow counters that are new in this release.
+
+- **Longer ladders.** Most lifetime totals get a further step. Circumnavigator at 500 kilometres, Million Mark
+  at a million blocks broken, Megastructure at a million placed, Assembly Line at 50,000 crafts, Mythic at
+  25,000 defeats, Apocalypse and Immortal at a million damage dealt and taken, Clear Cut and Old Growth for
+  logs, Harvest Moon for crops and Dragon's Hoard at 100,000 items picked up.
+- **Ore and metal.** Every metal gets a second step, from Copper Magnate at 500 copper ore to Adamant Heart at
+  100 adamantite, and Deep Vein asks for 25,000 ore blocks.
+- **Building and crafting.** Larger targets for torches, lanterns, beds, furniture, chests and benches, plus
+  Glazier for glass, Stonemason for stone and brick, Timber Frame for wood and Arborist for saplings. The craft
+  ladders for tools, weapons, armour, bars, meals, potions and furniture each get a top step.
+- **Combat.** Further steps for ranged defeats, undead, Trorks, Outlanders, Scaraks, Feran, golems and spirits
+  and bosses. Rampage asks for 50 defeats without dying, and the hidden Overkill, Untouchable, Gladiator and
+  Warmonger wait for the bold.
+- **Survival.** More sessions, more hours, more deaths, more nights, more meals and more potions. Marathon asks
+  for 8 hours in one session, and two hidden feats wait for anyone who burns to death or dies in lava.
+- **Nature.** Larger targets for logs, crops, harvests, fish, livestock and predators, Tamer for taming an
+  animal and Saddle Up for a kilometre on a mount.
+- **Chapter I.** Goblin Bane, Arachnid Apex and Void Reaver at the top of the defeat ladders, a second step for
+  every ability, more portal worlds, Breach and Deepworks trips, Gobliterator defeats, Runestones, shards,
+  Scraps, silk, Coffer Keys, Kenolite, Void crystal and metal blocks. Speedrunner is hidden and asks for the
+  Gobliterator within 20 minutes of entering The Deepworks.
+- **Misc.** Loudspeaker at 10,000 chat messages, Icon at 150 feats and the hidden Completionist at 250.
+
+The sets ask for one of each.
+
+| Feat | Category | Tier | Asks for |
+|---|---|---|---|
+| Pick Collector | Mining | Gold | A wood, copper, iron, cobalt, thorium and adamantite pickaxe |
+| Copper Kit | Crafting | Bronze | Every piece of copper armour |
+| Cobalt Clad | Crafting | Gold | Every piece of cobalt armour |
+| Thorium Plate | Crafting | Gold | Every piece of thorium armour |
+| Sword Collector | Crafting | Gold | A copper, iron, cobalt, thorium and adamantite sword |
+| Crop Rotation | Nature | Gold | One harvest of each of the 14 crops |
+| Full Net | Nature | Platinum | One catch of each of 15 kinds of fish and shellfish |
+
+Three Platinum server firsts join the World tab. Founder goes to the first player to unlock 100 feats, Warpath
+to the first to defeat 5,000 creatures and Surveyor to the first to discover all 5 zones.
+
+Players who already pass a new target get the feat on their next join. On a world that ran before 1.4.0,
+`/feats admin scan all` credits what the game already recorded.
+
 ## Parked feats
 
 Five feats point at content that ships in the 0.7.0 assets but never appears in a survival world. Mithril,
@@ -100,11 +154,11 @@ Drill, Return to Sender, Shield Breaker, Pickpocketed and Coffer Cracker.
 
 ## World milestones and server firsts
 
-The World tab holds 15 feats that belong to the server rather than to one player. Nine are world milestones,
-reached once for everyone, and six are server firsts, held by the one player who got there before anyone else.
-They are not part of the 218 feats or the 7,870 points, they never count toward a player's unlocked count or
+The World tab holds 18 feats that belong to the server rather than to one player. Nine are world milestones,
+reached once for everyone, and nine are server firsts, held by the one player who got there before anyone else.
+They are not part of the 327 feats or the 15,075 points, they never count toward a player's unlocked count or
 completion, and they have no rarity. The start up log says
-`Feats loaded 218 feats worth 7870 points, plus 15 world feats`.
+`Feats loaded 327 feats worth 15075 points, plus 18 world feats`.
 
 | Milestone | Tier | Reached when |
 |---|---|---|
@@ -126,6 +180,9 @@ completion, and they have no rarity. The start up log says
 | Keeper of Memories | Platinum | Record 100 Memories |
 | Gatewright | Platinum | Build an Ancient Gateway |
 | Party Crasher | Platinum | Defeat the Goblin Feastmaster |
+| Founder | Platinum | Unlock 100 feats |
+| Warpath | Platinum | Defeat 5,000 creatures |
+| Surveyor | Platinum | Discover all 5 zones |
 
 **Milestones.** The player who raises a milestone, the initiator, unlocks it like any other feat, with the
 toast, the chat line, its points and its rewards. Only the initiator gets points. Every other player shares in
@@ -145,20 +202,21 @@ server, and that player holds it forever. When two players finish the same fight
 is claimed with a single atomic check, so exactly one of them gets it. The holder unlocks the first with its
 toast and its 100 points, and nobody can earn it after that.
 
-**The World tab.** Its header counts the records the server has, such as `4 / 15 achieved`. Each row shows
+**The World tab.** Its header counts the records the server has, such as `4 / 18 achieved`. Each row shows
 Milestone or First in place of the tier. An open row reads `Not yet achieved` or `Unclaimed` with the tier and
 its points. A reached row reads `Achieved by Steve` or `Held by Steve` with the date, plus the points when you
 earned it yourself. A milestone reached with nobody named reads `Achieved` alone. The All feats and Unlocked
 tabs only list personal feats.
 
 Admin grants and `setstat` never raise a milestone or a first. Points from the World tab are added on top of a
-player's personal points, so a points total can pass 7,870 while the unlocked count and the completion
+player's personal points, so a points total can pass 15,075 while the unlocked count and the completion
 percentage only ever count personal feats. The records are kept in `server.json`, see Configuration.
 
 ## Server versions
 
 | Feats | Hytale server |
 |---|---|
+| 1.4.0 | 0.7.0 release or newer |
 | 1.3.0 | 0.7.0 release or newer |
 | 1.2.1 | 0.7.0 release or newer |
 | 1.2.0 | 0.7.0 release or newer |
@@ -321,7 +379,7 @@ restart the server.
 | `BigTitleMinimumTier` | `"PLATINUM"` | Lowest tier that also shows a big title in the middle of the screen. `OFF` turns it off |
 | `BroadcastUnlocks` | `true` | Announce unlocks to other online players in chat |
 | `BroadcastMinimumTier` | `"SILVER"` | Lowest tier that gets announced. One of `BRONZE`, `SILVER`, `GOLD` or `PLATINUM` |
-| `WelcomeHint` | `true` | Show a short "x/218 unlocked, /feats to browse" line on join |
+| `WelcomeHint` | `true` | Show a short "x/327 unlocked, /feats to browse" line on join |
 | `TrackDistance` | `true` | Track distance travelled once per second |
 | `IgnoreCreative` | `true` | Stop every counter for players in Creative mode |
 | `DisabledWorlds` | `[]` | World names where every counter stops, ignoring case |
@@ -526,6 +584,17 @@ join instead of waiting for the next matching action. The first 5 such unlocks g
 chat line. Any beyond that unlock quietly with a single chat line saying how many more there were. Catch up
 unlocks are real unlocks and get their rewards.
 
+- **Swimming, gliding and riding.** The once a second distance sample also looks at how the player is moving. Metres covered while swimming or gliding count towards swim and glide distance as well as the total. Riding a mount or a minecart is measured from the mount itself and counts towards ride distance. These follow the TrackDistance setting.
+- **Top and bottom of the world.** The same sample notes when a player stands within three blocks of the lowest or the highest block layer of a world. Falling past the bottom into the void does not count, and portal instances such as The Deepworks are left out.
+- **Taming.** Feeding a wild animal until it turns tame counts for the player who fed it. The game keeps no owner on a tamed animal, so Feats catches the moment the animal changes into its tamed form and credits the player the animal was looking at.
+- **Kill streaks.** Every kill extends a running streak and a death ends it. The best streak is saved. The running streak lives in memory only, survives a relog and is forgotten an hour after the player leaves, like the anti farming memory. While a player is in Creative or a disabled world their streak neither grows nor ends.
+- **Biggest hit and longest session.** The largest single hit a player deals is kept as a record. Session length is written every five minutes while online and again on leaving, so a crash loses at most five minutes of it. A Feats reload does not split a session, and the session keeps counting in Creative or a disabled world whenever time played does.
+- **Untouched boss kills.** A boss fight starts with its first hit. A player credited with the kill who took no damage at all in the boss's world from then until the boss died earns the untouched boss kill, whether they joined the fight early or late and even if the fight went quiet for a while. A boss nobody touches for ten minutes starts a fresh fight.
+- **Fast Gobliterator runs.** Each Deepworks run remembers when the player first entered that instance. Stepping out and back in keeps the first time.
+- **Lava.** The game has no lava damage of its own, lava sets players alight with a stronger burn. A death to that burn counts as both a lava death and a fire death.
+- **Glass.** The only blocks named glass in the game are developer test blocks, so windows count as glass.
+- **Cheap tracking.** Block, item and creature ids are classified once and remembered, and a whole event updates a player's counters and checks their feats in one pass. A block break, kill or pickup costs well under a microsecond and allocates nothing.
+
 ## Leaderboard export
 
 Feats writes `export/feats.json` in its data folder so other tools can show a leaderboard and recent unlocks
@@ -539,7 +608,7 @@ rarity of every feat and the world milestones and server firsts. Offline player 
 a minute.
 
 ```json
-{"updatedAt": 1760000000000, "totalFeats": 218, "totalPoints": 7870, "online": 3, "rarityPlayers": 42,
+{"updatedAt": 1760000000000, "totalFeats": 327, "totalPoints": 15075, "online": 3, "rarityPlayers": 42,
  "rarity": {"first_steps": 0.9524, "rock_bottom": 0.0310},
  "players": [
   {"uuid": "…", "name": "Steve", "points": 1240, "unlocked": 58, "lastUnlockAt": 1759990000000}

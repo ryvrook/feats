@@ -21,7 +21,6 @@ import com.hypixel.hytale.server.core.inventory.transaction.SlotTransaction;
 import com.hypixel.hytale.server.core.inventory.transaction.TagTransaction;
 import com.hypixel.hytale.server.core.inventory.transaction.Transaction;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
-import dev.ryvrook.feats.stats.StatKeys;
 import dev.ryvrook.feats.track.Classify;
 import dev.ryvrook.feats.track.FeatsTracker;
 import dev.ryvrook.feats.track.RecentDrops;
@@ -52,11 +51,40 @@ import java.util.UUID;
 public final class InventorySystem extends PlayerEventSystem<InventoryChangeEvent> {
     private final RecentPlacements placements;
     private final RecentDrops drops;
+    /** The player's own inventory sections, read once since the engine registers them at start. */
+    private final List<ComponentType<EntityStore, ? extends InventoryComponent>> sections;
 
     public InventorySystem(FeatsTracker tracker, RecentPlacements placements, RecentDrops drops) {
         super(InventoryChangeEvent.class, tracker);
         this.placements = placements;
         this.drops = drops;
+        this.sections = List.of(
+                InventoryComponent.Hotbar.getComponentType(), InventoryComponent.Storage.getComponentType(),
+                InventoryComponent.Backpack.getComponentType(), InventoryComponent.Utility.getComponentType(),
+                InventoryComponent.Armor.getComponentType(), InventoryComponent.Tool.getComponentType(),
+                InventoryComponent.AbilitySlots.getComponentType(), InventoryComponent.RuneBag.getComponentType());
+    }
+
+    /**
+     * What one inventory change moved, item id to amount. Each map is only created once something lands
+     * in it, so a change that moves nothing countable allocates no maps at all.
+     */
+    private static final class Totals {
+        Map<String, Long> gained;
+        Map<String, Long> putAway;
+        Map<String, Long> dropped;
+
+        void gain(Counted counted) {
+            gained = note(gained, counted);
+        }
+
+        void putAway(Counted counted) {
+            putAway = note(putAway, counted);
+        }
+
+        void drop(Counted counted) {
+            dropped = note(dropped, counted);
+        }
     }
 
     @Override
@@ -86,30 +114,34 @@ public final class InventorySystem extends PlayerEventSystem<InventoryChangeEven
             countConsumed(uuid, slot);
         }
 
-        Map<String, Long> gained = new HashMap<>();
-        Map<String, Long> putAway = new HashMap<>();
-        Map<String, Long> dropped = new HashMap<>();
-        walk(transaction, true, ref, store, gained, putAway, dropped);
-        putAway.forEach((itemId, amount) -> stash(uuid, itemId, amount));
-        dropped.forEach((itemId, amount) -> drops.record(uuid, itemId, amount));
-        gained.forEach((itemId, amount) -> obtain(uuid, itemId, amount));
+        Totals totals = new Totals();
+        walk(transaction, true, ref, store, totals);
+        if (totals.putAway != null) {
+            totals.putAway.forEach((itemId, amount) -> stash(uuid, itemId, amount));
+        }
+        if (totals.dropped != null) {
+            totals.dropped.forEach((itemId, amount) -> drops.record(uuid, itemId, amount));
+        }
+        if (totals.gained != null) {
+            totals.gained.forEach((itemId, amount) -> obtain(uuid, itemId, amount));
+        }
     }
 
     // ---- obtained ---------------------------------------------------------
 
     private void walk(Transaction transaction, boolean topLevel, Ref<EntityStore> ref, Store<EntityStore> store,
-                      Map<String, Long> gained, Map<String, Long> putAway, Map<String, Long> dropped) {
+                      Totals totals) {
         if (transaction == null || !transaction.succeeded()) {
             return;
         }
         if (transaction instanceof MoveTransaction<?> move) {
-            if (ownedByPlayer(move.getOtherContainer(), ref, store)) {
+            if (ownedByPlayer(move.getOtherContainer(), ref, store, sections)) {
                 return; // a rearrangement inside the player's own inventory
             }
             if (move.getMoveType() == MoveType.MOVE_TO_SELF) {
-                walk(move.getAddTransaction(), false, ref, store, gained, putAway, dropped);
+                walk(move.getAddTransaction(), false, ref, store, totals);
             } else {
-                note(putAway, removed(move.getRemoveTransaction()));
+                totals.putAway(removed(move.getRemoveTransaction()));
             }
             return;
         }
@@ -119,46 +151,47 @@ public final class InventorySystem extends PlayerEventSystem<InventoryChangeEven
         }
         if (transaction instanceof ListTransaction<?> list) {
             for (Transaction part : list.getList()) {
-                walk(part, false, ref, store, gained, putAway, dropped);
+                walk(part, false, ref, store, totals);
             }
             return;
         }
         if (transaction instanceof ItemStackTransaction stack) {
             if (stack.getAction() != null && stack.getAction().isAdd()) {
                 for (ItemStackSlotTransaction part : stack.getSlotTransactions()) {
-                    note(gained, added(part));
+                    totals.gain(added(part));
                 }
             }
             return;
         }
         if (transaction instanceof ItemStackSlotTransaction slot) {
             if (slot.getAction() != null && slot.getAction().isAdd()) {
-                note(gained, added(slot));
+                totals.gain(added(slot));
             } else if (topLevel && slot.getAction() == ActionType.REMOVE && slot.getQuery() == null) {
                 Counted gone = removed(slot); // the drop key
-                note(putAway, gone);
-                note(dropped, gone);
+                totals.putAway(gone);
+                totals.drop(gone);
             }
             return;
         }
         if (transaction.getClass() == SlotTransaction.class) {
             SlotTransaction slot = (SlotTransaction) transaction;
             if (slot.getAction() != null && slot.getAction().isAdd()) {
-                note(gained, added(slot));
+                totals.gain(added(slot));
             } else if (topLevel && slot.getAction() == ActionType.REMOVE) {
                 Counted gone = removed(slot); // a whole stack leaving, such as death drops
-                note(putAway, gone);
-                note(dropped, gone);
+                totals.putAway(gone);
+                totals.drop(gone);
             }
         }
     }
 
     /** True when the container is one of this player's own inventory sections or a view over them. */
-    private static boolean ownedByPlayer(ItemContainer other, Ref<EntityStore> ref, Store<EntityStore> store) {
+    private static boolean ownedByPlayer(ItemContainer other, Ref<EntityStore> ref, Store<EntityStore> store,
+                                         List<ComponentType<EntityStore, ? extends InventoryComponent>> sections) {
         if (other == null) {
             return true; // nothing to tell it apart by, so never count it
         }
-        for (ComponentType<EntityStore, ? extends InventoryComponent> type : sections()) {
+        for (ComponentType<EntityStore, ? extends InventoryComponent> type : sections) {
             InventoryComponent component = store.getComponent(ref, type);
             ItemContainer mine = component != null ? component.getInventory() : null;
             if (mine != null && (other == mine || other.containsContainer(mine))) {
@@ -166,14 +199,6 @@ public final class InventorySystem extends PlayerEventSystem<InventoryChangeEven
             }
         }
         return false;
-    }
-
-    private static List<ComponentType<EntityStore, ? extends InventoryComponent>> sections() {
-        return List.of(
-                InventoryComponent.Hotbar.getComponentType(), InventoryComponent.Storage.getComponentType(),
-                InventoryComponent.Backpack.getComponentType(), InventoryComponent.Utility.getComponentType(),
-                InventoryComponent.Armor.getComponentType(), InventoryComponent.Tool.getComponentType(),
-                InventoryComponent.AbilitySlots.getComponentType(), InventoryComponent.RuneBag.getComponentType());
     }
 
     /** What one slot gained, which is the new stack less whatever of the same item was already there. */
@@ -210,22 +235,28 @@ public final class InventorySystem extends PlayerEventSystem<InventoryChangeEven
         return amount > 0 ? new Counted(before.getItemId(), amount) : null;
     }
 
-    private static void note(Map<String, Long> totals, Counted counted) {
-        if (counted != null && counted.itemId() != null) {
-            totals.merge(counted.itemId(), counted.amount(), Long::sum);
+    /** Adds to a total, creating the map on first use. Returns the map to keep. */
+    private static Map<String, Long> note(Map<String, Long> totals, Counted counted) {
+        if (counted == null || counted.itemId() == null) {
+            return totals;
         }
+        if (totals == null) {
+            totals = new HashMap<>(4);
+        }
+        totals.merge(counted.itemId(), counted.amount(), Long::sum);
+        return totals;
     }
 
     private void stash(UUID uuid, String itemId, long amount) {
-        if (tracker.isWatched(StatKeys.OBTAINED_PREFIX + itemId)) {
-            tracker.addSilently(uuid, StatKeys.STASH_PREFIX + itemId, amount);
+        if (tracker.isWatched(Classify.obtainedKey(itemId))) {
+            tracker.addSilently(uuid, Classify.stashKey(itemId), amount);
         }
     }
 
     private void obtain(UUID uuid, String itemId, long amount) {
         long fresh = amount;
-        if (tracker.isWatched(StatKeys.OBTAINED_PREFIX + itemId)) {
-            fresh -= tracker.takeSilently(uuid, StatKeys.STASH_PREFIX + itemId, amount);
+        if (tracker.isWatched(Classify.obtainedKey(itemId))) {
+            fresh -= tracker.takeSilently(uuid, Classify.stashKey(itemId), amount);
         }
         if (fresh > 0) {
             tracker.incrementAll(uuid, Classify.obtained(itemId), fresh);

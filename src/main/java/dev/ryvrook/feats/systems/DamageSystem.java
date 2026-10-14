@@ -19,7 +19,8 @@ import dev.ryvrook.feats.track.FeatsTracker;
 
 /**
  * Tracks damage dealt by players and damage taken by players, and notes every player who hits a boss
- * in the {@link BossLedger} so the kill can credit the whole group.
+ * in the {@link BossLedger} so the kill can credit the whole group. Damage a player takes is noted in
+ * the ledger too, for the untouched boss kill, and every hit a player deals raises their biggest hit.
  */
 public final class DamageSystem extends EntityEventSystem<EntityStore, Damage> {
     private final FeatsTracker tracker;
@@ -58,6 +59,7 @@ public final class DamageSystem extends EntityEventSystem<EntityStore, Damage> {
         PlayerRef victimPlayer = store.getComponent(victim, PlayerRef.getComponentType());
         if (victimPlayer != null) {
             tracker.increment(victimPlayer.getUuid(), StatKeys.DAMAGE_TAKEN, amount);
+            ledger.hurt(victimPlayer.getUuid(), PlayerEventSystem.worldName(store), System.nanoTime());
         }
         if (damage.getSource() instanceof Damage.EntitySource source) {
             Ref<EntityStore> attacker = source.getRef();
@@ -67,6 +69,7 @@ public final class DamageSystem extends EntityEventSystem<EntityStore, Damage> {
                 PlayerRef attackerPlayer = store.getComponent(attacker, PlayerRef.getComponentType());
                 if (attackerPlayer != null) {
                     tracker.increment(attackerPlayer.getUuid(), StatKeys.DAMAGE_DEALT, amount);
+                    tracker.raiseTo(attackerPlayer.getUuid(), StatKeys.BIGGEST_HIT, amount);
                     if (victimPlayer == null) {
                         noteBossHit(victim, store, attackerPlayer);
                     }
@@ -82,7 +85,7 @@ public final class DamageSystem extends EntityEventSystem<EntityStore, Damage> {
         }
         UUIDComponent id = store.getComponent(victim, UUIDComponent.getComponentType());
         if (id != null) {
-            ledger.record(id.getUuid(), attacker.getUuid(), System.nanoTime());
+            ledger.record(id.getUuid(), attacker.getUuid(), PlayerEventSystem.worldName(store), System.nanoTime());
         }
     }
 }

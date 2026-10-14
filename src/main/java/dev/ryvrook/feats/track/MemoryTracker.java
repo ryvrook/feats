@@ -5,8 +5,6 @@ import com.hypixel.hytale.builtin.adventure.memories.memories.Memory;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.logger.HytaleLogger;
-import com.hypixel.hytale.server.core.universe.PlayerRef;
-import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.ryvrook.feats.stats.StatKeys;
 
@@ -18,8 +16,8 @@ import java.util.logging.Level;
 /**
  * Watches the Memories a player has recorded. The recorded set empties when the player hands their
  * Memories in, so every Memory id is remembered as a one time discovery and the total only grows.
- * The component is read on the world thread. If the Memories classes ever change shape the tracker
- * switches itself off with one warning.
+ * The component is read on the world thread, see {@link #read}. If the Memories classes ever change
+ * shape the tracker switches itself off with one warning.
  */
 public final class MemoryTracker {
     private final FeatsTracker tracker;
@@ -34,31 +32,12 @@ public final class MemoryTracker {
         this.logger = logger;
     }
 
-    /** Schedules a read of the player's recorded Memories. Safe to call from any thread. */
-    public void poll(PlayerRef playerRef) {
-        if (disabled) {
-            return;
-        }
-        try {
-            Ref<EntityStore> ref = playerRef.getReference();
-            if (ref == null) {
-                return;
-            }
-            World world = ref.getStore().getExternalData().getWorld();
-            if (world == null) {
-                return;
-            }
-            UUID uuid = playerRef.getUuid();
-            world.execute(() -> read(uuid, ref));
-        } catch (LinkageError e) {
-            disable(e); // the API this tracker reads is missing on this server
-        } catch (RuntimeException e) {
-            skip(e); // one player or one world misbehaved, carry on with the rest
-        }
-    }
-
-    private void read(UUID uuid, Ref<EntityStore> ref) {
-        if (disabled || !ref.isValid()) {
+    /**
+     * Reads the player's recorded Memories right here. Call it on the world thread that owns the player.
+     * The once a second pass in {@link PlayerSampler} does so for every player of a world in one task.
+     */
+    public void read(UUID uuid, Ref<EntityStore> ref) {
+        if (disabled || ref == null || !ref.isValid()) {
             return;
         }
         try {

@@ -6,7 +6,9 @@ import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.component.query.Query;
+import com.hypixel.hytale.server.core.asset.type.entityeffect.config.EntityEffect;
 import com.hypixel.hytale.server.core.asset.type.portalworld.PortalType;
+import com.hypixel.hytale.server.core.entity.effect.ActiveEntityEffect;
 import com.hypixel.hytale.server.core.entity.UUIDComponent;
 import com.hypixel.hytale.server.core.inventory.InventoryComponent;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
@@ -29,7 +31,9 @@ import java.util.UUID;
 
 /**
  * Fires once per death of any entity and records player deaths and player kills. A boss kill credits
- * every player the {@link BossLedger} saw hit it in the last minute, as well as the killer.
+ * every player the {@link BossLedger} saw hit it in the last minute, as well as the killer, and an
+ * untouched boss kill to each of them the ledger never saw take damage during the fight. Every credited
+ * kill extends the player's kill streak and a death ends it.
  */
 public final class DeathSystem extends DeathSystems.OnDeathSystem {
     private final FeatsTracker tracker;
@@ -64,7 +68,8 @@ public final class DeathSystem extends DeathSystems.OnDeathSystem {
         if (victimPlayer != null) {
             DamageCause damageCause = death.getDeathCause();
             String cause = damageCause != null ? damageCause.getId() : null;
-            tracker.incrementAll(victimPlayer.getUuid(), Classify.death(cause), 1);
+            tracker.incrementAll(victimPlayer.getUuid(), Classify.death(cause, effectId(info)), 1);
+            tracker.countDeath(victimPlayer.getUuid());
             if (isDeepworks(store)) {
                 runs.died(victimPlayer.getUuid(), PlayerEventSystem.worldName(store));
             }
@@ -94,6 +99,30 @@ public final class DeathSystem extends DeathSystems.OnDeathSystem {
         }
         if (killerPlayer != null) {
             tracker.incrementAll(killerPlayer.getUuid(), Classify.kill(victimType, ranged), 1);
+            tracker.countKill(killerPlayer.getUuid());
+        }
+    }
+
+    /**
+     * The id of the status effect whose damage killed, such as Lava_Burn, or null when the death came
+     * from anything else. Effect damage carries the effect as its source, wrapped in an entity source
+     * when the effect has a living owner.
+     */
+    static String effectId(Damage info) {
+        if (info == null) {
+            return null;
+        }
+        try {
+            Damage.Source source = info.getSource();
+            ActiveEntityEffect effect = source instanceof Damage.EntityEffectSource owned ? owned.getEffect()
+                    : source instanceof ActiveEntityEffect bare ? bare : null;
+            if (effect == null) {
+                return null;
+            }
+            EntityEffect asset = EntityEffect.getAssetMap().getAsset(effect.getEntityEffectIndex());
+            return asset != null ? asset.getId() : null;
+        } catch (RuntimeException | LinkageError e) {
+            return null; // the cause key still counts, only the effect key is lost
         }
     }
 
@@ -108,8 +137,10 @@ public final class DeathSystem extends DeathSystems.OnDeathSystem {
             credited.add(killer);
         }
         UUIDComponent id = store.getComponent(ref, UUIDComponent.getComponentType());
+        BossLedger.Outcome fight = BossLedger.Outcome.NONE;
         if (id != null && store.isInThread()) {
-            credited.addAll(ledger.take(id.getUuid(), System.nanoTime()));
+            fight = ledger.finish(id.getUuid(), System.nanoTime());
+            credited.addAll(fight.credited());
         }
         if (credited.isEmpty()) {
             return;
@@ -117,6 +148,10 @@ public final class DeathSystem extends DeathSystems.OnDeathSystem {
         for (UUID player : credited) {
             boolean blow = player.equals(killer);
             tracker.incrementAll(player, Classify.kill(bossType, blow && ranged), 1);
+            tracker.countKill(player);
+            if (fight.untouched(player)) {
+                tracker.increment(player, StatKeys.BOSS_FLAWLESS, 1);
+            }
         }
         if (Classify.isGobliteratorFinal(bossType)) {
             creditGobliterator(store, bossType, credited);
@@ -132,6 +167,7 @@ public final class DeathSystem extends DeathSystems.OnDeathSystem {
         boolean hard = Classify.isGobliteratorFinalHard(bossType);
         boolean deepworks = isDeepworks(store);
         String worldName = PlayerEventSystem.worldName(store);
+        long now = System.currentTimeMillis();
         for (PlayerRef playerRef : world.getPlayerRefs()) {
             UUID player = playerRef.getUuid();
             if (player == null || !credited.contains(player)) {
@@ -139,6 +175,9 @@ public final class DeathSystem extends DeathSystems.OnDeathSystem {
             }
             if (deepworks && runs.isClean(player, worldName)) {
                 tracker.increment(player, StatKeys.GOBLITERATOR_DEATHLESS, 1);
+            }
+            if (deepworks && runs.isFast(player, worldName, now)) {
+                tracker.increment(player, StatKeys.GOBLITERATOR_FAST, 1);
             }
             if (hard && wearsNoArmour(store, playerRef.getReference())) {
                 tracker.increment(player, StatKeys.GOBLITERATOR_HM_UNARMOURED, 1);

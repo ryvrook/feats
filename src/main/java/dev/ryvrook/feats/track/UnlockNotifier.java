@@ -2,6 +2,7 @@ package dev.ryvrook.feats.track;
 
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.protocol.SoundCategory;
+import com.hypixel.hytale.protocol.packets.interface_.EventTitleStyle;
 import com.hypixel.hytale.protocol.packets.interface_.NotificationStyle;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.asset.type.soundevent.config.SoundEvent;
@@ -46,9 +47,13 @@ public final class UnlockNotifier {
     }
 
     public void unlocked(PlayerProgress progress, Feat feat, int unlockedCount, int totalCount) {
+        Universe universe = Universe.get();
+        if (universe == null) {
+            return; // no server running, as in the tests
+        }
         FeatsConfig cfg = config.get();
         UUID uuid = progress.uuid();
-        PlayerRef player = Universe.get().getPlayer(uuid);
+        PlayerRef player = universe.getPlayer(uuid);
         if (player == null) {
             return;
         }
@@ -70,7 +75,7 @@ public final class UnlockNotifier {
                 EventTitleUtil.showEventTitleToPlayer(player,
                         Message.raw(feat.name()).color(feat.tier().color()),
                         Message.raw(feat.description()),
-                        feat.tier() == Tier.PLATINUM);
+                        feat.tier() == Tier.PLATINUM ? EventTitleStyle.Major : EventTitleStyle.Default);
             }
             if (cfg.broadcastUnlocks() && meetsBroadcastTier(feat.tier(), cfg.broadcastMinimumTier())) {
                 broadcast(player, feat);

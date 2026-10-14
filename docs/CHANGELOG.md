@@ -3,6 +3,67 @@
 Every notable change to Feats is recorded here. The format follows Keep a Changelog and the project uses
 semantic versioning.
 
+## 1.4.0 - 2026-10-14
+
+Needs the Hytale 0.7.0 release server or newer. 327 personal feats worth 15,075 points in nine categories, plus
+18 world feats in the World tab that never count toward the totals.
+
+### Upgrading
+
+- Players who already pass a new target get the feat on their next join through the catch up, the same as in
+  1.3.0. The first 5 get the usual toast and the rest unlock quietly with one summary line.
+- The new ladder steps read counters Feats has kept since 1.0, so a player with 100,000 blocks broken gets
+  Million Mark on the way there and Deep Vein at 25,000 ore without any scan. `/feats admin scan all` still only
+  reads zones, Memories, death markers and the first spawn, and it records the new firsts for the earliest
+  existing unlocks, so run it once after upgrading.
+
+### Added
+
+- 109 personal feats worth 7,205 points, 14 of them hidden.
+- Exploration. Circumnavigator at 500 kilometres and Vault Breaker at 2,500 chests. Sea Legs for a kilometre
+  swum, Wingspan for 5 kilometres on a Scrap Glider, Bedrock Bound for reaching the bottom of the world and
+  Head in the Clouds for standing at the top.
+- Mining. Million Mark, hidden, at 1,000,000 blocks and Deep Vein at 25,000 ore blocks. A second step for every
+  metal with Copper Magnate, Ironbound, Gold Standard, Silver Service, Cobalt Crown, Thorium Reactor and
+  Adamant Heart. Pick Collector for a pickaxe of every metal from wood to adamantite.
+- Building. Megastructure, hidden, at 1,000,000 blocks placed, Light of Orbis, Festival of Lights, Bed and
+  Breakfast, Show Home, Industrial Park and Grand Vault. Glazier for glass, Stonemason for stone and brick,
+  Timber Frame for wood and Arborist for saplings.
+- Crafting. Assembly Line, Master Toolmaker, Arms Dealer, Quartermaster, Foundry, Banquet, Apothecary and Master
+  Carpenter at the top of the craft ladders. Copper Kit, Cobalt Clad and Thorium Plate for full armour sets and
+  Sword Collector for a sword of every metal from copper to adamantite.
+- Combat. Mythic, Marksman, Lich Bane, Trork Scourge, Outlander Outlaw, Hive Breaker, Feran Hunter, Elemental
+  Master, Boss Hunter, Apocalypse and Immortal. Rampage for 50 defeats without dying. The hidden Gladiator,
+  Warmonger, Untouchable and Overkill.
+- Survival. Fixture, Part of the Furniture, Death Wish, Long Winter, Bench Veteran, Bottomless and Potion
+  Problem. Marathon for 8 hours in one session. The hidden Old Timer, Respawn Point, Hot Stuff and Lava Bath.
+- Nature. Timber, Clear Cut, Breadbasket, Granary, Harvest Moon, Dragon's Hoard, Sea Legend, Abattoir and Apex
+  Predator, plus the hidden Old Growth. Crop Rotation for all 14 crops, Full Net for 15 kinds of fish, Tamer for
+  taming an animal and Saddle Up for a kilometre on a mount.
+- Chapter I. Goblin Bane, Arachnid Apex, Void Reaver, Grand Archmage, Rune Lord, Frequent Flyer, Breach Veteran,
+  Deepworks Regular and Scrap Dealer. A second step for every ability with Inferno, Tremor, Berserker,
+  Plaguebringer, Tempest, Hooked and Overcharged. Rune Hoard, Scrap Baron, Silk Merchant, Key Ring, Kenolite
+  Quarry, Crystal Cavern and Steelworks. The hidden Hard Habit and Speedrunner.
+- Misc. Loudspeaker at 10,000 chat messages, Icon at 150 feats and the hidden Completionist at 250.
+- Three Platinum server firsts. Founder for the first player to unlock 100 feats, Warpath for the first to
+  defeat 5,000 creatures and Surveyor for the first to discover all 5 zones.
+- New counters for 1.4.0 feats. Glass (and window), stone, wood and sapling placements, fire and lava deaths, swim, glide and ride distance, reaching the bottom and the top of the world, animals tamed, best kill streak, biggest hit, longest session, untouched boss kills and Gobliterator kills within 20 minutes of entering The Deepworks.
+- Stats tab rows for distance swum, glided and ridden, best kill streak, biggest hit, animals tamed and longest session.
+- Marksman and Berserker use the ids `master_marksman` and `berserker_rage`, because `marksman` and
+  `berserker` already belong to Charged Up and Seeing Red.
+
+### Changed
+
+- The start up log line reads `Feats loaded 327 feats worth 15075 points, plus 18 world feats`.
+- Tracking is faster and allocates nothing on the busy paths. A block break, kill or pickup now takes about 90 to 110 ns instead of 260 to 850 ns, measured over a million events each.
+- Key lists for block, item and creature ids are worked out once per id and remembered.
+- One event updates every counter it touches and checks the feats that read them in a single pass, under one lock on the player.
+- Counters no longer box a new number on every bump.
+- The once a second distance and Memories pass runs as one task per world instead of one per player.
+- Session length is saved every five minutes while online, on leaving, and when the server stops or Feats reloads.
+- Builds against server 0.7.1. gradle.properties still pinned 0.7.0 before.
+- Big unlock titles use the event title style the 0.7.1 engine asks for, the old switch is due to be removed.
+
 ## 1.3.0 - 2026-10-13
 
 Needs the Hytale 0.7.0 release server or newer. 218 personal feats worth 7,870 points in nine categories, plus

@@ -46,6 +46,28 @@ public final class StatKeys {
     public static final String GOBLITERATOR_HM_UNARMOURED = "gobliterator_hm_unarmoured";
     /** Gobliterator kills credited to a player who had not died in that Deepworks run. */
     public static final String GOBLITERATOR_DEATHLESS = "gobliterator_deathless";
+    /** Gobliterator kills credited to a player within 20 minutes of entering that Deepworks run. */
+    public static final String GOBLITERATOR_FAST = "gobliterator_fast";
+    /** Metres travelled while swimming, sampled with {@link #DISTANCE}. */
+    public static final String SWIM_DISTANCE = "swim_distance";
+    /** Metres travelled while gliding, sampled with {@link #DISTANCE}. */
+    public static final String GLIDE_DISTANCE = "glide_distance";
+    /** Metres travelled while riding a mount or a minecart, sampled with {@link #DISTANCE}. */
+    public static final String RIDE_DISTANCE = "ride_distance";
+    /** 1 once the player stood at the floor of a world, near the lowest block layer. */
+    public static final String BOTTOM_REACHED = "bottom_reached";
+    /** 1 once the player stood at the ceiling of a world, near the highest block layer. */
+    public static final String TOP_REACHED = "top_reached";
+    /** Animals the player tamed by feeding them. */
+    public static final String TAMED = "tamed";
+    /** The most kills in a row without dying. The running streak itself is only kept in memory. */
+    public static final String KILL_STREAK = "kill_streak";
+    /** The largest single hit the player dealt, in damage points. */
+    public static final String BIGGEST_HIT = "biggest_hit";
+    /** The longest time connected in one go, in seconds. */
+    public static final String LONGEST_SESSION = "longest_session";
+    /** Boss kills credited to a player who took no damage between the first hit of the fight and the kill. */
+    public static final String BOSS_FLAWLESS = "boss_flawless";
 
     // Dynamic prefixes
     public static final String BROKEN_PREFIX = "broken:";
@@ -80,6 +102,9 @@ public final class StatKeys {
 
     /** True for a per id counter key, see {@link #PER_ID_PREFIXES}. */
     public static boolean isPerId(String key) {
+        if (key.indexOf(':') < 0) {
+            return false; // every per id prefix ends in a colon, so totals skip the prefix loop
+        }
         for (String prefix : PER_ID_PREFIXES) {
             if (key.startsWith(prefix)) {
                 return true;
@@ -96,6 +121,9 @@ public final class StatKeys {
     public static final List<StatRow> DISPLAY = List.of(
             new StatRow(PLAYTIME, "Time played", Format.DURATION),
             new StatRow(DISTANCE, "Distance travelled", Format.DISTANCE),
+            new StatRow(SWIM_DISTANCE, "Distance swum", Format.DISTANCE),
+            new StatRow(GLIDE_DISTANCE, "Distance glided", Format.DISTANCE),
+            new StatRow(RIDE_DISTANCE, "Distance ridden", Format.DISTANCE),
             new StatRow(ZONES_DISCOVERED, "Zones discovered", Format.COUNT),
             new StatRow(BLOCKS_BROKEN, "Blocks broken", Format.COUNT),
             new StatRow(ORE_MINED, "Ore mined", Format.COUNT),
@@ -108,9 +136,12 @@ public final class StatKeys {
             new StatRow(KILLS, "Kills", Format.COUNT),
             new StatRow(KILLS_RANGED, "Ranged kills", Format.COUNT),
             new StatRow(KILLS_BOSS, "Boss kills", Format.COUNT),
+            new StatRow(KILL_STREAK, "Best kill streak", Format.COUNT),
             new StatRow(DEATHS, "Deaths", Format.COUNT),
             new StatRow(DAMAGE_DEALT, "Damage dealt", Format.COUNT),
             new StatRow(DAMAGE_TAKEN, "Damage taken", Format.COUNT),
+            new StatRow(BIGGEST_HIT, "Biggest hit", Format.COUNT),
+            new StatRow(TAMED, "Animals tamed", Format.COUNT),
             new StatRow(CHESTS_OPENED, "Chests opened", Format.COUNT),
             new StatRow(BEDS_USED, "Nights slept", Format.COUNT),
             new StatRow(BENCHES_USED, "Benches used", Format.COUNT),
@@ -121,6 +152,7 @@ public final class StatKeys {
             new StatRow(POTIONS_DRUNK, "Potions drunk", Format.COUNT),
             new StatRow(CHAT, "Chat messages", Format.COUNT),
             new StatRow(JOINS, "Sessions", Format.COUNT),
+            new StatRow(LONGEST_SESSION, "Longest session", Format.DURATION),
             new StatRow(FEATS_UNLOCKED, "Feats unlocked", Format.COUNT)
     );
 

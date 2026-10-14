@@ -6,13 +6,109 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 /**
  * Turns raw game identifiers (block ids, item ids, NPC type ids) into the stat keys
  * that feats are defined against. Pure functions, no game state.
+ *
+ * <p>Block, item and creature ids come from a finite set, and the same few ids fire over and over (every
+ * stone block broken, every arrow hit). So the key lists for the busy events are worked out once per id
+ * and kept in a bounded map. A hit costs one map lookup and allocates nothing. The returned lists are
+ * immutable and shared, callers must not change them.
  */
 public final class Classify {
     private Classify() {}
+
+    /**
+     * Ids kept per memo. The game ships about four thousand items and a few hundred creatures, so this
+     * holds them all. Past the limit an id is still classified, only not remembered.
+     */
+    static final int MEMO_LIMIT = 8192;
+
+    /** One id to key list cache. */
+    private static final class Memo {
+        private final ConcurrentHashMap<String, List<String>> lists = new ConcurrentHashMap<>();
+        private final Function<String, List<String>> compute;
+
+        Memo(Function<String, List<String>> compute) {
+            this.compute = compute;
+        }
+
+        List<String> get(String id) {
+            List<String> hit = lists.get(id);
+            if (hit != null) {
+                return hit;
+            }
+            List<String> keys = List.copyOf(compute.apply(id));
+            if (lists.size() < MEMO_LIMIT) {
+                List<String> raced = lists.putIfAbsent(id, keys);
+                if (raced != null) {
+                    return raced;
+                }
+            }
+            return keys;
+        }
+
+        int size() {
+            return lists.size();
+        }
+    }
+
+    /** One id to key cache, for the per id keys that are built by joining a prefix and an id. */
+    private static final class KeyMemo {
+        private final ConcurrentHashMap<String, String> keys = new ConcurrentHashMap<>();
+        private final String prefix;
+
+        KeyMemo(String prefix) {
+            this.prefix = prefix;
+        }
+
+        String get(String id) {
+            String hit = keys.get(id);
+            if (hit != null) {
+                return hit;
+            }
+            String key = prefix + id;
+            if (keys.size() < MEMO_LIMIT) {
+                String raced = keys.putIfAbsent(id, key);
+                if (raced != null) {
+                    return raced;
+                }
+            }
+            return key;
+        }
+    }
+
+    private static final List<String> BROKEN_NONE = List.of(StatKeys.BLOCKS_BROKEN);
+    private static final List<String> PLACED_NONE = List.of(StatKeys.BLOCKS_PLACED);
+    private static final List<String> CRAFTED_NONE = List.of(StatKeys.CRAFTED);
+    private static final List<String> OBTAINED_NONE = List.of(StatKeys.OBTAINED);
+    private static final List<String> PICKED_NONE = List.of(StatKeys.PICKED_UP);
+    private static final List<String> FOOD = List.of(StatKeys.FOOD_EATEN);
+    private static final List<String> POTION = List.of(StatKeys.POTIONS_DRUNK);
+    private static final List<String> SPYGLASS = List.of(StatKeys.SPYGLASS_USES);
+    private static final List<String> KILL_NONE = List.of(StatKeys.KILLS);
+    private static final List<String> KILL_NONE_RANGED = List.of(StatKeys.KILLS, StatKeys.KILLS_RANGED);
+
+    private static final Memo BROKEN = new Memo(Classify::computeBlockBroken);
+    private static final Memo PLACED = new Memo(Classify::computeBlockPlaced);
+    private static final Memo CRAFTED = new Memo(Classify::computeCrafted);
+    private static final Memo OBTAINED = new Memo(id -> List.of(StatKeys.OBTAINED, StatKeys.OBTAINED_PREFIX + id));
+    private static final Memo PICKED = new Memo(Classify::computePickedUp);
+    private static final Memo USED = new Memo(Classify::computeBlockUsed);
+    private static final Memo INTERACTION = new Memo(Classify::computeInteraction);
+    private static final Memo KILL_MELEE = new Memo(id -> computeKill(id, false));
+    private static final Memo KILL_RANGED = new Memo(id -> computeKill(id, true));
+    private static final KeyMemo OBTAINED_KEY = new KeyMemo(StatKeys.OBTAINED_PREFIX);
+    private static final KeyMemo STASH_KEY = new KeyMemo(StatKeys.STASH_PREFIX);
+
+    /** Ids remembered across every memo, for tests and diagnostics. */
+    static int memoised() {
+        return BROKEN.size() + PLACED.size() + CRAFTED.size() + OBTAINED.size() + PICKED.size() + USED.size()
+                + INTERACTION.size() + KILL_MELEE.size() + KILL_RANGED.size();
+    }
 
     private static final Set<String> LIVESTOCK = Set.of(
             "Cow", "Pig", "Sheep", "Chicken", "Goat", "Bison", "Boar", "Camel", "Horse",
@@ -70,6 +166,10 @@ public final class Classify {
 
     /** Keys to bump when a player breaks a block with the given block type id. */
     public static List<String> blockBroken(String blockId) {
+        return blockId == null || blockId.isEmpty() ? BROKEN_NONE : BROKEN.get(blockId);
+    }
+
+    private static List<String> computeBlockBroken(String blockId) {
         List<String> keys = new ArrayList<>(4);
         keys.add(StatKeys.BLOCKS_BROKEN);
         if (blockId == null || blockId.isEmpty()) {
@@ -92,7 +192,11 @@ public final class Classify {
 
     /** Keys to bump when a player places a block from the given item id. */
     public static List<String> blockPlaced(String itemId) {
-        List<String> keys = new ArrayList<>(4);
+        return itemId == null || itemId.isEmpty() ? PLACED_NONE : PLACED.get(itemId);
+    }
+
+    private static List<String> computeBlockPlaced(String itemId) {
+        List<String> keys = new ArrayList<>(6);
         keys.add(StatKeys.BLOCKS_PLACED);
         if (itemId == null || itemId.isEmpty()) {
             return keys;
@@ -129,11 +233,29 @@ public final class Classify {
         if (itemId.startsWith("Metal_")) {
             keys.add(StatKeys.PLACED_PREFIX + "metal");
         }
+        // Material groups. The only items named Glass are developer test blocks, so windows count as
+        // glass too, being the glass a survival player can craft.
+        if (itemId.contains("Glass") || itemId.contains("Window")) {
+            keys.add(StatKeys.PLACED_PREFIX + "glass");
+        }
+        if (itemId.startsWith("Rock_")) {
+            keys.add(StatKeys.PLACED_PREFIX + "stone"); // stone, bricks, sandstone, crystal and the rest
+        }
+        if (itemId.startsWith("Wood_")) {
+            keys.add(StatKeys.PLACED_PREFIX + "wood"); // every Wood_ item is a block, tools are named Tool_
+        }
+        if (itemId.startsWith("Plant_Sapling_")) {
+            keys.add(StatKeys.PLACED_PREFIX + "sapling");
+        }
         return keys;
     }
 
     /** Keys to bump when a player crafts the given item id. */
     public static List<String> crafted(String itemId) {
+        return itemId == null || itemId.isEmpty() ? CRAFTED_NONE : CRAFTED.get(itemId);
+    }
+
+    private static List<String> computeCrafted(String itemId) {
         List<String> keys = new ArrayList<>(4);
         keys.add(StatKeys.CRAFTED);
         if (itemId == null || itemId.isEmpty()) {
@@ -190,10 +312,17 @@ public final class Classify {
      * there (loot, drops, crafting, a chest).
      */
     public static List<String> obtained(String itemId) {
-        if (itemId == null || itemId.isEmpty()) {
-            return List.of(StatKeys.OBTAINED);
-        }
-        return List.of(StatKeys.OBTAINED, StatKeys.OBTAINED_PREFIX + itemId);
+        return itemId == null || itemId.isEmpty() ? OBTAINED_NONE : OBTAINED.get(itemId);
+    }
+
+    /** The per item obtained key, {@code obtained:<id>}, without joining strings on every call. */
+    public static String obtainedKey(String itemId) {
+        return OBTAINED_KEY.get(itemId);
+    }
+
+    /** The per item stash key, {@code stash:<id>}, without joining strings on every call. */
+    public static String stashKey(String itemId) {
+        return STASH_KEY.get(itemId);
     }
 
     /** Keys to bump when one of the given item is eaten or drunk from a player's hand. */
@@ -202,16 +331,20 @@ public final class Classify {
             return List.of();
         }
         if (itemId.startsWith("Food_")) {
-            return List.of(StatKeys.FOOD_EATEN);
+            return FOOD;
         }
         if (itemId.startsWith("Potion_") && !itemId.startsWith("Potion_Empty")) {
-            return List.of(StatKeys.POTIONS_DRUNK);
+            return POTION;
         }
         return List.of();
     }
 
     /** Keys to bump when a player picks up the given item id. */
     public static List<String> pickedUp(String itemId) {
+        return itemId == null || itemId.isEmpty() ? PICKED_NONE : PICKED.get(itemId);
+    }
+
+    private static List<String> computePickedUp(String itemId) {
         List<String> keys = new ArrayList<>(4);
         keys.add(StatKeys.PICKED_UP);
         if (itemId == null || itemId.isEmpty()) {
@@ -230,10 +363,11 @@ public final class Classify {
 
     /** Keys to bump when a player interacts with (uses) a block. */
     public static List<String> blockUsed(String blockId) {
+        return blockId == null || blockId.isEmpty() ? List.of() : USED.get(blockId);
+    }
+
+    private static List<String> computeBlockUsed(String blockId) {
         List<String> keys = new ArrayList<>(3);
-        if (blockId == null || blockId.isEmpty()) {
-            return keys;
-        }
         // Block state variants are registered as "*<BaseId>_<State>", so drop the marker first.
         if (blockId.startsWith("*")) {
             blockId = blockId.substring(1);
@@ -260,6 +394,13 @@ public final class Classify {
      * @param ranged    true when the killing blow came from a projectile
      */
     public static List<String> kill(String npcTypeId, boolean ranged) {
+        if (npcTypeId == null || npcTypeId.isEmpty()) {
+            return ranged ? KILL_NONE_RANGED : KILL_NONE;
+        }
+        return ranged ? KILL_RANGED.get(npcTypeId) : KILL_MELEE.get(npcTypeId);
+    }
+
+    private static List<String> computeKill(String npcTypeId, boolean ranged) {
         List<String> keys = new ArrayList<>(6);
         keys.add(StatKeys.KILLS);
         if (ranged) {
@@ -350,6 +491,10 @@ public final class Classify {
         if (rootId == null || !rootId.startsWith("Root_")) {
             return List.of();
         }
+        return INTERACTION.get(rootId);
+    }
+
+    private static List<String> computeInteraction(String rootId) {
         if (rootId.startsWith(ABILITY_ROOT)) {
             String ability = rootId.substring(ABILITY_ROOT.length());
             if (ability.isEmpty()) {
@@ -358,7 +503,7 @@ public final class Classify {
             return List.of(StatKeys.ABILITY_CASTS, StatKeys.CAST_PREFIX + ability);
         }
         if (rootId.equals(SPYGLASS_ROOT)) {
-            return List.of(StatKeys.SPYGLASS_USES);
+            return SPYGLASS;
         }
         return List.of();
     }
@@ -375,13 +520,29 @@ public final class Classify {
 
     /** Keys to bump when a player dies. */
     public static List<String> death(String causeId) {
-        List<String> keys = new ArrayList<>(2);
+        return death(causeId, null);
+    }
+
+    /**
+     * Keys to bump when a player dies, from the damage cause id and, when the killing damage came from a
+     * status effect, that effect's id. Cause ids are lower cased, so the Fire cause is {@code death:fire}.
+     * Lava has no cause of its own. Touching it applies the Lava_Burn effect, which deals Fire damage, so
+     * a death to that effect counts as {@code death:lava} as well as {@code death:fire}.
+     */
+    public static List<String> death(String causeId, String effectId) {
+        List<String> keys = new ArrayList<>(3);
         keys.add(StatKeys.DEATHS);
         if (causeId != null && !causeId.isEmpty()) {
             keys.add(StatKeys.DEATH_CAUSE_PREFIX + causeId.toLowerCase(Locale.ROOT));
         }
+        if (effectId != null && effectId.startsWith(LAVA_EFFECT)) {
+            keys.add(StatKeys.DEATH_CAUSE_PREFIX + "lava");
+        }
         return keys;
     }
+
+    /** Prefix of the status effect lava applies, Lava_Burn in 0.7.1, see {@link #death(String, String)}. */
+    private static final String LAVA_EFFECT = "Lava_";
 
     private static boolean isUndead(String id) {
         return id.contains("Skeleton") || id.contains("Zombie") || id.contains("Ghoul")

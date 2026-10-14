@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "dev.ryvrook"
-version = "1.3.0"
+version = "1.4.0"
 
 java {
     toolchain {
@@ -36,6 +36,25 @@ dependencies {
     compileOnly("com.hypixel.hytale:Server:$hytaleVersion")
     // Optional at runtime. Feats only touches it when the PlaceholderAPI plugin is installed.
     compileOnly("at.helpch:placeholderapi-hytale:1.0.8")
+
+    // Tests run without a server. The server jar is only on the test classpath for bson and the logger.
+    testImplementation("com.hypixel.hytale:Server:$hytaleVersion")
+    testImplementation(platform("org.junit:junit-bom:5.11.4"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+tasks.test {
+    useJUnitPlatform()
+    // The tracking benchmark prints its numbers, run with -Pbench to see them in the console.
+    testLogging {
+        showStandardStreams = project.hasProperty("bench")
+        events("failed")
+    }
+    systemProperty("feats.bench", project.hasProperty("bench").toString())
+    // The engine logger insists on owning java.util.logging before anything logs.
+    systemProperty("java.util.logging.manager", "com.hypixel.hytale.logger.backend.HytaleLogManager")
+    jvmArgs("-Xmx1G")
 }
 
 tasks.withType<JavaCompile>().configureEach {

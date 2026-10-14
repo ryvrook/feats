@@ -94,7 +94,9 @@ public record Feat(
         if (!isPersonal()) {
             return false;
         }
-        for (Requirement r : requirements) {
+        // Indexed rather than for each, this runs for every watched counter bump and should not allocate.
+        for (int i = 0, n = requirements.size(); i < n; i++) {
+            Requirement r = requirements.get(i);
             if (progress.get(r.key()) < r.target()) {
                 return false;
             }

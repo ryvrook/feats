@@ -1,8 +1,8 @@
 {
   "Group": "Ryvrook",
   "Name": "Feats",
-  "Version": "1.3.0",
-  "Description": "Achievements and lifetime statistics for Hytale. 218 feats across 9 categories including Chapter I, unlock toasts, and an in-game browser (/feats).",
+  "Version": "1.4.0",
+  "Description": "Achievements and lifetime statistics for Hytale. 327 feats across 9 categories including Chapter I, unlock toasts, and an in-game browser (/feats).",
   "Main": "dev.ryvrook.feats.FeatsPlugin",
   "Authors": [
     {
