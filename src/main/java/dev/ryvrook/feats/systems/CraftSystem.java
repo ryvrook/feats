@@ -27,7 +27,7 @@ public final class CraftSystem extends PlayerEventSystem<CraftRecipeEvent.Post> 
         }
         MaterialQuantity output = recipe.getPrimaryOutput();
         String itemId = output != null ? output.getItemId() : null;
-        long count = Math.max(1, event.getQuantity());
+        long count = CraftCounts.of(store, ref, recipe, event.getQuantity());
         tracker.incrementAll(uuid, Classify.crafted(itemId), count);
     }
 }

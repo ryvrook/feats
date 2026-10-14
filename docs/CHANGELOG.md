@@ -3,6 +3,9 @@
 Every notable change to Feats is recorded here. The format follows Keep a Changelog and the project uses
 semantic versioning.
 
+## 1.5.1
+- Queued bench crafts count one run per craft event. The engine fires one event per finished unit of a queued batch and stamps each with the whole batch quantity, so a batch of a hundred counted as ten thousand crafts. Instant crafts are unchanged.
+
 ## 1.5.0 - 2026-10-14
 
 Needs the Hytale 0.7.0 release server or newer. No feats changed.
