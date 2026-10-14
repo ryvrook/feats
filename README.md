@@ -393,6 +393,7 @@ restart the server.
 | `DiscordMinimumTier` | `"GOLD"` | Lowest tier that gets posted to Discord |
 | `AutosaveSeconds` | `60` | How often changed progress is written to disk. Values below 10 are raised to 10 |
 | `ExportSeconds` | `15` | How often the leaderboard export is checked and rewritten if it changed. `0` or less turns the export off. Other values below 5 are raised to 5 |
+| `Tracker` | `"auto"` | Where the counters come from. `auto` uses TrackerAPI when it is installed, else Feats tracks on its own. `always` uses TrackerAPI only. `never` ignores TrackerAPI. Read at startup, see [Works with TrackerAPI](#works-with-trackerapi) |
 
 `PausePlaytimeWhenDisabled` defaults to `true`, which also stops time played in Creative mode and in disabled
 worlds. Set it to `false` to keep time played counting there.
@@ -594,6 +595,22 @@ unlocks are real unlocks and get their rewards.
 - **Lava.** The game has no lava damage of its own, lava sets players alight with a stronger burn. A death to that burn counts as both a lava death and a fire death.
 - **Glass.** The only blocks named glass in the game are developer test blocks, so windows count as glass.
 - **Cheap tracking.** Block, item and creature ids are classified once and remembered, and a whole event updates a player's counters and checks their feats in one pass. A block break, kill or pickup costs well under a microsecond and allocates nothing.
+
+## Works with TrackerAPI
+
+TrackerAPI is an optional server plugin that tracks what players do once and shares it with other plugins.
+When it is installed, Feats takes its counts from TrackerAPI and registers none of its own tracking hooks.
+Every count carries on in the Feats files with no gap, so nothing is lost when you add or remove it.
+
+- Without TrackerAPI, Feats tracks on its own exactly as before.
+- Feats needs TrackerAPI 1.0.0 or newer. An older one is ignored.
+- The server log says at startup which way Feats is tracking.
+- The `Tracker` setting picks the way. `auto` is the default. `always` uses TrackerAPI only and tracks nothing
+  without it. `never` keeps Feats on its own hooks even when TrackerAPI is installed.
+- The choice is made when Feats starts. After `/plugin reload TrackerAPI`, run `/plugin reload Feats` as
+  well. Feats logs a reminder when it notices.
+- Time played, session length, the Goblin Lab milestones, chat titles, rewards and the export stay with Feats
+  either way.
 
 ## Leaderboard export
 

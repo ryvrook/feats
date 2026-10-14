@@ -8,6 +8,7 @@ import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.component.system.EntityEventSystem;
 import com.hypixel.hytale.event.EventPriority;
 import com.hypixel.hytale.event.IEventDispatcher;
+import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.protocol.GameMode;
 import com.hypixel.hytale.server.core.HytaleServer;
 import com.hypixel.hytale.server.core.Message;
@@ -33,6 +34,9 @@ import dev.ryvrook.feats.api.FeatUnlockedEvent;
 import dev.ryvrook.feats.api.FeatsApi;
 import dev.ryvrook.feats.command.FeatsCommand;
 import dev.ryvrook.feats.export.LeaderboardExporter;
+import dev.ryvrook.feats.integration.TrackerBridge;
+import dev.ryvrook.feats.integration.TrackerHost;
+import dev.ryvrook.feats.integration.TrackerSwitch;
 import dev.ryvrook.feats.model.Feat;
 import dev.ryvrook.feats.model.FeatRegistry;
 import dev.ryvrook.feats.placeholders.FeatsExpansion;
@@ -48,6 +52,7 @@ import dev.ryvrook.feats.systems.DeathSystem;
 import dev.ryvrook.feats.systems.FlagWatcher;
 import dev.ryvrook.feats.systems.InteractionSystem;
 import dev.ryvrook.feats.systems.InventorySystem;
+import dev.ryvrook.feats.systems.LabUses;
 import dev.ryvrook.feats.systems.PickupSystem;
 import dev.ryvrook.feats.systems.PlaceBlockSystem;
 import dev.ryvrook.feats.systems.TameSystem;
@@ -107,6 +112,14 @@ public final class FeatsPlugin extends JavaPlugin {
     private final RecentPlacements placements = new RecentPlacements();
     private final PlacedBlocks placedBlocks = new PlacedBlocks();
     private final RecentDrops drops = new RecentDrops();
+    /** The Goblin Lab device uses the flag watcher reads, fed by whichever tracking path is active. */
+    private final LabUses labUses = new LabUses();
+    /** Which path feeds the counters, decided once in setup. */
+    private TrackerSwitch trackerSwitch;
+    /** The TrackerAPI hooks while Feats tracks through it, closed at shutdown. */
+    private AutoCloseable trackerLink;
+    /** The 5 second look at the TrackerAPI plugin object that notices a reload of it. */
+    private ScheduledFuture<?> trackerWatch;
     private final Map<UUID, Long> lastChatAt = new ConcurrentHashMap<>();
     /** When each player left. Their placement ring, drops and chat timer are dropped an hour later. */
     private final Map<UUID, Long> offlineSince = new ConcurrentHashMap<>();
@@ -391,13 +404,39 @@ public final class FeatsPlugin extends JavaPlugin {
                 future -> future.thenApply(this::onPlayerChat));
         getEventRegistry().registerGlobal(AddPlayerToWorldEvent.class, this::onAddPlayerToWorld);
 
+        TrackerSwitch.Mode mode = TrackerSwitch.Mode.parse(config().tracker());
+        TrackerSwitch.Found found = mode == TrackerSwitch.Mode.NEVER ? TrackerSwitch.Found.MISSING
+                : TrackerSwitch.ENGINE.find();
+        TrackerSwitch.Path path = TrackerSwitch.decide(mode, found);
+        trackerSwitch = new TrackerSwitch(mode, path, found, TrackerSwitch.ENGINE);
+        if (path == TrackerSwitch.Path.OWN) {
+            registerOwnTracking();
+        }
+        memories = new MemoryTracker(tracker, getLogger());
+        sampler = new PlayerSampler(tracker, memories, getLogger());
+        try {
+            flags = new FlagWatcher(tracker, labUses, getLogger());
+        } catch (LinkageError | RuntimeException e) {
+            getLogger().at(Level.WARNING).withCause(e).log("Feats cannot watch the Goblin Lab flags on this server");
+        }
+
+        getLogger().at(path == TrackerSwitch.Path.NONE ? Level.WARNING : Level.INFO)
+                .log("%s", TrackerSwitch.describe(mode, path, found));
+        getLogger().at(Level.INFO).log("Feats loaded %d feats worth %d points, plus %d world feats", registry.count(),
+                registry.totalPoints(), registry.countServer());
+    }
+
+    /**
+     * The Feats engine systems and the portal listener, registered only when Feats tracks on its own. With
+     * TrackerAPI in charge none of them exist and {@link TrackerBridge} feeds the same counters.
+     */
+    private void registerOwnTracking() {
         var ecs = getEntityStoreRegistry();
         ecs.registerSystem(new BreakBlockSystem(tracker, placedBlocks));
         ecs.registerSystem(new PlaceBlockSystem(tracker, placements, placedBlocks));
         ecs.registerSystem(new CraftSystem(tracker));
         ecs.registerSystem(new PickupSystem(tracker, drops));
-        UseBlockSystem useBlocks = new UseBlockSystem(tracker);
-        ecs.registerSystem(useBlocks);
+        ecs.registerSystem(new UseBlockSystem(tracker, labUses));
         ecs.registerSystem(new ZoneDiscoverySystem(tracker));
         ecs.registerSystem(new DamageSystem(tracker));
         ecs.registerSystem(new DeathSystem(tracker));
@@ -429,16 +468,6 @@ public final class FeatsPlugin extends JavaPlugin {
         } catch (LinkageError | RuntimeException e) {
             getLogger().at(Level.WARNING).withCause(e).log("Feats portal tracking is not supported on this server");
         }
-        memories = new MemoryTracker(tracker, getLogger());
-        sampler = new PlayerSampler(tracker, memories, getLogger());
-        try {
-            flags = new FlagWatcher(tracker, useBlocks, getLogger());
-        } catch (LinkageError | RuntimeException e) {
-            getLogger().at(Level.WARNING).withCause(e).log("Feats cannot watch the Goblin Lab flags on this server");
-        }
-
-        getLogger().at(Level.INFO).log("Feats loaded %d feats worth %d points, plus %d world feats", registry.count(),
-                registry.totalPoints(), registry.countServer());
     }
 
     /** Reads server.json on the IO thread and waits for it, so milestones are known before anyone joins. */
@@ -464,6 +493,7 @@ public final class FeatsPlugin extends JavaPlugin {
                 getLogger().at(Level.WARNING).withCause(e).log("Feats cannot watch the Goblin Lab flags on this server");
             }
         }
+        startTrackerLink();
         ticker = HytaleServer.SCHEDULED_EXECUTOR.scheduleAtFixedRate(this::tick, 1, 1, TimeUnit.SECONDS);
         int every = config().autosaveSeconds();
         autosave = HytaleServer.SCHEDULED_EXECUTOR.scheduleAtFixedRate(this::autosave, every, every, TimeUnit.SECONDS);
@@ -484,8 +514,87 @@ public final class FeatsPlugin extends JavaPlugin {
         }
     }
 
+    /**
+     * Hooks the bridge to TrackerAPI when setup chose it, and starts the 5 second watch that notices a reload
+     * of TrackerAPI. The bridge class is only loaded here, after setup found TrackerAPI installed.
+     */
+    private void startTrackerLink() {
+        if (trackerSwitch == null) {
+            return;
+        }
+        if (trackerSwitch.path() == TrackerSwitch.Path.TRACKER_API) {
+            try {
+                trackerLink = TrackerBridge.install(new Host());
+            } catch (LinkageError | RuntimeException e) {
+                getLogger().at(Level.WARNING).withCause(e).log("Feats could not link to TrackerAPI and counts nothing until it is reloaded");
+            }
+        }
+        if (trackerSwitch.mode() != TrackerSwitch.Mode.NEVER) {
+            trackerWatch = HytaleServer.SCHEDULED_EXECUTOR.scheduleWithFixedDelay(() -> {
+                String line = trackerSwitch.poll();
+                if (line != null) {
+                    getLogger().at(Level.WARNING).log("%s", line);
+                }
+            }, 5, 5, TimeUnit.SECONDS);
+        }
+    }
+
+    /** What the TrackerAPI bridge reads and calls in Feats. */
+    private final class Host implements TrackerHost {
+        @Override
+        public FeatsTracker tracker() {
+            return tracker;
+        }
+
+        @Override
+        public LabUses labUses() {
+            return labUses;
+        }
+
+        @Override
+        public boolean trackDistance() {
+            return config().trackDistance();
+        }
+
+        @Override
+        public boolean isCreative(UUID uuid) {
+            return uuid != null && creative.contains(uuid);
+        }
+
+        @Override
+        public void setCreative(UUID uuid, boolean isCreative) {
+            FeatsPlugin.this.setCreative(uuid, isCreative);
+        }
+
+        @Override
+        public String worldOf(UUID uuid) {
+            return uuid == null ? null : worldOf.get(uuid);
+        }
+
+        @Override
+        public void countChat(UUID uuid, long atMillis) {
+            FeatsPlugin.this.countChat(uuid, atMillis);
+        }
+
+        @Override
+        public HytaleLogger logger() {
+            return getLogger();
+        }
+    }
+
     @Override
     protected void shutdown() {
+        if (trackerWatch != null) {
+            trackerWatch.cancel(false);
+        }
+        if (trackerLink != null) {
+            try {
+                trackerLink.close();
+            } catch (Exception | LinkageError e) {
+                getLogger().at(Level.FINE).withCause(e).log("Feats could not unlink from TrackerAPI");
+            }
+            trackerLink = null;
+        }
         FeatsExpansion.unregister(this);
         FeatsApi.uninstall(api);
         if (rewards != null) {
@@ -740,17 +849,8 @@ public final class FeatsPlugin extends JavaPlugin {
         try {
             if (!event.isCancelled() && event.getSender() != null) {
                 UUID uuid = event.getSender().getUuid();
-                long now = System.currentTimeMillis();
-                boolean[] counts = {false};
-                lastChatAt.compute(uuid, (id, last) -> {
-                    if (last == null || now - last >= CHAT_GAP_MILLIS) {
-                        counts[0] = true;
-                        return now;
-                    }
-                    return last;
-                });
-                if (counts[0]) {
-                    tracker.increment(uuid, StatKeys.CHAT, 1);
+                if (ownTracking()) {
+                    countChat(uuid, System.currentTimeMillis()); // TrackerAPI counts it through PlayerChatted otherwise
                 }
                 applyTitle(event, uuid);
             }
@@ -758,6 +858,26 @@ public final class FeatsPlugin extends JavaPlugin {
             getLogger().at(Level.WARNING).withCause(e).log("Feats chat tracking failed");
         }
         return event;
+    }
+
+    /** Counts one chat message unless the last counted one was under 5 seconds before {@code now}. */
+    private void countChat(UUID uuid, long now) {
+        boolean[] counts = {false};
+        lastChatAt.compute(uuid, (id, last) -> {
+            if (last == null || now - last >= CHAT_GAP_MILLIS) {
+                counts[0] = true;
+                return now;
+            }
+            return last;
+        });
+        if (counts[0]) {
+            tracker.increment(uuid, StatKeys.CHAT, 1);
+        }
+    }
+
+    /** True when the Feats systems and samplers feed the counters, false when TrackerAPI does or nothing does. */
+    private boolean ownTracking() {
+        return trackerSwitch == null || trackerSwitch.path() == TrackerSwitch.Path.OWN;
     }
 
     /**
@@ -816,6 +936,7 @@ public final class FeatsPlugin extends JavaPlugin {
         try {
             boolean trackDistance = config().trackDistance();
             boolean recordSessions = ++ticks % SESSION_RECORD_TICKS == 0;
+            boolean sample = ownTracking(); // with TrackerAPI the samples arrive as PlayerMoved and MemoryRecorded
             long now = System.currentTimeMillis();
             Map<World, List<PlayerRef>> byWorld = null;
             for (PlayerRef ref : Universe.get().getPlayers()) {
@@ -827,7 +948,7 @@ public final class FeatsPlugin extends JavaPlugin {
                 if (recordSessions) {
                     tracker.raiseTo(uuid, StatKeys.LONGEST_SESSION, sessions.seconds(uuid, now));
                 }
-                World world = worldOf(ref);
+                World world = sample ? worldOf(ref) : null;
                 if (world != null) {
                     if (byWorld == null) {
                         byWorld = new HashMap<>(4);
@@ -835,7 +956,7 @@ public final class FeatsPlugin extends JavaPlugin {
                     byWorld.computeIfAbsent(world, w -> new ArrayList<>()).add(ref);
                 }
             }
-            if (byWorld != null) {
+            if (byWorld != null && ownTracking()) {
                 for (Map.Entry<World, List<PlayerRef>> e : byWorld.entrySet()) {
                     List<PlayerRef> players = e.getValue();
                     try {

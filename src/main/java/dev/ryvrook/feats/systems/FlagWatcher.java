@@ -32,13 +32,13 @@ public final class FlagWatcher {
             "goblin_lab_recipe_c", "GoblinLab_Tinkering_Bench_Recipeset_C");
 
     private final FeatsTracker tracker;
-    private final UseBlockSystem uses;
+    private final LabUses uses;
     private final HytaleLogger logger;
     private final List<Feat> watched;
     private ScheduledFuture<?> task;
     private volatile boolean warned;
 
-    public FlagWatcher(FeatsTracker tracker, UseBlockSystem uses, HytaleLogger logger) {
+    public FlagWatcher(FeatsTracker tracker, LabUses uses, HytaleLogger logger) {
         this.tracker = tracker;
         this.uses = uses;
         this.logger = logger;

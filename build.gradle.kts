@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "dev.ryvrook"
-version = "1.4.0"
+version = "1.5.0"
 
 java {
     toolchain {
@@ -31,14 +31,22 @@ repositories {
     }
 }
 
+// The TrackerAPI jar Feats compiles against. Optional at runtime, see integration/TrackerBridge.
+// Override with -PtrackerApiJar=/path/to/TrackerAPI-1.0.0.jar
+val trackerApiJar = (project.findProperty("trackerApiJar") as String?)?.trim()
+    ?: "../trackerapi/build/libs/TrackerAPI-1.0.0.jar"
+
 dependencies {
     // Provided by the Hytale server at runtime; never bundled into the mod jar.
     compileOnly("com.hypixel.hytale:Server:$hytaleVersion")
     // Optional at runtime. Feats only touches it when the PlaceholderAPI plugin is installed.
     compileOnly("at.helpch:placeholderapi-hytale:1.0.8")
+    // Optional at runtime. Only the bridge touches it, and only when TrackerAPI is installed.
+    compileOnly(files(trackerApiJar))
 
     // Tests run without a server. The server jar is only on the test classpath for bson and the logger.
     testImplementation("com.hypixel.hytale:Server:$hytaleVersion")
+    testImplementation(files(trackerApiJar))
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

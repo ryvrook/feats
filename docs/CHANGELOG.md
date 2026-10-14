@@ -3,6 +3,26 @@
 Every notable change to Feats is recorded here. The format follows Keep a Changelog and the project uses
 semantic versioning.
 
+## 1.5.0 - 2026-10-14
+
+Needs the Hytale 0.7.0 release server or newer. No feats changed.
+
+### Added
+
+- Works with TrackerAPI. When TrackerAPI 1.0.0 or newer is installed, Feats takes block, item, combat,
+  movement, portal, zone, Memories, taming, ability and chat counts from it and registers none of its own
+  tracking hooks. Without it Feats tracks on its own as before.
+- `Tracker` setting in `Feats.json`, `auto` by default. `always` uses TrackerAPI only and `never` ignores it.
+- One line in the server log at startup saying which way Feats tracks, and a reminder to reload Feats when
+  TrackerAPI is reloaded.
+
+### Upgrading
+
+- Nothing to do. Every counter carries on in the same player files.
+- With TrackerAPI, items taken back out of a chest are matched against the last 10 minutes of what the player
+  put away, where Feats used to remember it for as long as the player kept it there.
+  Other members of the group no longer get it.
+
 ## 1.4.0 - 2026-10-14
 
 Needs the Hytale 0.7.0 release server or newer. 327 personal feats worth 15,075 points in nine categories, plus

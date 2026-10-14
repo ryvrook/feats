@@ -96,6 +96,10 @@ public final class FeatsConfig {
                     (c, v, extra) -> c.unlockSound = v,
                     (c, extra) -> c.unlockSound)
             .add()
+            .append(new KeyedCodec<>("Tracker", Codec.STRING),
+                    (c, v, extra) -> c.tracker = v,
+                    (c, extra) -> c.tracker)
+            .add()
             .build();
 
     private boolean showToasts = true;
@@ -119,6 +123,7 @@ public final class FeatsConfig {
     private String[] disabledWorlds = new String[0];
     private boolean pausePlaytimeWhenDisabled = true;
     private String unlockSound = "SFX_Memories_Unlock_Local";
+    private String tracker = "auto";
 
     public boolean showToasts() {
         return showToasts;
@@ -215,5 +220,14 @@ public final class FeatsConfig {
     /** Sound asset id played on unlock. An empty or unknown id falls back to the Memories unlock sound. */
     public String unlockSound() {
         return unlockSound;
+    }
+
+    /**
+     * Where the counters come from. {@code auto} uses TrackerAPI when it is installed and new enough, else
+     * the Feats systems. {@code always} uses TrackerAPI only and tracks nothing without it. {@code never}
+     * ignores TrackerAPI. Read once at setup, a change needs a restart or a reload of Feats.
+     */
+    public String tracker() {
+        return tracker == null || tracker.isBlank() ? "auto" : tracker;
     }
 }
