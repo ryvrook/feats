@@ -18,6 +18,8 @@ import java.util.Locale;
 public final class TrackerSwitch {
     /** The oldest TrackerAPI Feats binds to. */
     public static final String MINIMUM = "1.0.0";
+    /** The first TrackerAPI that reloads its dependents, Feats included, after its own reload. */
+    public static final String RELOADS_DEPENDENTS = "1.0.3";
     public static final String GROUP = "Ryvrook";
     public static final String NAME = "TrackerAPI";
 
@@ -119,7 +121,8 @@ public final class TrackerSwitch {
      * Run every 5 seconds. Returns one line to log when the TrackerAPI plugin object changed since the last
      * look, which means it was reloaded, removed or added, else null. A reloaded TrackerAPI has new API
      * classes in a new loader, and the hooks Feats registered live on the old ones, so Feats has to be
-     * reloaded as well.
+     * reloaded as well. TrackerAPI 1.0.3 and newer do that reload themselves, so a reload of one of those
+     * is not logged. An unload, or a reload of an older one, still is.
      */
     public synchronized String poll() {
         Found now;
@@ -133,6 +136,9 @@ public final class TrackerSwitch {
             return null;
         }
         seen = current;
+        if (path == Path.TRACKER_API && current != null && reloadsDependents(now.version())) {
+            return null; // TrackerAPI reloads Feats right after, which links again
+        }
         String noSwitch = mode == Mode.AUTO
                 ? " Feats cannot switch to its own tracking after setup, so the reload is needed either way." : "";
         return switch (path) {
@@ -145,6 +151,18 @@ public final class TrackerSwitch {
                     ? "TrackerAPI is now loaded but Feats chose its own tracking at setup. Run /plugin reload Feats to track through TrackerAPI."
                     : null;
         };
+    }
+
+    /** True when this TrackerAPI version reloads Feats after its own reload. Null or unreadable is false. */
+    public static boolean reloadsDependents(String version) {
+        if (version == null || version.isBlank()) {
+            return false;
+        }
+        try {
+            return !VersionCompare.below(version, RELOADS_DEPENDENTS);
+        } catch (RuntimeException e) {
+            return false;
+        }
     }
 
     private static Found findInEngine() {

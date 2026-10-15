@@ -30,8 +30,9 @@ titles in chat. Time played, session length and the Goblin Lab flag poll stay wi
 
 `TrackerBridgeTest` feeds synthetic TrackerAPI records through the bridge and checks the counters come out as
 the Feats systems made them. A reload of TrackerAPI
-leaves Feats with hooks on the old classes. TrackerAPI 1.0.3 reloads its dependents itself, and the 5 second
-watch in `TrackerSwitch` logs a reminder when the plugin object changes.
+leaves Feats with hooks on the old classes. TrackerAPI 1.0.3 and newer reload their dependents themselves, so the 5
+second watch in `TrackerSwitch` stays quiet for those and only logs a reminder for an older TrackerAPI or an
+unload.
 
 ## Threads
 

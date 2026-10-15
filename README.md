@@ -614,8 +614,8 @@ Every count carries on in the Feats files with no gap, so nothing is lost when y
 - The server log says at startup which way Feats is tracking.
 - The `Tracker` setting picks the way. `auto` is the default. `always` uses TrackerAPI only and tracks nothing
   without it. `never` keeps Feats on its own hooks even when TrackerAPI is installed.
-- The choice is made when Feats starts. After `/plugin reload TrackerAPI`, run `/plugin reload Feats` as
-  well. Feats logs a reminder when it notices.
+- The choice is made when Feats starts. TrackerAPI 1.0.3 and newer reload Feats after their own reload. With
+  an older TrackerAPI, run `/plugin reload Feats` after `/plugin reload TrackerAPI`. Feats logs a reminder then.
 - Time played, session length, the Goblin Lab milestones, chat titles, rewards and the export stay with Feats
   either way.
 

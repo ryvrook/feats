@@ -35,6 +35,9 @@ semantic versioning.
 
 ### Fixed
 
+- A reload of TrackerAPI 1.0.3 or newer no longer logs a reminder to reload Feats, since that TrackerAPI
+  reloads Feats itself. An older TrackerAPI or an unload still gets the reminder.
+
 - Without TrackerAPI, dropping 256 cheap items no longer made Feats forget the drop of a counted item. A full
   drop memory now forgets its oldest drop.
 - `%feats_rarity_<featId>%` ignores the case of the id, like the other feat placeholders.

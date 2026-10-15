@@ -3,6 +3,7 @@ package dev.ryvrook.feats.integration;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -49,5 +50,24 @@ class TrackerSwitchTest {
         assertTrue(line.contains("/plugin reload Feats"));
         assertTrue(line.contains("own tracking"), "auto mode says it cannot fall back");
         assertNull(watch.poll());
+    }
+
+    @Test
+    void trackerApiFrom103OnReloadsFeatsItselfSoOnlyOlderOnesAreLogged() {
+        assertFalse(TrackerSwitch.reloadsDependents("1.0.2"));
+        assertTrue(TrackerSwitch.reloadsDependents("1.0.3"));
+        assertTrue(TrackerSwitch.reloadsDependents("1.1.0"));
+        assertFalse(TrackerSwitch.reloadsDependents(null));
+        assertFalse(TrackerSwitch.reloadsDependents(""));
+
+        TrackerSwitch.Found[] now = {RUNNING};
+        TrackerSwitch watch = new TrackerSwitch(TrackerSwitch.Mode.AUTO, TrackerSwitch.Path.TRACKER_API, RUNNING,
+                () -> now[0]);
+        now[0] = new TrackerSwitch.Found(new Object(), "1.0.3", true);
+        assertNull(watch.poll(), "a 1.0.3 reload reloads Feats, nothing to say");
+        now[0] = TrackerSwitch.Found.MISSING;
+        String line = watch.poll();
+        assertNotNull(line, "an unload is still logged");
+        assertTrue(line.contains("unloaded"));
     }
 }
