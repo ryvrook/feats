@@ -43,6 +43,8 @@ import java.util.logging.Level;
  */
 public final class RewardService {
     public static final String FILE_NAME = "Rewards.json";
+    /** Coins rewards still owed at the last shutdown because Coinage was away, read back at the next start. */
+    public static final String WAITING_FILE = "CoinsWaiting.json";
     private static final long STEP_MILLIS = 100L;
     private static final long QUIET_MILLIS = 60_000L;
 
@@ -50,6 +52,9 @@ public final class RewardService {
     private final FeatsTracker tracker;
     private final HytaleLogger logger;
     private final Path file;
+    private final Path waitingFile;
+    /** Coins that came due while Coinage was stopped or reloading, see {@link #payWaiting}. */
+    private final WaitingCoins waiting = new WaitingCoins();
     private volatile RewardTable table = RewardTable.EMPTY;
     private volatile boolean stopped;
     /** Pays the Coins part while Coinage is installed, null without it. */
@@ -65,6 +70,7 @@ public final class RewardService {
         this.tracker = tracker;
         this.logger = logger;
         this.file = dataDirectory.resolve(FILE_NAME);
+        this.waitingFile = dataDirectory.resolve(WAITING_FILE);
     }
 
     /**
@@ -117,6 +123,54 @@ public final class RewardService {
         if (ran > 0) {
             logger.at(Level.INFO).log("Feats ran %d waiting reward steps at shutdown", ran);
         }
+        CoinPayer payer = coins;
+        if (payer != null && payer.ready()) {
+            for (WaitingCoins.Payment p : waiting.takeAll()) {
+                payCoins(p);
+            }
+        }
+        try {
+            int kept = waiting.save(waitingFile);
+            if (kept > 0) {
+                logger.at(Level.INFO).log("Feats keeps %d Coins rewards in %s until Coinage is back", kept, WAITING_FILE);
+            }
+        } catch (IOException | RuntimeException e) {
+            logger.at(Level.WARNING).withCause(e).log("Feats could not write %s, the Coins rewards waiting for Coinage are lost", WAITING_FILE);
+        }
+    }
+
+    /**
+     * Reads the Coins rewards a shutdown left waiting for Coinage. They are paid once Coinage is linked, see
+     * {@link #payWaiting}. Blocks on the file, so call it on the IO thread.
+     */
+    public void loadWaiting() {
+        try {
+            int read = waiting.load(waitingFile);
+            if (read > 0) {
+                logger.at(Level.INFO).log("Feats read %d Coins rewards that were waiting for Coinage", read);
+            }
+        } catch (IOException | RuntimeException e) {
+            logger.at(Level.WARNING).withCause(e).log("Feats could not read %s", WAITING_FILE);
+        }
+    }
+
+    /**
+     * Queues the Coins rewards that waited for Coinage once it is linked again. Cheap when nothing waits, the
+     * plugin calls it every second.
+     */
+    public void payWaiting() {
+        CoinPayer payer = coins;
+        if (stopped || payer == null || !payer.ready() || waiting.isEmpty()) {
+            return;
+        }
+        for (WaitingCoins.Payment p : waiting.takeAll()) {
+            enqueue(() -> payCoins(p));
+        }
+    }
+
+    /** Coins rewards waiting for Coinage, for tests and status. */
+    public int coinsWaiting() {
+        return waiting.size();
     }
 
     /** Hands the Coins part of each reward to Coinage. Null leaves Coins unpaid with a warning. */
@@ -185,8 +239,9 @@ public final class RewardService {
             enqueue(() -> runCommand(command, line));
         }
         if (reward.coins() != null) {
-            String reason = "feats:" + ctx.feat().id();
-            enqueue(() -> payCoins(ctx.uuid(), reward, reason));
+            WaitingCoins.Payment payment = new WaitingCoins.Payment(ctx.uuid(), reward.currency(), reward.coins(),
+                    "feats:" + ctx.feat().id());
+            enqueue(() -> payCoins(payment));
         }
         if (!reward.permissions().isEmpty() || !reward.group().isEmpty() || !reward.message().isEmpty()) {
             String message = reward.message().isEmpty() ? "" : ctx.fill(reward.message());
@@ -194,16 +249,23 @@ public final class RewardService {
         }
     }
 
-    /** Deposits the Coins through Coinage. Coinage takes deposits for offline players as well. */
-    private void payCoins(UUID uuid, Reward reward, String reason) {
+    /**
+     * Deposits the Coins through Coinage, which takes deposits for offline players as well. While Coinage is
+     * stopped or reloading the payment waits for it instead of being lost.
+     */
+    void payCoins(WaitingCoins.Payment payment) {
         CoinPayer payer = coins;
-        String what = "coins " + reward.coins().toPlainString() + (reward.currency().isEmpty() ? "" : " " + reward.currency());
+        String what = "coins " + payment.amount().toPlainString() + (payment.currency().isEmpty() ? "" : " " + payment.currency());
         if (payer == null) {
             failed(what, new IllegalStateException("Coinage is not installed"));
             return;
         }
-        String problem = payer.pay(uuid, reward.currency(), reward.coins(), reason);
-        if (problem != null) {
+        String problem = payer.pay(payment.player(), payment.currency(), payment.amount(), payment.reason());
+        if (CoinPayer.NOT_RUNNING.equals(problem)) {
+            if (!waiting.add(payment)) {
+                failed(what, new IllegalStateException(WaitingCoins.LIMIT + " Coins rewards already wait for Coinage"));
+            }
+        } else if (problem != null) {
             failed(what, new IllegalStateException(problem));
         }
     }

@@ -291,6 +291,7 @@ public final class FeatsPlugin extends JavaPlugin {
         if (config().rewardsEnabled()) {
             runIo(rewards::reload); // nothing reads Rewards.json while rewards are off
         }
+        runIo(rewards::loadWaiting); // Coins a shutdown kept because Coinage was away, owed even with rewards off now
         api = FeatsApi.install(this);
 
         getCommandRegistry().registerCommand(new FeatsCommand(this));
@@ -865,6 +866,7 @@ public final class FeatsPlugin extends JavaPlugin {
      */
     private void tick() {
         try {
+            rewards.payWaiting();
             boolean trackDistance = config().trackDistance();
             boolean recordSessions = ++ticks % SESSION_RECORD_TICKS == 0;
             boolean sample = ownTracking(); // with TrackerAPI the samples arrive as PlayerMoved and MemoryRecorded

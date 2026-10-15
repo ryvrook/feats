@@ -52,6 +52,11 @@ public final class CoinageRewards implements CoinPayer, AutoCloseable {
         return api != null;
     }
 
+    @Override
+    public boolean ready() {
+        return !closed && api != null;
+    }
+
     public String version() {
         CoinageApi a = api;
         try {
@@ -65,7 +70,7 @@ public final class CoinageRewards implements CoinPayer, AutoCloseable {
     public String pay(UUID player, String currency, BigDecimal amount, String reason) {
         CoinageApi a = api;
         if (closed || a == null) {
-            return "Coinage is not running";
+            return NOT_RUNNING;
         }
         if (player == null || amount == null || amount.signum() <= 0) {
             return "nothing to pay";
