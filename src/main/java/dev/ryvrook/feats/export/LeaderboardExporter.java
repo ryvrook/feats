@@ -43,7 +43,8 @@ import java.util.logging.Level;
  * and recent unlocks without linking against Feats. The file is replaced atomically.
  *
  * <p>Each export also keeps the ranking it wrote in memory, so {@code /feats top} can answer from it
- * without touching the disk. Player files are re-read at most once a minute.
+ * without touching the disk. Player files are re-read at most once a minute, and only the ones saved since
+ * the last read are parsed again.
  *
  * <p>{@link #tick} and {@link #flush} do file work and run on the Feats IO thread, or inline at shutdown.
  * The online count is read by the caller and passed in, so this class never touches the universe itself.
@@ -240,12 +241,8 @@ public final class LeaderboardExporter {
         if (uuid == null) {
             return null;
         }
-        for (PlayerProgress p : tracker.loadedPlayers()) {
-            if (p.uuid().equals(uuid)) {
-                return p;
-            }
-        }
-        return diskCache.get(uuid);
+        PlayerProgress live = tracker.loadedProgress(uuid);
+        return live != null ? live : diskCache.get(uuid);
     }
 
     /**

@@ -10,11 +10,13 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -35,6 +37,16 @@ public final class ProgressStore {
     /** Lower case username to uuid, filled by one scan of the player files and kept current by loads and saves. */
     private final Map<String, UUID> names = new ConcurrentHashMap<>();
     private volatile boolean namesScanned;
+    /** What {@link #loadAll} read from each file last time, so an unchanged file is not parsed again. */
+    private final Map<UUID, Read> reads = new ConcurrentHashMap<>();
+
+    /** One file as {@link #loadAll} last read it. */
+    private record Read(long size, long modified, Object fileKey, PlayerProgress progress) {
+        boolean matches(BasicFileAttributes attrs) {
+            return size == attrs.size() && modified == attrs.lastModifiedTime().toMillis()
+                    && Objects.equals(fileKey, attrs.fileKey());
+        }
+    }
 
     public ProgressStore(Path dataDirectory, HytaleLogger logger) {
         this.directory = dataDirectory.resolve("players");
@@ -117,14 +129,17 @@ public final class ProgressStore {
     }
 
     /**
-     * Every player file on disk, with already-loaded (online) players substituted so their
-     * in-memory counters win. Used by the leaderboard and cheap for the file counts a server sees.
+     * Every player file on disk, with already-loaded (online) players substituted so their in-memory
+     * counters win. Used by the leaderboard export and the rarity scan once a minute. A file whose size,
+     * modified time and file key are the same as at the last call is not read again, its copy from then is
+     * handed back. The copies are only ever read, never changed or saved. Run it on the Feats IO thread.
      */
     public Collection<PlayerProgress> loadAll(Collection<PlayerProgress> loaded) {
         Map<UUID, PlayerProgress> result = new HashMap<>();
         for (PlayerProgress p : loaded) {
             result.put(p.uuid(), p);
         }
+        Set<UUID> onDisk = new HashSet<>();
         try (DirectoryStream<Path> files = Files.newDirectoryStream(directory, "*.json")) {
             for (Path file : files) {
                 String name = file.getFileName().toString();
@@ -134,18 +149,28 @@ public final class ProgressStore {
                 } catch (IllegalArgumentException e) {
                     continue;
                 }
+                onDisk.add(uuid);
                 if (result.containsKey(uuid)) {
                     continue;
                 }
                 try {
+                    BasicFileAttributes attrs = Files.readAttributes(file, BasicFileAttributes.class);
+                    Read last = reads.get(uuid);
+                    if (last != null && last.matches(attrs)) {
+                        result.put(uuid, last.progress());
+                        continue;
+                    }
                     String json = Files.readString(file, StandardCharsets.UTF_8);
                     PlayerProgress progress = PlayerProgress.fromDocument(uuid, Document.parse(json));
                     remember(progress);
+                    reads.put(uuid, new Read(attrs.size(), attrs.lastModifiedTime().toMillis(), attrs.fileKey(), progress));
                     result.put(uuid, progress);
                 } catch (Exception e) {
+                    reads.remove(uuid);
                     logger.at(Level.FINE).withCause(e).log("Skipping unreadable Feats file %s", file);
                 }
             }
+            reads.keySet().retainAll(onDisk);
         } catch (IOException e) {
             logger.at(Level.WARNING).withCause(e).log("Could not list Feats player files");
         }
@@ -154,6 +179,7 @@ public final class ProgressStore {
 
     public void delete(UUID uuid) {
         synchronized (lockFor(uuid)) {
+            reads.remove(uuid);
             try {
                 Files.deleteIfExists(fileFor(uuid));
             } catch (IOException e) {
