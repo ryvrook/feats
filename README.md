@@ -217,6 +217,8 @@ percentage only ever count personal feats. The records are kept in `server.json`
 
 | Feats | Hytale server |
 |---|---|
+| 1.5.1 | 0.7.0 release or newer, built against 0.7.1 |
+| 1.5.0 | 0.7.0 release or newer |
 | 1.4.0 | 0.7.0 release or newer |
 | 1.3.0 | 0.7.0 release or newer |
 | 1.2.1 | 0.7.0 release or newer |
@@ -387,9 +389,9 @@ restart the server.
 | `AllowViewOthers` | `true` | Let players use `/feats view` and `/feats compare` |
 | `Titles` | `"PREFIX"` | `PREFIX` puts a player's chosen title in front of their chat lines. `OFF` leaves chat alone |
 | `ShowRarity` | `true` | Show rarity in the browser, in `/feats share` and on the unlock chat line of rare feats |
-| `RarityMinimumPlayers` | `10` | Rarity stays hidden until at least this many players count toward it |
-| `RareBelowPercent` | `5` | A feat owned by fewer than this percent of players counts as rare |
-| `RewardsEnabled` | `false` | Hand out the rewards in `Rewards.json`. While off the file is never read |
+| `RarityMinimumPlayers` | `10` | Rarity stays hidden until at least this many players count toward it. Values below 1 read as 1 |
+| `RareBelowPercent` | `5` | A feat owned by fewer than this percent of players counts as rare, 0 to 100 |
+| `RewardsEnabled` | `false` | Hand out the rewards in `Rewards.json`, Coinage coins included. While off the file is never read |
 | `DiscordWebhookUrl` | `""` | Discord webhook to post unlocks to. Empty turns it off |
 | `DiscordMinimumTier` | `"GOLD"` | Lowest tier that gets posted to Discord |
 | `AutosaveSeconds` | `60` | How often changed progress is written to disk. Values below 10 are raised to 10 |
@@ -727,7 +729,7 @@ jar somewhere else.
 The build pulls `com.hypixel.hytale:Server` from Hytale's Maven repository as a compile only dependency, so no
 manual server jar is needed. PlaceholderAPI comes from the HelpChat repository as a compile only dependency and
 is never bundled. Two properties in `gradle.properties` choose the server artifact. `hytale_channel` is
-`release` or `pre-release`, and `hytale_version` defaults to `0.7.0`. Override both on the command line to
+`release` or `pre-release`, and `hytale_version` defaults to `0.7.1`. Override both on the command line to
 compile against a newer release or a pre-release.
 
 ```bash
@@ -735,6 +737,10 @@ compile against a newer release or a pre-release.
 ```
 
 Versions older than 0.7.0 no longer compile because the Chapter I hooks need its classes.
+
+The TrackerAPI and Coinage bridges compile against `TrackerAPI-1.0.0.jar` and `Coinage-api-1.0.0.jar`, found in a
+`trackerapi` and a `coinage` checkout next to this one or under `~/Projects`. Point at other copies with
+`-PtrackerApiJar=<path>` and `-PcoinageJar=<path>`. Neither is bundled.
 
 ## Contributing
 

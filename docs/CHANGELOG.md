@@ -24,8 +24,8 @@ semantic versioning.
 - The leaderboard export and the rarity scan only parse the player files saved since their last read. With
   2,000 player files a read with nothing changed went from 167 ms to 10 ms on the Feats file thread.
 - The stale asset pack fix matches the one in Coinage. It compares jar paths without mixing file systems,
-  drops a jar pack directly while the asset monitor runs, and lets go of the pack at shutdown, so a
-  `/plugin reload Feats` no longer logs a SEVERE from the asset monitor.
+  drops a jar pack directly while the asset monitor runs, and lets go of the pack at shutdown. The engine
+  still prints `Failed to reload plugin Ryvrook:Feats!` on a reload and then enables Feats with its pages.
 
 ### Fixed
 
