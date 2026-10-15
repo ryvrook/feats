@@ -196,7 +196,7 @@ public final class FeatRegistry {
         feat("wanderer", "Wanderer", "Travel 1 kilometre.", EXPLORATION, BRONZE, "Tool_Map", StatKeys.DISTANCE, 1_000);
         feat("traveller", "Traveller", "Travel 10 kilometres.", EXPLORATION, SILVER, "Glider_Scrap", StatKeys.DISTANCE, 10_000);
         feat("globetrotter", "Globetrotter", "Travel 50 kilometres.", EXPLORATION, GOLD, "Glider_Scrap", StatKeys.DISTANCE, 50_000);
-        feat("around_orbis", "Around Orbis", "Travel 200 kilometres. That is a very long walk.", EXPLORATION, PLATINUM, "Glider_Scrap", StatKeys.DISTANCE, 200_000);
+        feat("around_orbis", "Around Orbis", "Travel 200 kilometres.", EXPLORATION, PLATINUM, "Glider_Scrap", StatKeys.DISTANCE, 200_000);
         feat("circumnavigator", "Circumnavigator", "Travel 500 kilometres.", EXPLORATION, PLATINUM, "Vehicle_Wood_Boat", StatKeys.DISTANCE, 500_000);
         // Movement trackers. The engine keeps these counters in metres.
         feat("sea_legs", "Sea Legs", "Swim 1 kilometre.", EXPLORATION, SILVER, "Armor_Diving_Crude_Chest", "swim_distance", 1_000); // engine key swim_distance
@@ -373,7 +373,7 @@ public final class FeatRegistry {
         feat("apocalypse", "Apocalypse", "Deal 1,000,000 damage.", COMBAT, PLATINUM, "Weapon_Bomb_Large_Fire", StatKeys.DAMAGE_DEALT, 1_000_000);
         // Largest single hit, raised by the engine.
         hidden("overkill", "Overkill", "Deal 250 damage in one hit.", COMBAT, SILVER, "Weapon_Club_Iron", "biggest_hit", 250); // engine key biggest_hit
-        feat("tough", "Tough", "Take 1,000 damage and live to tell the tale.", COMBAT, BRONZE, "Armor_Iron_Chest", StatKeys.DAMAGE_TAKEN, 1_000);
+        feat("tough", "Tough", "Take 1,000 damage.", COMBAT, BRONZE, "Armor_Iron_Chest", StatKeys.DAMAGE_TAKEN, 1_000);
         feat("punching_bag", "Punching Bag", "Take 10,000 damage.", COMBAT, SILVER, "Armor_Iron_Chest", StatKeys.DAMAGE_TAKEN, 10_000);
         feat("unbreakable", "Unbreakable", "Take 100,000 damage.", COMBAT, GOLD, "Armor_Cobalt_Chest", StatKeys.DAMAGE_TAKEN, 100_000);
         feat("immortal", "Immortal", "Take 1,000,000 damage.", COMBAT, PLATINUM, "Armor_Adamantite_Chest", StatKeys.DAMAGE_TAKEN, 1_000_000);
@@ -390,14 +390,14 @@ public final class FeatRegistry {
         feat("dedicated", "Dedicated", "Play for 1 hour.", SURVIVAL, BRONZE, "Deco_Trophy_Harvest", StatKeys.PLAYTIME, HOUR);
         feat("devoted", "Devoted", "Play for 10 hours.", SURVIVAL, SILVER, "Deco_Trophy_Harvest", StatKeys.PLAYTIME, 10 * HOUR);
         feat("veteran", "Veteran", "Play for 50 hours.", SURVIVAL, GOLD, "Deco_Treasure", StatKeys.PLAYTIME, 50 * HOUR);
-        hidden("touch_grass", "Touch Grass", "Play for 200 hours. Go outside sometime.", SURVIVAL, PLATINUM, "Deco_Treasure_Pile_Large", StatKeys.PLAYTIME, 200 * HOUR);
+        hidden("touch_grass", "Touch Grass", "Play for 200 hours.", SURVIVAL, PLATINUM, "Deco_Treasure_Pile_Large", StatKeys.PLAYTIME, 200 * HOUR);
         hidden("old_timer", "Old Timer", "Play for 500 hours.", SURVIVAL, PLATINUM, "Deco_Treasure_Pile_Large", StatKeys.PLAYTIME, 500 * HOUR);
         // Longest single session in seconds, raised by the engine when a player leaves.
         feat("marathon", "Marathon", "Stay online for 8 hours in one session.", SURVIVAL, GOLD, "Potion_Stamina_Greater", "longest_session", 8 * HOUR); // engine key longest_session
         feat("first_death", "Everybody Dies", "Die for the first time.", SURVIVAL, BRONZE, "Deco_Bone_Skulls_Wall", StatKeys.DEATHS, 1);
         feat("nine_lives", "Nine Lives", "Die 9 times.", SURVIVAL, SILVER, "Deco_Bone_Skulls_Wall", StatKeys.DEATHS, 9);
         feat("death_wish", "Death Wish", "Die 50 times.", SURVIVAL, GOLD, "Deco_Bone_Skulls", StatKeys.DEATHS, 50);
-        hidden("respawn_point", "Respawn Point", "Die 250 times. At this point it is a lifestyle.", SURVIVAL, PLATINUM, "Deco_Bone_Pile", StatKeys.DEATHS, 250);
+        hidden("respawn_point", "Respawn Point", "Die 250 times.", SURVIVAL, PLATINUM, "Deco_Bone_Pile", StatKeys.DEATHS, 250);
         hidden("gravity_check", "Gravity Check", "Die from a fall.", SURVIVAL, BRONZE, "Deco_Bone_Ribs_Feran", StatKeys.DEATH_CAUSE_PREFIX + "fall", 1);
         hidden("sleeping_with_fishes", "Sleeping with the Fishes", "Drown.", SURVIVAL, BRONZE, "Fish_Minnow_Item", StatKeys.DEATH_CAUSE_PREFIX + "drowning", 1);
         hidden("hot_stuff", "Hot Stuff", "Burn to death.", SURVIVAL, BRONZE, "Ingredient_Fire_Essence", StatKeys.DEATH_CAUSE_PREFIX + "fire", 1);
@@ -409,7 +409,7 @@ public final class FeatRegistry {
         feat("bench_warmer", "Bench Warmer", "Use a crafting bench 50 times.", SURVIVAL, SILVER, "Bench_WorkBench", StatKeys.BENCHES_USED, 50);
         feat("bench_veteran", "Bench Veteran", "Use a crafting bench 500 times.", SURVIVAL, GOLD, "Bench_Furnace", StatKeys.BENCHES_USED, 500);
         feat("well_fed", "Well Fed", "Eat 50 meals.", SURVIVAL, BRONZE, "Food_Bread", StatKeys.FOOD_EATEN, 50);
-        feat("glutton", "Glutton", "Eat 500 meals. The Feastmaster would be proud.", SURVIVAL, SILVER, "Food_Cheese", StatKeys.FOOD_EATEN, 500);
+        feat("glutton", "Glutton", "Eat 500 meals.", SURVIVAL, SILVER, "Food_Cheese", StatKeys.FOOD_EATEN, 500);
         feat("bottomless", "Bottomless", "Eat 5,000 meals.", SURVIVAL, GOLD, "Food_Pie_Pumpkin", StatKeys.FOOD_EATEN, 5_000);
         feat("potion_addict", "Potion Addict", "Drink 50 potions.", SURVIVAL, SILVER, "Potion_Health", StatKeys.POTIONS_DRUNK, 50);
         feat("potion_problem", "Potion Problem", "Drink 500 potions.", SURVIVAL, GOLD, "Potion_Health_Large", StatKeys.POTIONS_DRUNK, 500);
@@ -421,7 +421,7 @@ public final class FeatRegistry {
         feat("timber", "Timber", "Chop 1,000 logs.", NATURE, GOLD, "Wood_Oak_Trunk", StatKeys.WOOD_CHOPPED, 1_000);
         feat("deforestation", "Deforestation", "Chop 2,500 logs.", NATURE, GOLD, "Tool_Hatchet_Cobalt", StatKeys.WOOD_CHOPPED, 2_500);
         feat("clear_cut", "Clear Cut", "Chop 5,000 logs.", NATURE, PLATINUM, "Tool_Hatchet_Thorium", StatKeys.WOOD_CHOPPED, 5_000);
-        hidden("old_growth", "Old Growth", "Chop 25,000 logs. The forest remembers.", NATURE, PLATINUM, "Tool_Hatchet_Adamantite", StatKeys.WOOD_CHOPPED, 25_000);
+        hidden("old_growth", "Old Growth", "Chop 25,000 logs.", NATURE, PLATINUM, "Tool_Hatchet_Adamantite", StatKeys.WOOD_CHOPPED, 25_000);
         feat("green_thumb", "Green Thumb", "Plant 10 crops.", NATURE, BRONZE, "Plant_Crop_Carrot_Item", StatKeys.PLACED_PREFIX + "crop", 10);
         feat("farmer", "Farmer", "Plant 100 crops.", NATURE, SILVER, "Plant_Crop_Corn_Item", StatKeys.PLACED_PREFIX + "crop", 100);
         feat("agriculturist", "Agriculturist", "Plant 1,000 crops.", NATURE, GOLD, "Plant_Crop_Cauliflower_Item", StatKeys.PLACED_PREFIX + "crop", 1_000);
@@ -460,7 +460,7 @@ public final class FeatRegistry {
         feat("abattoir", "Abattoir", "Slaughter 250 livestock.", NATURE, GOLD, "Food_Pork_Raw", StatKeys.KILL_GROUP_PREFIX + "livestock", 250);
         feat("big_game", "Big Game Hunter", "Defeat 10 predators.", NATURE, SILVER, "Food_Wildmeat_Raw", StatKeys.KILL_GROUP_PREFIX + "predator", 10);
         feat("apex_predator", "Apex Predator", "Defeat 100 predators.", NATURE, GOLD, "Food_Wildmeat_Cooked", StatKeys.KILL_GROUP_PREFIX + "predator", 100);
-        hidden("kweebec_grudge", "Kweebec Grudge", "Defeat 10 Kweebecs. They never did anything to you.", NATURE, SILVER, "Armor_Kweebec_Head", StatKeys.KILL_GROUP_PREFIX + "kweebec", 10);
+        hidden("kweebec_grudge", "Kweebec Grudge", "Defeat 10 Kweebecs.", NATURE, SILVER, "Armor_Kweebec_Head", StatKeys.KILL_GROUP_PREFIX + "kweebec", 10);
         // Tamed creatures counted by the engine, and mounted travel in metres.
         feat("tamer", "Tamer", "Tame an animal.", NATURE, SILVER, "Tool_Trap_Bait", "tamed", 1); // engine key tamed
         feat("saddle_up", "Saddle Up", "Ride a mount for 1 kilometre.", NATURE, SILVER, "Tool_Feedbag", "ride_distance", 1_000); // engine key ride_distance
@@ -469,7 +469,7 @@ public final class FeatRegistry {
         // Goblins, the Void and the new bosses
         feat("goblin_slayer", "Goblin Slayer", "Defeat 50 goblins.", CHAPTER, SILVER, "Weapon_Club_Scrap", StatKeys.KILL_GROUP_PREFIX + "goblin", 50);
         feat("scrap_heap", "Scrap Heap", "Defeat 100 goblins.", CHAPTER, GOLD, "Weapon_Club_Scrap", StatKeys.KILL_GROUP_PREFIX + "goblin", 100);
-        feat("goblin_warlord", "Goblin Warlord", "Defeat 500 goblins. They will write songs about you. Bad ones.", CHAPTER, PLATINUM, "Weapon_Mace_Scrap", StatKeys.KILL_GROUP_PREFIX + "goblin", 500);
+        feat("goblin_warlord", "Goblin Warlord", "Defeat 500 goblins.", CHAPTER, PLATINUM, "Weapon_Mace_Scrap", StatKeys.KILL_GROUP_PREFIX + "goblin", 500);
         feat("goblin_bane", "Goblin Bane", "Defeat 2,500 goblins.", CHAPTER, PLATINUM, "Weapon_Mace_Scrap", StatKeys.KILL_GROUP_PREFIX + "goblin", 2_500);
         multi("goblinologist", "Goblinologist", "Defeat one of every kind of goblin.", CHAPTER, GOLD, "Deco_Goblin_Plush",
                 req(StatKeys.KILL_GROUP_PREFIX + "goblin_scrapper", 1), req(StatKeys.KILL_GROUP_PREFIX + "goblin_miner", 1),
@@ -491,7 +491,7 @@ public final class FeatRegistry {
                 req(StatKeys.KILL_GROUP_PREFIX + "void_larva", 1), req(StatKeys.KILL_GROUP_PREFIX + "void_spawn", 1),
                 req(StatKeys.KILL_GROUP_PREFIX + "void_spectre", 1), req(StatKeys.KILL_GROUP_PREFIX + "void_tentacle", 1));
         feat("revenant_slayer", "Revenant Slayer", "Defeat a Revenant Guardian.", CHAPTER, GOLD, "Weapon_Longsword_Ruined_Giant", StatKeys.KILL_GROUP_PREFIX + "revenant", 1);
-        feat("feastmaster", "Feast Interrupted", "Defeat the Goblin Feastmaster before dessert.", CHAPTER, GOLD, "Food_Popcorn", StatKeys.KILL_PREFIX + "Dungeon_Feastmaster_Boss", 1);
+        feat("feastmaster", "Feast Interrupted", "Defeat the Goblin Feastmaster.", CHAPTER, GOLD, "Food_Popcorn", StatKeys.KILL_PREFIX + "Dungeon_Feastmaster_Boss", 1);
         feat("gobliterated", "Gobliterated", "Defeat the Gobliterator.", CHAPTER, PLATINUM, "Ingredient_Gobliterator_Core", StatKeys.KILL_GROUP_PREFIX + "gobliterator", 1);
         hidden("gobliterated_hard", "Overclocked", "Defeat the Gobliterator on hard mode.", CHAPTER, PLATINUM, "Ingredient_Gobliterator_Core", StatKeys.KILL_GROUP_PREFIX + "gobliterator_hm", 1);
         hidden("hard_habit", "Hard Habit", "Defeat the Gobliterator on hard mode 5 times.", CHAPTER, PLATINUM, "Goblin_Gobliterator_Difficulty_Button", StatKeys.KILL_GROUP_PREFIX + "gobliterator_hm", 5);
@@ -562,7 +562,7 @@ public final class FeatRegistry {
                 req(StatKeys.CRAFT_GROUP_PREFIX + "weapon_mace", 1), req(StatKeys.CRAFT_GROUP_PREFIX + "weapon_daggers", 1),
                 req(StatKeys.CRAFT_GROUP_PREFIX + "weapon_shortbow", 1), req(StatKeys.CRAFT_GROUP_PREFIX + "weapon_crossbow", 1),
                 req(StatKeys.CRAFT_GROUP_PREFIX + "weapon_shield", 1), req(StatKeys.CRAFT_GROUP_PREFIX + "weapon_staff", 1));
-        feat("big_bang", "Big Bang", "Craft 25 Bangsticks. Stand well back.", CHAPTER, SILVER, "Weapon_Bangstick", StatKeys.CRAFTED_PREFIX + "Weapon_Bangstick", 25);
+        feat("big_bang", "Big Bang", "Craft 25 Bangsticks.", CHAPTER, SILVER, "Weapon_Bangstick", StatKeys.CRAFTED_PREFIX + "Weapon_Bangstick", 25);
 
         // The Breach, The Deepworks and the Hollows
         feat("into_the_breach", "Into the Breach", "Enter a Goblin Breach.", CHAPTER, BRONZE, "PortalKey_Goblin_Breach", StatKeys.PORTAL_PREFIX + "Goblin_Breach", 1);
@@ -585,7 +585,7 @@ public final class FeatRegistry {
         feat("heart_of_the_void", "Heart of the Void", "Get your hands on a Voidheart.", CHAPTER, SILVER, "Ingredient_Voidheart", StatKeys.OBTAINED_PREFIX + "Ingredient_Voidheart", 1);
         feat("shard_collector", "Shard Collector", "Collect 20 Runestone Shards.", CHAPTER, SILVER, "Ingredient_Rune_Shard", StatKeys.OBTAINED_PREFIX + "Ingredient_Rune_Shard", 20);
         feat("rune_hoard", "Rune Hoard", "Collect 200 Runestone Shards.", CHAPTER, GOLD, "Ingredient_Rune_Shard", StatKeys.OBTAINED_PREFIX + "Ingredient_Rune_Shard", 200);
-        feat("scrap_rat", "Scrap Rat", "Collect 250 Scraps. One goblin's junk is your treasure.", CHAPTER, SILVER, "Ingredient_Scraps", StatKeys.OBTAINED_PREFIX + "Ingredient_Scraps", 250);
+        feat("scrap_rat", "Scrap Rat", "Collect 250 Scraps.", CHAPTER, SILVER, "Ingredient_Scraps", StatKeys.OBTAINED_PREFIX + "Ingredient_Scraps", 250);
         feat("scrap_baron", "Scrap Baron", "Collect 2,500 Scraps.", CHAPTER, GOLD, "Ingredient_Scraps", StatKeys.OBTAINED_PREFIX + "Ingredient_Scraps", 2_500);
         feat("key_master", "Key Master", "Collect 5 Coffer Keys.", CHAPTER, SILVER, "Coffer_Key", StatKeys.OBTAINED_PREFIX + "Coffer_Key", 5);
         feat("key_ring", "Key Ring", "Collect 25 Coffer Keys.", CHAPTER, GOLD, "Coffer_Key", StatKeys.OBTAINED_PREFIX + "Coffer_Key", 25);
@@ -623,7 +623,7 @@ public final class FeatRegistry {
                 req(StatKeys.PLACED_PREFIX + "Goblin_Painting_Breach", 1), req(StatKeys.PLACED_PREFIX + "Goblin_Painting_Fail", 1),
                 req(StatKeys.PLACED_PREFIX + "Goblin_Painting_ForgottenTemple", 1), req(StatKeys.PLACED_PREFIX + "Goblin_Painting_Orbis", 1),
                 req(StatKeys.PLACED_PREFIX + "Goblin_Painting_Portal", 1), req(StatKeys.PLACED_PREFIX + "Goblin_Painting_Repair", 1));
-        feat("forger", "Forger", "Craft 3 painting replicas. Nobody will ever know.", CHAPTER, SILVER, "Goblin_Painting_Breach", StatKeys.CRAFT_GROUP_PREFIX + "painting", 3);
+        feat("forger", "Forger", "Craft 3 painting replicas.", CHAPTER, SILVER, "Goblin_Painting_Breach", StatKeys.CRAFT_GROUP_PREFIX + "painting", 3);
         feat("pipe_dream", "Pipe Dream", "Place 100 metal blocks.", CHAPTER, SILVER, "Metal_Goblin_Iron", StatKeys.PLACED_PREFIX + "metal", 100);
         feat("ironworks", "Ironworks", "Place 1,000 metal blocks.", CHAPTER, GOLD, "Metal_Orbis_Copper", StatKeys.PLACED_PREFIX + "metal", 1_000);
         feat("steelworks", "Steelworks", "Place 10,000 metal blocks.", CHAPTER, PLATINUM, "Metal_Goblin_Iron", StatKeys.PLACED_PREFIX + "metal", 10_000);

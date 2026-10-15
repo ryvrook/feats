@@ -29,8 +29,8 @@ Goblinologist for every goblin or Full Net for 15 kinds of fish. Hidden feats sh
 meta feats unlock at 10, 25, 50, 100, 150 and 250 feats.
 
 The categories are Exploration, Mining, Building, Crafting, Combat, Survival, Nature, Chapter I and Misc. The
-Chapter I tab holds 105 feats worth 4,650 points for the 0.7.0 content, from the goblin ladder and every
-Voidspawn to the Gobliterator on hard mode with no armour on. A tenth tab, Factions, adds 15 feats worth 460
+Chapter I tab holds 105 feats worth 4,650 points for the 0.7.0 content, the goblin ladder, every Voidspawn
+and the Gobliterator on hard mode with no armour on. A tenth tab, Factions, adds 15 feats worth 460
 points when Dominion Factions is installed.
 
 An unlock shows the game's own toast with the Memories unlock sound. Platinum also puts a big title on screen,

@@ -319,7 +319,7 @@ public final class FeatsPage extends InteractiveCustomUIPage<FeatsPage.Event> {
 
         commands.set(selector + " #Icon.ItemId", secret ? HIDDEN_ICON : feat.icon());
         commands.set(selector + " #Name.Text", secret ? "???" : feat.name());
-        commands.set(selector + " #Desc.Text", secret ? "Hidden feat. Keep playing to discover it." : feat.description());
+        commands.set(selector + " #Desc.Text", secret ? "Hidden feat. Its name shows once you unlock it." : feat.description());
         commands.set(selector + " #Tier.Text", feat.tier().displayName());
         commands.set(selector + " #Check.Visible", unlocked);
 

@@ -39,7 +39,7 @@ public final class ShareCommand extends AbstractPlayerCommand {
     private final Map<UUID, Long> lastShare = new ConcurrentHashMap<>();
 
     public ShareCommand(FeatsPlugin plugin) {
-        super("share", "Show off one of your feats in chat.");
+        super("share", "Post one of your feats to chat.");
         requireNoPermission();
         this.plugin = plugin;
         this.featArg = withRequiredArg("feat", "Id of the feat to share, such as rock_bottom", ArgTypes.STRING);
