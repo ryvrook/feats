@@ -13,7 +13,7 @@ PlaceholderAPI are optional.
 
 ## Install
 
-Drop `Feats-<version>.jar` into `UserData/Mods` for a singleplayer world or into the server's `mods/` folder and
+Drop `Feats-1.6.0.jar` into `UserData/Mods` for a singleplayer world or into the server's `mods/` folder and
 start it. Tracking starts the first time a player joins. Type `/feats`.
 
 To update a running server, swap the jar and run `/plugin reload Ryvrook:Feats`. The engine prints
