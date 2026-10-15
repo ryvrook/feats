@@ -598,7 +598,7 @@ unlocks are real unlocks and get their rewards.
 
 ## Works with TrackerAPI
 
-TrackerAPI is an optional server plugin that tracks what players do once and shares it with other plugins.
+[TrackerAPI](https://www.curseforge.com/hytale/mods/trackerapi/) is an optional server plugin that tracks what players do once and shares it with other plugins.
 When it is installed, Feats takes its counts from TrackerAPI and registers none of its own tracking hooks.
 Every count carries on in the Feats files with no gap, so nothing is lost when you add or remove it.
 
