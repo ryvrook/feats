@@ -14,11 +14,13 @@ semantic versioning.
 - `Coins` and `Currency` on every reward in `Rewards.json`. With Coinage installed Feats deposits that many
   whole units into the player's account, per feat, per tier or per threshold. Rewards stay off until
   `RewardsEnabled` is on, and a reward without `Coins` pays nothing, so a server that does not use it sees no
-  change. Coinage is a new optional dependency.
+  change. Coinage is a new optional dependency. A reward that comes due while Coinage is stopped or reloading
+  waits for it, and a Feats shutdown in that time keeps it in `CoinsWaiting.json` for the next start.
 - `FeatsApi.addStat` takes offline players. The add waits in memory, merged per player, and the Feats file
   thread writes it into the player file, where the feats it meets unlock quietly and their rewards wait for
   the next join. A player Feats has never seen gets nothing. Dominion's siege and mission credits to members
-  who are offline are no longer lost.
+  who are offline are no longer lost. An API object kept from before a Feats reload answers false, so ask
+  `FeatsApi.get()` again after one.
 - A `hidden` flag on every milestone and first in `export/feats.json`, and `hidden()` on `WorldRecord` from
   `FeatsApi.milestones()` and `firsts()`. Every existing field stays as it was.
 
@@ -28,7 +30,8 @@ semantic versioning.
 - Touch Grass and Kweebec Grudge lost their questions, and Pick Collector says "every material", since wood is
   not a metal.
 - The leaderboard export and the rarity scan only parse the player files saved since their last read. With
-  2,000 player files a read with nothing changed went from 167 ms to 10 ms on the Feats file thread.
+  2,000 player files a read with nothing changed takes about 12 ms on the Feats file thread, where parsing
+  every file took 170 to 300 ms.
 - The stale asset pack fix matches the one in Coinage. It compares jar paths without mixing file systems,
   drops a jar pack directly while the asset monitor runs, and lets go of the pack at shutdown. The engine
   still prints `Failed to reload plugin Ryvrook:Feats!` on a reload and then enables Feats with its pages.
@@ -37,7 +40,6 @@ semantic versioning.
 
 - A reload of TrackerAPI 1.0.3 or newer no longer logs a reminder to reload Feats, since that TrackerAPI
   reloads Feats itself. An older TrackerAPI or an unload still gets the reminder.
-
 - Without TrackerAPI, dropping 256 cheap items no longer made Feats forget the drop of a counted item. A full
   drop memory now forgets its oldest drop.
 - `%feats_rarity_<featId>%` ignores the case of the id, like the other feat placeholders.

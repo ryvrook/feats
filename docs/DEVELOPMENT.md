@@ -29,10 +29,9 @@ and chat listeners stay either way, since they load players, keep the Creative a
 titles in chat. Time played, session length and the Goblin Lab flag poll stay with Feats on both paths.
 
 `TrackerBridgeTest` feeds synthetic TrackerAPI records through the bridge and checks the counters come out as
-the Feats systems made them. A reload of TrackerAPI
-leaves Feats with hooks on the old classes. TrackerAPI 1.0.3 and newer reload their dependents themselves, so the 5
-second watch in `TrackerSwitch` stays quiet for those and only logs a reminder for an older TrackerAPI or an
-unload.
+the Feats systems made them. A reload of TrackerAPI leaves Feats with hooks on the old classes. TrackerAPI 1.0.3
+and newer reload their dependents themselves, so the 5 second watch in `TrackerSwitch` stays quiet for those and
+only logs a reminder for an older TrackerAPI or an unload.
 
 ## Threads
 
@@ -40,7 +39,7 @@ unload.
   the player's file through `tracker.load`. That read measured about 0.1 ms for a file with 150 counters and
   120 unlocks, so it stays there.
 - The engine scheduler runs the 1 second tick (time played, and the movement sample handed to each world
-  thread when Feats tracks on its own), the autosave timer, the export timer, the 5 second flag poll, the 5
+  thread when Feats tracks on its own, and the hand over of Coins waiting for Coinage), the autosave timer, the export timer, the 5 second flag poll, the 5
   second TrackerAPI watch and the reward queue, one step every 100 ms.
 - `Feats-IO` is a single daemon thread. Every save, the export, the rarity scan and the Discord posts run
   there. Shutdown is the only place that saves inline, after the timers are cancelled.
@@ -61,10 +60,12 @@ Everything lives in `mods/Ryvrook_Feats/`.
 | `players/<uuid>.json` | `ProgressStore` | temp file then atomic move. A file that fails to parse moves to `<uuid>.corrupt-<time>.json`, only the newest kept |
 | `server.json` | `WorldStore` | milestones and firsts, same atomic write, corrupt copy kept the same way |
 | `export/feats.json` | `LeaderboardExporter` | rewritten only when the body changed, read by Atlas and Chronicle Stats |
+| `CoinsWaiting.json` | `RewardService` | only when a shutdown found Coins rewards waiting for Coinage, read and deleted at the next start |
 
 The exporter and the rarity scan read every player file at most once a minute. `ProgressStore.loadAll` keeps
-the size, modified time and file key of each file it read and parses only the ones that changed. With 2,000
-player files the read went from 167 ms to 10 ms. `ExportReadBenchmarkTest` measures it and writes
+the size, modified time and file key of each file it read and parses a file again when any of the three differ,
+so a file edited by hand is read again even when its time went backwards. With 2,000 player files a read with
+nothing changed takes about 12 ms, where parsing every file takes 170 to 300 ms on my machine. `ExportReadBenchmarkTest` measures it and writes
 `build/benchmark-export.txt`.
 
 ## Integrations
@@ -73,14 +74,19 @@ TrackerAPI is listed under `OptionalDependencies`, so its classes are visible, a
 only after the switch found it. Coinage works the same way through `CoinageRewards`, loaded by name in start
 when the plugin list has `Ryvrook:Coinage`. It follows Coinage with the enable and disable hooks and pays the
 `Coins` of a reward with `Ledger.deposit`, plugin `Feats`, reason `feats:<feat id>`. Rewards are recorded in
-the player file before they run, so a failed deposit is logged and not retried.
+the player file before they run, so a refused deposit is logged and not retried. A deposit made while Coinage
+is stopped moves nothing, so it waits in `WaitingCoins` (at most 10,000) and the 1 second tick queues it again
+once Coinage is linked. A Coinage reload stops Coinage first and reloads Feats about two seconds later, so a
+Feats shutdown in between writes what waits to `CoinsWaiting.json` and the next start reads it back.
 
 Dominion is not a dependency. It lists Feats and calls `FeatsApi.addStat` with its `dominion:` counters.
 `addStat` for an offline player goes through `FeatsTracker.addOffline`, which merges the adds per player in
 memory (at most 10,000 players waiting) and queues one task on Feats-IO. That task takes the player with
 `acquire`, adds, checks the feats that read those keys as an offline catch up and releases, which saves. A join
 before the task runs gets the adds on the live copy instead, and a join during it shares the held copy. A player
-without a file is skipped. `OfflineAddsTest` covers each case.
+without a file is skipped. An admin edit holding the player puts the adds back and queues the task again.
+`FeatsApi` objects from before a Feats reload refuse `addStat`, since the old file thread is gone and the
+write would run on the caller's thread. `OfflineAddsTest` covers each case.
 `Siblings.installed("Dominion")` looks at the engine's available plugins in setup, since Dominion sets up after
 Feats, and adds the Factions tab when the jar is there. `FactionFeatsTest` holds the list of keys Dominion 0.5.1
 sends, so a rename on either side fails the build.
