@@ -18,12 +18,7 @@ import com.hypixel.hytale.server.core.event.events.player.AddPlayerToWorldEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerChatEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerDisconnectEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
-import com.hypixel.hytale.assetstore.AssetPack;
-import com.hypixel.hytale.server.core.asset.AssetModule;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.Universe;
@@ -267,112 +262,9 @@ public final class FeatsPlugin extends JavaPlugin {
         return exporting;
     }
 
-    /**
-     * The engine registers the UI asset pack of this jar right after setup and refuses it when a pack with
-     * the same name is already registered. On a boot load that is harmless because the earlier registration
-     * points at this very file. After the jar was replaced by a file with another name, or when the old
-     * file is gone, the earlier registration is stale and would block every load until a restart, so
-     * it is removed here first.
-     */
-    private void dropStaleAssetPack() {
-        AssetModule assets;
-        AssetPack stale;
-        try {
-            assets = AssetModule.get();
-            if (assets == null) {
-                return;
-            }
-            stale = findPack(assets, getIdentifier().toString());
-            if (stale == null) {
-                return;
-            }
-            Path mine = getFile();
-            Path theirs = stale.getPackLocation();
-            boolean sameFile = false;
-            if (mine != null && theirs != null && Files.exists(theirs)) {
-                try {
-                    sameFile = Files.isSameFile(mine, theirs);
-                } catch (IOException ignored) {
-                    // treat it as a different file
-                }
-            }
-            // A pack the boot scan registered from this very jar is left alone, the engine reuses it. One
-            // registered by a runtime load is always replaced, because the engine compares the path text and
-            // its runtime path never matches the one it checks on reload.
-            if (sameFile && stale.getSource() != AssetPack.PackSource.RUNTIME) {
-                return;
-            }
-        } catch (RuntimeException | LinkageError e) {
-            getLogger().at(Level.FINE).withCause(e).log("Feats could not check the asset pack registration");
-            return;
-        }
-        String name = stale.getName();
-        Path location = stale.getPackLocation();
-        try {
-            assets.unregisterPack(name);
-        } catch (VirtualMachineError e) {
-            throw e;
-        } catch (Throwable e) {
-            // The engine throws checked exceptions here without declaring them, for example when the old
-            // jar no longer exists. The registration is usually gone by then, so check instead of giving up.
-            getLogger().at(Level.FINE).withCause(e).log("Feats hit an error while removing the stale asset pack");
-        }
-        if (findPack(assets, name) == null) {
-            getLogger().at(Level.INFO).log("Feats refreshed the asset pack registration from %s so this jar can register its own", location);
-            return;
-        }
-        if (forgetPack(assets, name)) {
-            getLogger().at(Level.INFO).log("Feats dropped a stale asset pack registration from %s so this jar can register its own", location);
-        } else {
-            getLogger().at(Level.WARNING).log("Feats found a stale asset pack registration from %s and could not remove it. Restart the server if the Feats pages do not open.", location);
-        }
-    }
-
-
-    /** One line at start saying whether the UI pack of this jar is registered, which the /feats page needs. */
-    private void reportAssetPack() {
-        try {
-            AssetModule assets = AssetModule.get();
-            AssetPack pack = assets == null ? null : findPack(assets, getIdentifier().toString());
-            if (pack == null) {
-                getLogger().at(Level.WARNING).log("Feats UI pack is not registered, the /feats page will not open until the server restarts");
-            } else {
-                getLogger().at(Level.INFO).log("Feats UI pack registered from %s", pack.getPackLocation());
-            }
-        } catch (RuntimeException | LinkageError e) {
-            getLogger().at(Level.FINE).withCause(e).log("Feats could not report the asset pack");
-        }
-    }
-
-    private static AssetPack findPack(AssetModule assets, String name) {
-        for (AssetPack pack : assets.getAssetPacks()) {
-            if (pack != null && name.equalsIgnoreCase(pack.getName())) {
-                return pack;
-            }
-        }
-        return null;
-    }
-
-    /** Last resort when the engine's own removal failed partway, drops the entry from its pack list directly. */
-    private static boolean forgetPack(AssetModule assets, String name) {
-        try {
-            java.lang.reflect.Field field = AssetModule.class.getDeclaredField("assetPacks");
-            field.setAccessible(true);
-            Object value = field.get(assets);
-            if (value instanceof java.util.List<?> list) {
-                return list.removeIf(o -> o instanceof AssetPack pack && name.equalsIgnoreCase(pack.getName()));
-            }
-        } catch (VirtualMachineError e) {
-            throw e;
-        } catch (Throwable ignored) {
-            // the engine changed, leave it to a restart
-        }
-        return false;
-    }
-
     @Override
     protected void setup() {
-        dropStaleAssetPack();
+        AssetPackFix.dropStale(this);
         config.save();
 
         io = newIoExecutor();
@@ -483,7 +375,7 @@ public final class FeatsPlugin extends JavaPlugin {
 
     @Override
     protected void start() {
-        reportAssetPack();
+        AssetPackFix.report(this);
         loadOnlinePlayers();
         FeatsExpansion.registerIfPresent(this); // does nothing without PlaceholderAPI
         if (flags != null) {
@@ -624,6 +516,7 @@ public final class FeatsPlugin extends JavaPlugin {
             exporter.flush(LeaderboardExporter.onlineNow());
         }
         stopIo();
+        AssetPackFix.release(this);
     }
 
     /** Lets queued saves finish, then stops the IO thread. Waits up to 10 seconds. */
