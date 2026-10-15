@@ -1,7 +1,7 @@
 {
   "Group": "Ryvrook",
   "Name": "Feats",
-  "Version": "1.5.1",
+  "Version": "1.6.0",
   "Description": "Achievements and lifetime statistics for Hytale. 327 feats in nine categories including Chapter I, 15 more with Dominion Factions installed, unlock toasts and an in-game browser at /feats.",
   "Main": "dev.ryvrook.feats.FeatsPlugin",
   "Authors": [
