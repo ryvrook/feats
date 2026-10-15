@@ -25,11 +25,23 @@ public final class FeatRegistry {
     private final List<Feat> personal = new ArrayList<>();
     private final List<Feat> server = new ArrayList<>();
 
+    /** The built-in feats without the Factions tab. */
     public FeatRegistry() {
+        this(false);
+    }
+
+    /**
+     * The built-in feats. {@code factions} adds the Factions tab, read from the {@code dominion:} counters
+     * Dominion Factions mirrors into Feats, so it is only worth adding when Dominion is installed.
+     */
+    public FeatRegistry(boolean factions) {
         for (Category c : Category.values()) {
             byCategory.put(c, new ArrayList<>());
         }
         defineAll();
+        if (factions) {
+            defineFactions();
+        }
         defineWorld();
         for (Map.Entry<String, List<Feat>> e : byAfter.entrySet()) {
             Feat source = byId.get(e.getKey());
@@ -633,6 +645,28 @@ public final class FeatRegistry {
      * World milestones and server firsts. The Goblin Lab flags are raised for the whole server by the
      * Generator and the three repairable devices, see {@code AugmentBlock.ProgressionKey} in the assets.
      */
+    /**
+     * The Factions tab. Dominion Factions counts these and hands them to Feats with FeatsApi.addStat, so
+     * they only move while Dominion is installed and the player is online when the credit arrives.
+     */
+    private void defineFactions() {
+        feat("faction_founder", "Founding Charter", "Found a faction.", FACTIONS, BRONZE, "Furniture_Human_Ruins_Banner", StatKeys.DOMINION_FACTIONS_FOUNDED, 1);
+        feat("staked_claim", "Staked Claim", "Claim a chunk for your faction.", FACTIONS, BRONZE, "Furniture_Flag_Small_Red", StatKeys.DOMINION_CLAIMS, 1);
+        feat("landholder", "Landholder", "Claim 50 chunks for your faction.", FACTIONS, SILVER, "Furniture_Flag_Orange", StatKeys.DOMINION_CLAIMS, 50);
+        feat("sprawl", "Sprawl", "Claim 250 chunks for your faction.", FACTIONS, GOLD, "Tool_Map", StatKeys.DOMINION_CLAIMS, 250);
+        feat("recruiter", "Recruiter", "Invite 10 players to your faction.", FACTIONS, SILVER, "Deco_Scroll", StatKeys.DOMINION_INVITES, 10);
+        feat("blood_feud", "Blood Feud", "Defeat a player from a faction you are at war with.", FACTIONS, BRONZE, "Weapon_Sword_Iron", StatKeys.DOMINION_ENEMY_KILLS, 1);
+        feat("war_hero", "War Hero", "Defeat 25 players from factions you are at war with.", FACTIONS, GOLD, "Weapon_Battleaxe_Iron", StatKeys.DOMINION_ENEMY_KILLS, 25);
+        hidden("behind_enemy_lines", "Behind Enemy Lines", "Die on land held by a faction you are at war with.", FACTIONS, BRONZE, "Deco_Bone_Skulls", StatKeys.DOMINION_ENEMY_LAND_DEATHS, 1);
+        feat("victory_banner", "Victory Banner", "Win a siege with your faction.", FACTIONS, SILVER, "Furniture_Outlander_Banner", StatKeys.DOMINION_SIEGES_WON, 1);
+        feat("conqueror", "Conqueror", "Win 10 sieges with your faction.", FACTIONS, PLATINUM, "Furniture_Ancient_Statue", StatKeys.DOMINION_SIEGES_WON, 10);
+        hidden("sacked", "Sacked", "Lose a siege with your faction.", FACTIONS, BRONZE, "Deco_Bone_Pile", StatKeys.DOMINION_SIEGES_LOST, 1);
+        feat("orders_received", "Orders Received", "Complete a faction mission.", FACTIONS, BRONZE, "Deco_Map", StatKeys.DOMINION_MISSIONS, 1);
+        feat("mission_veteran", "Old Hand", "Complete 25 faction missions.", FACTIONS, GOLD, "Furniture_Ancient_Table", StatKeys.DOMINION_MISSIONS, 25);
+        feat("dues_paid", "Dues Paid", "Put 1,000 coins into your faction bank.", FACTIONS, SILVER, "Deco_Treasure_Pile_Small", StatKeys.DOMINION_BANK_DEPOSITED, 1_000);
+        feat("patron", "Patron", "Put 25,000 coins into your faction bank.", FACTIONS, GOLD, "Deco_Treasure_Pile_Large", StatKeys.DOMINION_BANK_DEPOSITED, 25_000);
+    }
+
     private void defineWorld() {
         // ---------------- World milestones ----------------
         world("world_power", "Lights On", "Restore power to the Goblin Lab.", SILVER, "GoblinLab_Generator", flag("goblin_lab_power", 1));

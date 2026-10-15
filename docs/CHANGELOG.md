@@ -3,6 +3,15 @@
 Every notable change to Feats is recorded here. The format follows Keep a Changelog and the project uses
 semantic versioning.
 
+## Unreleased
+
+### Added
+
+- A Factions tab with 15 feats worth 460 points, there only when Dominion Factions is installed. They read the
+  `dominion:` counters Dominion already sends through `FeatsApi.addStat`, which no feat read before. Those are
+  claims, invites, enemy kills, deaths on enemy land, sieges won and lost, missions and coins put in the bank.
+  Feats checks for Dominion when it starts, so adding Dominion later needs a restart or `/plugin reload Feats`.
+
 ## 1.5.1
 - Queued bench crafts count one run per craft event. The engine fires one event per finished unit of a queued batch and stamps each with the whole batch quantity, so a batch of a hundred counted as ten thousand crafts. Instant crafts are unchanged.
 

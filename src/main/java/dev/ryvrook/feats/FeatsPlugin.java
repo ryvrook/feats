@@ -31,7 +31,9 @@ import dev.ryvrook.feats.command.FeatsCommand;
 import dev.ryvrook.feats.export.LeaderboardExporter;
 import dev.ryvrook.feats.integration.TrackerBridge;
 import dev.ryvrook.feats.integration.TrackerHost;
+import dev.ryvrook.feats.integration.Siblings;
 import dev.ryvrook.feats.integration.TrackerSwitch;
+import dev.ryvrook.feats.model.Category;
 import dev.ryvrook.feats.model.Feat;
 import dev.ryvrook.feats.model.FeatRegistry;
 import dev.ryvrook.feats.placeholders.FeatsExpansion;
@@ -268,7 +270,8 @@ public final class FeatsPlugin extends JavaPlugin {
         config.save();
 
         io = newIoExecutor();
-        registry = new FeatRegistry();
+        boolean factions = Siblings.installed(Siblings.DOMINION);
+        registry = new FeatRegistry(factions);
         store = new ProgressStore(getDataDirectory(), getLogger());
         world = new WorldStore(getDataDirectory(), getLogger());
         loadWorld();
@@ -316,6 +319,9 @@ public final class FeatsPlugin extends JavaPlugin {
                 .log("%s", TrackerSwitch.describe(mode, path, found));
         getLogger().at(Level.INFO).log("Feats loaded %d feats worth %d points, plus %d world feats", registry.count(),
                 registry.totalPoints(), registry.countServer());
+        if (factions) {
+            getLogger().at(Level.INFO).log("Dominion is installed, so the %d Factions feats are in", registry.inCategory(Category.FACTIONS).size());
+        }
     }
 
     /**

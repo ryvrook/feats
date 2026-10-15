@@ -69,6 +69,19 @@ public final class StatKeys {
     /** Boss kills credited to a player who took no damage between the first hit of the fight and the kill. */
     public static final String BOSS_FLAWLESS = "boss_flawless";
 
+    // Counters Dominion Factions keeps and hands to Feats through FeatsApi.addStat. Only the Factions
+    // feats read them, see FeatRegistry. The names match Dominion's integration StatKeys.
+    public static final String DOMINION_PREFIX = "dominion:";
+    public static final String DOMINION_CLAIMS = DOMINION_PREFIX + "claims";
+    public static final String DOMINION_ENEMY_KILLS = DOMINION_PREFIX + "enemy_kills";
+    public static final String DOMINION_ENEMY_LAND_DEATHS = DOMINION_PREFIX + "enemy_land_deaths";
+    public static final String DOMINION_SIEGES_WON = DOMINION_PREFIX + "sieges_won";
+    public static final String DOMINION_SIEGES_LOST = DOMINION_PREFIX + "sieges_lost";
+    public static final String DOMINION_MISSIONS = DOMINION_PREFIX + "missions";
+    public static final String DOMINION_BANK_DEPOSITED = DOMINION_PREFIX + "bank_deposited";
+    public static final String DOMINION_FACTIONS_FOUNDED = DOMINION_PREFIX + "factions_founded";
+    public static final String DOMINION_INVITES = DOMINION_PREFIX + "invites";
+
     // Dynamic prefixes
     public static final String BROKEN_PREFIX = "broken:";
     public static final String ORE_PREFIX = "ore:";

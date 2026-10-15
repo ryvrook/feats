@@ -10,6 +10,8 @@ public enum Category {
     SURVIVAL("Survival", "Furniture_Crude_Bed"),
     NATURE("Nature", "Plant_Crop_Carrot_Item"),
     CHAPTER("Chapter I", "Rune_Fireball"),
+    /** Only filled when Dominion Factions is installed, an empty tab is never shown. */
+    FACTIONS("Factions", "Furniture_Human_Ruins_Banner"),
     MISC("Misc", "Deco_Treasure"),
     /** Server milestones and server firsts. Never counted in totals or completion. */
     WORLD("World", "Deco_Trophy_Harvest");

@@ -12,6 +12,7 @@ players join with an unmodified client.
 
 - **327 feats** with progress bars, from "Break your first block" to "Travel 500 kilometres".
 - **Nine categories**, namely Exploration, Mining, Building, Crafting, Combat, Survival, Nature, Chapter I and Misc.
+  A tenth, Factions, with 15 feats worth 460 points, appears when Dominion Factions is installed.
 - **Four tiers**. Bronze is worth 10 points, Silver 25, Gold 50 and Platinum 100, for 15,075 points in total.
 - **Hidden feats** show as `???` until you earn them.
 - **Multi step feats** such as Goblinologist, which asks for one of every kind of goblin, and Full Net, which
@@ -611,6 +612,14 @@ Every count carries on in the Feats files with no gap, so nothing is lost when y
   well. Feats logs a reminder when it notices.
 - Time played, session length, the Goblin Lab milestones, chat titles, rewards and the export stay with Feats
   either way.
+
+## Works with Dominion Factions
+
+When Dominion Factions is installed, Feats adds a Factions tab with 15 feats worth 460 points. They read the
+counters Dominion hands to Feats, such as chunks claimed, enemy kills, sieges won, missions and coins put in the
+faction bank. A counter only moves while the player is online. Feats looks for Dominion when it starts, so after
+adding Dominion restart the server or run `/plugin reload Feats`. Without Dominion the tab does not exist and
+the totals stay at 327 feats.
 
 ## Leaderboard export
 
