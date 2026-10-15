@@ -11,7 +11,9 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -109,5 +111,57 @@ class OfflineAddsTest {
         assertEquals(1, io.size());
         drainIo();
         assertEquals(5, store.load(uuid, null).get(StatKeys.DOMINION_MISSIONS));
+    }
+
+    @Test
+    void pastTheLimitNewPlayersAreRefusedButWaitingOnesStillMerge() {
+        UUID first = UUID.randomUUID();
+        assertTrue(tracker.addOffline(first, StatKeys.DOMINION_MISSIONS, 1));
+        for (int i = 1; i < FeatsTracker.OFFLINE_ADDS_LIMIT; i++) {
+            assertTrue(tracker.addOffline(UUID.randomUUID(), StatKeys.DOMINION_MISSIONS, 1));
+        }
+        assertEquals(FeatsTracker.OFFLINE_ADDS_LIMIT, tracker.offlineAddsWaiting());
+        assertFalse(tracker.addOffline(UUID.randomUUID(), StatKeys.DOMINION_MISSIONS, 1));
+        assertTrue(tracker.addOffline(first, StatKeys.DOMINION_MISSIONS, 1), "a player already waiting still takes adds");
+        drainIo();
+        assertEquals(0, tracker.offlineAddsWaiting());
+    }
+
+    @Test
+    void anAdminEditHoldingThePlayerDelaysTheWriteWithoutLosingIt() {
+        UUID uuid = knownOfflinePlayer();
+        FeatsTracker.Lease admin = tracker.acquire(uuid);
+        tracker.addOffline(uuid, StatKeys.DOMINION_MISSIONS, 2);
+        io.poll().run(); // busy, so the adds go back and the write is queued again
+        assertEquals(1, tracker.offlineAddsWaiting());
+        assertEquals(1, io.size());
+        tracker.addOffline(uuid, StatKeys.DOMINION_MISSIONS, 3);
+        tracker.release(uuid, admin);
+        drainIo();
+        assertEquals(5, store.load(uuid, null).get(StatKeys.DOMINION_MISSIONS), "every add counted once");
+    }
+
+    @Test
+    void aFeatUnlockedOfflineIsRewardedOnceAtTheNextJoin() {
+        UUID uuid = knownOfflinePlayer();
+        List<String> rewarded = new ArrayList<>();
+        tracker.addUnlockHook(u -> {
+            if (u.rewards()) {
+                rewarded.add(u.feat().id());
+            }
+        });
+        tracker.setDeferredRewards(u -> rewarded.add(u.feat().id()));
+        tracker.addOffline(uuid, StatKeys.DOMINION_SIEGES_WON, 1);
+        drainIo();
+        assertTrue(rewarded.isEmpty(), "nothing is handed out while the player is away");
+
+        tracker.load(uuid, "Back");
+        tracker.catchUp(uuid);
+        assertEquals(List.of("victory_banner"), rewarded);
+        tracker.unload(uuid);
+        drainIo();
+        tracker.load(uuid, "Again");
+        tracker.catchUp(uuid);
+        assertEquals(List.of("victory_banner"), rewarded, "a second join hands out nothing more");
     }
 }

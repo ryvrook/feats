@@ -159,12 +159,13 @@ public final class FeatsApi {
      * including the Creative mode and disabled world pause. For an offline player the add waits in memory
      * and the Feats file thread writes it into their file, where the feats it meets unlock quietly with
      * their rewards held for the next join. A player Feats has never seen gets nothing. Returns false when
-     * {@code delta} is not positive, the key is not a counter Feats keeps or watches, or too many offline
-     * adds are waiting. An ignored key is logged at most once a minute.
+     * {@code delta} is not positive, the key is not a counter Feats keeps or watches, too many offline adds
+     * are waiting, or this API belongs to a Feats that has stopped since. After a Feats reload ask
+     * {@link #get} again. An ignored key is logged at most once a minute.
      */
     public boolean addStat(UUID uuid, String key, long delta) {
-        if (uuid == null || key == null || key.isEmpty() || delta <= 0) {
-            return false;
+        if (uuid == null || key == null || key.isEmpty() || delta <= 0 || instance != this) {
+            return false; // a stopped Feats has no file thread, its write would run on the caller's thread
         }
         if (!tracker().isPersisted(key) && !tracker().isWatched(key)) {
             ignoredKey(key);
