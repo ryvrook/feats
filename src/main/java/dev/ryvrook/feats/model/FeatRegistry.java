@@ -647,7 +647,7 @@ public final class FeatRegistry {
      */
     /**
      * The Factions tab. Dominion Factions counts these and hands them to Feats with FeatsApi.addStat, so
-     * they only move while Dominion is installed and the player is online when the credit arrives.
+     * they only move while Dominion is installed. Credits for offline members are written into their file.
      */
     private void defineFactions() {
         feat("faction_founder", "Founding Charter", "Found a faction.", FACTIONS, BRONZE, "Furniture_Human_Ruins_Banner", StatKeys.DOMINION_FACTIONS_FOUNDED, 1);

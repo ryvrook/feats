@@ -28,8 +28,8 @@ import java.util.logging.Level;
  * <p>Every method is safe from any thread. Reads come from memory for online players. For offline
  * players {@link #points}, {@link #unlocked}, {@link #hasFeat}, {@link #progress}, {@link #title} and
  * {@link #stats} answer from the leaderboard's last read of the player files, which is at most a
- * minute old, and return zero, empty or null for a player Feats has never seen. Writes only work for
- * online players.
+ * minute old, and return zero, empty or null for a player Feats has never seen. {@link #addStat}
+ * also takes offline players, {@link #grant} only online ones.
  *
  * <p>This class is stable. Methods are only ever added, and existing ones keep their meaning.
  */
@@ -155,10 +155,12 @@ public final class FeatsApi {
     }
 
     /**
-     * Adds to a counter for an online player and unlocks whatever feats read it, exactly as if Feats
-     * had seen the action itself, including the Creative mode and disabled world pause. Returns false
-     * when the player is not online, {@code delta} is not positive or the key is not a counter Feats
-     * keeps or watches. An ignored key is logged at most once a minute.
+     * Adds to a counter and unlocks whatever feats read it, exactly as if Feats had seen the action itself,
+     * including the Creative mode and disabled world pause. For an offline player the add waits in memory
+     * and the Feats file thread writes it into their file, where the feats it meets unlock quietly with
+     * their rewards held for the next join. A player Feats has never seen gets nothing. Returns false when
+     * {@code delta} is not positive, the key is not a counter Feats keeps or watches, or too many offline
+     * adds are waiting. An ignored key is logged at most once a minute.
      */
     public boolean addStat(UUID uuid, String key, long delta) {
         if (uuid == null || key == null || key.isEmpty() || delta <= 0) {
@@ -168,11 +170,7 @@ public final class FeatsApi {
             ignoredKey(key);
             return false;
         }
-        if (!tracker().isLoaded(uuid)) {
-            return false;
-        }
-        tracker().increment(uuid, key, delta);
-        return true;
+        return tracker().addOffline(uuid, key, delta);
     }
 
     /**

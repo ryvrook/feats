@@ -623,7 +623,8 @@ Every count carries on in the Feats files with no gap, so nothing is lost when y
 
 When Dominion Factions is installed, Feats adds a Factions tab with 15 feats worth 460 points. They read the
 counters Dominion hands to Feats, such as chunks claimed, enemy kills, sieges won, missions and coins put in the
-faction bank. A counter only moves while the player is online. Feats looks for Dominion when it starts, so after
+faction bank. Credits for members who are offline, such as a siege won while they slept, are written into
+their file and the feats show up at their next join. Feats looks for Dominion when it starts, so after
 adding Dominion restart the server or run `/plugin reload Feats`. Without Dominion the tab does not exist and
 the totals stay at 327 feats.
 
@@ -695,7 +696,7 @@ if (feats != null) {
 | `feats` | Every feat with id, name, description, category, tier, hidden flag, points and scope |
 | `milestones` | Every reached world milestone by feat id, as a `WorldRecord` |
 | `firsts` | Every claimed server first by feat id, as a `WorldRecord` |
-| `addStat` | Adds to a counter for an online player and unlocks what it meets |
+| `addStat` | Adds to a counter and unlocks what it meets, for online and offline players |
 | `grant` | Unlocks a feat for an online player, with the usual toast and rewards |
 | `onUnlock` | Calls the listener on every unlock and returns a handle that removes it |
 
@@ -710,8 +711,10 @@ delivered on the thread that caused the unlock, usually a world thread, so keep 
 cancelled.
 
 Reads for online players come from memory. Offline players answer from the leaderboard's last read of the
-player files, at most a minute old. `addStat` respects the Creative mode and disabled world pause, and writes
-only work for online players. Look `FeatsApi.get()` up again after a `/plugin reload` of Feats instead of
+player files, at most a minute old. `addStat` respects the Creative mode and disabled world pause. For an offline
+player the add waits in memory and the Feats file thread writes it into their file, where feats unlock quietly
+and their rewards wait for the next join. A player Feats has never seen gets nothing. `grant` only works for
+online players. Look `FeatsApi.get()` up again after a `/plugin reload` of Feats instead of
 keeping it. The API is stable. Methods are only ever added.
 
 ## Building from source

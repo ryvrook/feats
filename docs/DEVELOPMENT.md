@@ -75,6 +75,11 @@ when the plugin list has `Ryvrook:Coinage`. It follows Coinage with the enable a
 the player file before they run, so a failed deposit is logged and not retried.
 
 Dominion is not a dependency. It lists Feats and calls `FeatsApi.addStat` with its `dominion:` counters.
+`addStat` for an offline player goes through `FeatsTracker.addOffline`, which merges the adds per player in
+memory (at most 10,000 players waiting) and queues one task on Feats-IO. That task takes the player with
+`acquire`, adds, checks the feats that read those keys as an offline catch up and releases, which saves. A join
+before the task runs gets the adds on the live copy instead, and a join during it shares the held copy. A player
+without a file is skipped. `OfflineAddsTest` covers each case.
 `Siblings.installed("Dominion")` looks at the engine's available plugins in setup, since Dominion sets up after
 Feats, and adds the Factions tab when the jar is there. `FactionFeatsTest` holds the list of keys Dominion 0.5.1
 sends, so a rename on either side fails the build.

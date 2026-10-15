@@ -11,7 +11,9 @@ import dev.ryvrook.feats.stats.WorldStore;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -67,6 +69,13 @@ public final class FeatsTracker {
      * changes after start, so an entry never goes stale. Bounded like the {@link Classify} memos.
      */
     private final Map<String, KeyInfo> keyInfo = new ConcurrentHashMap<>();
+    /**
+     * Counter adds from other plugins for players who are offline, by player and key, waiting for the IO
+     * thread to write them into the player file. See {@link #addOffline}.
+     */
+    private final Map<UUID, Map<String, Long>> offlineAdds = new ConcurrentHashMap<>();
+    /** Players with adds waiting. Past this further offline adds are dropped. */
+    static final int OFFLINE_ADDS_LIMIT = 10_000;
     /** Running kill streaks, in memory only. See {@link #countKill}. */
     private final KillStreaks streaks = new KillStreaks();
 
@@ -704,6 +713,93 @@ public final class FeatsTracker {
     }
 
     // ---- counters ------------------------------------------------------
+
+    /**
+     * Adds to a counter of a player who may be offline, for the API. An online player is counted at once
+     * as {@link #increment} would. Otherwise the add waits in memory, merged with any other adds for that
+     * player, and the IO thread writes the whole batch into the player file, checks the feats that read
+     * those counters and saves. Feats unlocked that way stay quiet and their rewards wait for the next join.
+     * A player without a file gets nothing. A player who joins before the batch is written gets it on the
+     * live copy. Safe from any thread, never touches a file itself. Returns false only when the add was
+     * dropped because too many players have adds waiting.
+     */
+    public boolean addOffline(UUID uuid, String key, long amount) {
+        if (uuid == null || key == null || amount <= 0) {
+            return false;
+        }
+        if (loaded.containsKey(uuid)) {
+            increment(uuid, key, amount);
+            return true;
+        }
+        if (!offlineAdds.containsKey(uuid) && offlineAdds.size() >= OFFLINE_ADDS_LIMIT) {
+            return false;
+        }
+        boolean[] first = {false};
+        offlineAdds.compute(uuid, (id, adds) -> {
+            if (adds == null) {
+                adds = new HashMap<>();
+                first[0] = true;
+            }
+            adds.merge(key, amount, Long::sum);
+            return adds;
+        });
+        if (first[0]) {
+            runInBackground(() -> applyOffline(uuid));
+        }
+        return true;
+    }
+
+    /** Players with offline adds waiting to be written, for tests and status. */
+    public int offlineAddsWaiting() {
+        return offlineAdds.size();
+    }
+
+    /** Writes one player's waiting adds. Runs on the IO thread. */
+    private void applyOffline(UUID uuid) {
+        Map<String, Long> adds = offlineAdds.remove(uuid);
+        if (adds == null || adds.isEmpty()) {
+            return;
+        }
+        if (loaded.containsKey(uuid)) {
+            adds.forEach((key, amount) -> increment(uuid, key, amount)); // joined meanwhile
+            return;
+        }
+        Lease lease;
+        try {
+            lease = acquire(uuid);
+        } catch (BusyException e) {
+            // An admin edit holds the player. Put the adds back and try again after it.
+            offlineAdds.compute(uuid, (id, newer) -> {
+                if (newer != null) {
+                    adds.forEach((key, amount) -> newer.merge(key, amount, Long::sum));
+                    return newer;
+                }
+                return adds;
+            });
+            runInBackground(() -> applyOffline(uuid));
+            return;
+        }
+        if (lease == null) {
+            return; // never seen on this server, nothing to add to
+        }
+        if (lease.online()) {
+            adds.forEach((key, amount) -> increment(uuid, key, amount));
+            return;
+        }
+        try {
+            PlayerProgress progress = lease.progress();
+            Set<Feat> watchers = new LinkedHashSet<>();
+            synchronized (progress) {
+                adds.forEach((key, amount) -> {
+                    progress.add(key, amount);
+                    watchers.addAll(info(key).watchers());
+                });
+            }
+            evaluate(uuid, progress, List.copyOf(watchers), new Announcements(0), Source.OFFLINE);
+        } finally {
+            release(uuid, lease);
+        }
+    }
 
     public void increment(UUID uuid, String key, long amount) {
         if (amount <= 0 || uuid == null) {
