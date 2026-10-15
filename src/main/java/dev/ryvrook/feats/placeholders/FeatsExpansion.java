@@ -170,7 +170,7 @@ public final class FeatsExpansion {
                     break;
             }
             if (lower.startsWith("rarity_")) {
-                double rarity = exporter == null ? -1 : exporter.rarity(params.substring("rarity_".length()));
+                double rarity = exporter == null ? -1 : exporter.rarity(featIdOf(registry, params.substring("rarity_".length())));
                 return rarity < 0 ? "" : Rarity.percent(rarity);
             }
 

@@ -170,12 +170,14 @@ public final class FeatsConfig {
         return showRarity;
     }
 
+    /** Counted players needed before rarity shows, at least 1. */
     public int rarityMinimumPlayers() {
-        return rarityMinimumPlayers;
+        return Math.max(1, rarityMinimumPlayers);
     }
 
+    /** Owned by fewer than this percent of counted players reads as rare, 0 to 100. */
     public int rareBelowPercent() {
-        return rareBelowPercent;
+        return Math.clamp(rareBelowPercent, 0, 100);
     }
 
     public boolean allowViewOthers() {

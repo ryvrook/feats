@@ -16,6 +16,24 @@ semantic versioning.
   `RewardsEnabled` is on, and a reward without `Coins` pays nothing, so a server that does not use it sees no
   change. Coinage is a new optional dependency.
 
+### Changed
+
+- Armorer is now spelled Armourer to match every other armour feat. The id stays `armorer`.
+- Touch Grass and Kweebec Grudge lost their questions, and Pick Collector says "every material", since wood is
+  not a metal.
+- The leaderboard export and the rarity scan only parse the player files saved since their last read. With
+  2,000 player files a read with nothing changed went from 167 ms to 10 ms on the Feats file thread.
+- The stale asset pack fix matches the one in Coinage. It compares jar paths without mixing file systems,
+  drops a jar pack directly while the asset monitor runs, and lets go of the pack at shutdown, so a
+  `/plugin reload Feats` no longer logs a SEVERE from the asset monitor.
+
+### Fixed
+
+- Without TrackerAPI, dropping 256 cheap items no longer made Feats forget the drop of a counted item. A full
+  drop memory now forgets its oldest drop.
+- `%feats_rarity_<featId>%` ignores the case of the id, like the other feat placeholders.
+- `RarityMinimumPlayers` reads as at least 1 and `RareBelowPercent` as 0 to 100.
+
 ## 1.5.1
 - Queued bench crafts count one run per craft event. The engine fires one event per finished unit of a queued batch and stamps each with the whole batch quantity, so a batch of a hundred counted as ten thousand crafts. Instant crafts are unchanged.
 
@@ -37,7 +55,6 @@ Needs the Hytale 0.7.0 release server or newer. No feats changed.
 - Nothing to do. Every counter carries on in the same player files.
 - With TrackerAPI, items taken back out of a chest are matched against the last 10 minutes of what the player
   put away, where Feats used to remember it for as long as the player kept it there.
-  Other members of the group no longer get it.
 
 ## 1.4.0 - 2026-10-14
 

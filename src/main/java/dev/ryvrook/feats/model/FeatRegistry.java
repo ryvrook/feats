@@ -251,7 +251,7 @@ public final class FeatRegistry {
                 req(StatKeys.ORE_PREFIX + "Silver", 1), req(StatKeys.ORE_PREFIX + "Gold", 1),
                 req(StatKeys.ORE_PREFIX + "Cobalt", 1), req(StatKeys.ORE_PREFIX + "Thorium", 1),
                 req(StatKeys.ORE_PREFIX + "Adamantite", 1));
-        multi("pick_collector", "Pick Collector", "Craft a pickaxe of every metal, from wood to adamantite.", MINING, GOLD, "Tool_Pickaxe_Thorium",
+        multi("pick_collector", "Pick Collector", "Craft a pickaxe of every material, from wood to adamantite.", MINING, GOLD, "Tool_Pickaxe_Thorium",
                 req(StatKeys.CRAFTED_PREFIX + "Tool_Pickaxe_Wood", 1), req(StatKeys.CRAFTED_PREFIX + "Tool_Pickaxe_Copper", 1),
                 req(StatKeys.CRAFTED_PREFIX + "Tool_Pickaxe_Iron", 1), req(StatKeys.CRAFTED_PREFIX + "Tool_Pickaxe_Cobalt", 1),
                 req(StatKeys.CRAFTED_PREFIX + "Tool_Pickaxe_Thorium", 1), req(StatKeys.CRAFTED_PREFIX + "Tool_Pickaxe_Adamantite", 1));
@@ -297,7 +297,7 @@ public final class FeatRegistry {
         feat("armed", "Armed", "Craft a weapon.", CRAFTING, BRONZE, "Weapon_Axe_Crude", StatKeys.CRAFT_GROUP_PREFIX + "weapon", 1);
         feat("weaponsmith", "Weaponsmith", "Craft 25 weapons.", CRAFTING, SILVER, "Weapon_Sword_Bronze", StatKeys.CRAFT_GROUP_PREFIX + "weapon", 25);
         feat("arms_dealer", "Arms Dealer", "Craft 250 weapons.", CRAFTING, GOLD, "Weapon_Sword_Cobalt", StatKeys.CRAFT_GROUP_PREFIX + "weapon", 250);
-        feat("armorer", "Armorer", "Craft 4 pieces of armour.", CRAFTING, SILVER, "Armor_Iron_Chest", StatKeys.CRAFT_GROUP_PREFIX + "armor", 4);
+        feat("armorer", "Armourer", "Craft 4 pieces of armour.", CRAFTING, SILVER, "Armor_Iron_Chest", StatKeys.CRAFT_GROUP_PREFIX + "armor", 4);
         feat("quartermaster", "Quartermaster", "Craft 40 pieces of armour.", CRAFTING, GOLD, "Armor_Steel_Chest", StatKeys.CRAFT_GROUP_PREFIX + "armor", 40);
         multi("copper_kit", "Copper Kit", "Craft a full set of copper armour.", CRAFTING, BRONZE, "Armor_Copper_Chest",
                 req(StatKeys.CRAFTED_PREFIX + "Armor_Copper_Head", 1), req(StatKeys.CRAFTED_PREFIX + "Armor_Copper_Chest", 1),
@@ -390,7 +390,7 @@ public final class FeatRegistry {
         feat("dedicated", "Dedicated", "Play for 1 hour.", SURVIVAL, BRONZE, "Deco_Trophy_Harvest", StatKeys.PLAYTIME, HOUR);
         feat("devoted", "Devoted", "Play for 10 hours.", SURVIVAL, SILVER, "Deco_Trophy_Harvest", StatKeys.PLAYTIME, 10 * HOUR);
         feat("veteran", "Veteran", "Play for 50 hours.", SURVIVAL, GOLD, "Deco_Treasure", StatKeys.PLAYTIME, 50 * HOUR);
-        hidden("touch_grass", "Touch Grass", "Play for 200 hours. Maybe go outside?", SURVIVAL, PLATINUM, "Deco_Treasure_Pile_Large", StatKeys.PLAYTIME, 200 * HOUR);
+        hidden("touch_grass", "Touch Grass", "Play for 200 hours. Go outside sometime.", SURVIVAL, PLATINUM, "Deco_Treasure_Pile_Large", StatKeys.PLAYTIME, 200 * HOUR);
         hidden("old_timer", "Old Timer", "Play for 500 hours.", SURVIVAL, PLATINUM, "Deco_Treasure_Pile_Large", StatKeys.PLAYTIME, 500 * HOUR);
         // Longest single session in seconds, raised by the engine when a player leaves.
         feat("marathon", "Marathon", "Stay online for 8 hours in one session.", SURVIVAL, GOLD, "Potion_Stamina_Greater", "longest_session", 8 * HOUR); // engine key longest_session
@@ -460,7 +460,7 @@ public final class FeatRegistry {
         feat("abattoir", "Abattoir", "Slaughter 250 livestock.", NATURE, GOLD, "Food_Pork_Raw", StatKeys.KILL_GROUP_PREFIX + "livestock", 250);
         feat("big_game", "Big Game Hunter", "Defeat 10 predators.", NATURE, SILVER, "Food_Wildmeat_Raw", StatKeys.KILL_GROUP_PREFIX + "predator", 10);
         feat("apex_predator", "Apex Predator", "Defeat 100 predators.", NATURE, GOLD, "Food_Wildmeat_Cooked", StatKeys.KILL_GROUP_PREFIX + "predator", 100);
-        hidden("kweebec_grudge", "Kweebec Grudge", "Defeat 10 Kweebecs. Why would you do that?", NATURE, SILVER, "Armor_Kweebec_Head", StatKeys.KILL_GROUP_PREFIX + "kweebec", 10);
+        hidden("kweebec_grudge", "Kweebec Grudge", "Defeat 10 Kweebecs. They never did anything to you.", NATURE, SILVER, "Armor_Kweebec_Head", StatKeys.KILL_GROUP_PREFIX + "kweebec", 10);
         // Tamed creatures counted by the engine, and mounted travel in metres.
         feat("tamer", "Tamer", "Tame an animal.", NATURE, SILVER, "Tool_Trap_Bait", "tamed", 1); // engine key tamed
         feat("saddle_up", "Saddle Up", "Ride a mount for 1 kilometre.", NATURE, SILVER, "Tool_Feedbag", "ride_distance", 1_000); // engine key ride_distance

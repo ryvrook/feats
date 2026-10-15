@@ -81,7 +81,7 @@ public final class UnlockNotifier {
                 broadcast(player, feat);
             }
         } catch (Exception e) {
-            logger.at(Level.WARNING).withCause(e).log("Failed to announce feat %s for %s", feat.id(), uuid);
+            logger.at(Level.WARNING).withCause(e).log("Feats could not announce %s to %s", feat.id(), uuid);
         }
     }
 

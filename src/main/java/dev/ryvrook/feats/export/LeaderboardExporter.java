@@ -168,7 +168,7 @@ public final class LeaderboardExporter {
         }
     }
 
-    /** One unlock in the recent list. The feat is kept by id so a removed feat simply drops out. */
+    /** One unlock in the recent list. The feat is kept by id so a removed feat drops out. */
     public record RecentUnlock(long at, UUID uuid, String name, String featId) {
     }
 

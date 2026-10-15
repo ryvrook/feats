@@ -283,8 +283,8 @@ public final class TrackerBridge {
     }
 
     /**
-     * The Gobliterator challenge feats, for each credited player who is still in the world of the kill.
-     * The record only says whether the killer wore armour, so the unarmoured feat goes to the killer.
+     * The Gobliterator challenge feats, for each credited player who is still in the world of the kill. The
+     * record lists every participant who wore no armour at the kill, so the unarmoured feat goes to each of them.
      */
     private void creditGobliterator(EntityDied e, String bossType, UUID killer, Set<UUID> credited, boolean deepworks) {
         String world = e.world();
