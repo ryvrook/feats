@@ -3,47 +3,46 @@
 Every notable change to Feats is recorded here. The format follows Keep a Changelog and the project uses
 semantic versioning.
 
-## Unreleased
+## 1.6.0 - 2026-10-15
 
-### Added
+Needs the Hytale 0.7.0 release server or newer. 327 feats as before, plus 15 in a Factions tab when Dominion
+Factions is installed.
+
+### For players
 
 - A Factions tab with 15 feats worth 460 points, there only when Dominion Factions is installed. They read the
-  `dominion:` counters Dominion already sends through `FeatsApi.addStat`, which no feat read before. Those are
-  claims, invites, enemy kills, deaths on enemy land, sieges won and lost, missions and coins put in the bank.
-  Feats checks for Dominion when it starts, so adding Dominion later needs a restart or `/plugin reload Feats`.
-- `Coins` and `Currency` on every reward in `Rewards.json`. With Coinage installed Feats deposits that many
-  whole units into the player's account, per feat, per tier or per threshold. Rewards stay off until
-  `RewardsEnabled` is on, and a reward without `Coins` pays nothing, so a server that does not use it sees no
-  change. Coinage is a new optional dependency. A reward that comes due while Coinage is stopped or reloading
-  waits for it, and a Feats shutdown in that time keeps it in `CoinsWaiting.json` for the next start.
-- `FeatsApi.addStat` takes offline players. The add waits in memory, merged per player, and the Feats file
-  thread writes it into the player file, where the feats it meets unlock quietly and their rewards wait for
-  the next join. A player Feats has never seen gets nothing. Dominion's siege and mission credits to members
-  who are offline are no longer lost. An API object kept from before a Feats reload answers false, so ask
-  `FeatsApi.get()` again after one.
-- A `hidden` flag on every milestone and first in `export/feats.json`, and `hidden()` on `WorldRecord` from
-  `FeatsApi.milestones()` and `firsts()`. Every existing field stays as it was.
+  `dominion:` counters Dominion already sends, such as claims, enemy kills, sieges won and lost, missions and
+  coins put in the faction bank. Siege and mission credits for members who were offline now reach them at their
+  next join instead of being lost.
+- Armorer is spelled Armourer to match the other armour feats. Touch Grass and Kweebec Grudge lost their
+  questions, and Pick Collector says "every material", since wood is not a metal.
 
-### Changed
+### For admins
 
-- Armorer is now spelled Armourer to match every other armour feat. The id stays `armorer`.
-- Touch Grass and Kweebec Grudge lost their questions, and Pick Collector says "every material", since wood is
-  not a metal.
-- The leaderboard export and the rarity scan only parse the player files saved since their last read. With
-  2,000 player files a read with nothing changed takes about 12 ms on the Feats file thread, where parsing
-  every file took 170 to 300 ms.
-- The stale asset pack fix matches the one in Coinage. It compares jar paths without mixing file systems,
-  drops a jar pack directly while the asset monitor runs, and lets go of the pack at shutdown. The engine
-  still prints `Failed to reload plugin Ryvrook:Feats!` on a reload and then enables Feats with its pages.
-
-### Fixed
-
-- A reload of TrackerAPI 1.0.3 or newer no longer logs a reminder to reload Feats, since that TrackerAPI
-  reloads Feats itself. An older TrackerAPI or an unload still gets the reminder.
-- Without TrackerAPI, dropping 256 cheap items no longer made Feats forget the drop of a counted item. A full
-  drop memory now forgets its oldest drop.
-- `%feats_rarity_<featId>%` ignores the case of the id, like the other feat placeholders.
+- Rewards in `Rewards.json` can pay `Coins`, with an optional `Currency`, into the player's Coinage account.
+  Coinage is a new optional dependency. Coins that come due while Coinage is stopped or reloading wait for it,
+  and a Feats shutdown meanwhile keeps them in `CoinsWaiting.json`.
+- A reload of TrackerAPI 1.0.3 or newer no longer logs a reminder to reload Feats, since that TrackerAPI does it.
 - `RarityMinimumPlayers` reads as at least 1 and `RareBelowPercent` as 0 to 100.
+
+### Upgrading
+
+- Swap the jar. Nothing in `Feats.json` changed and every player file carries on.
+- After adding Dominion Factions, restart or run `/plugin reload Ryvrook:Feats` so the Factions tab appears.
+
+### Other changes
+
+- `FeatsApi.addStat` takes offline players. The add waits in memory and the file thread writes it, where feats
+  unlock quietly and rewards wait for the next join. A player Feats has never seen gets nothing. An API object
+  kept from before a Feats reload answers false, so ask `FeatsApi.get()` again.
+- A `hidden` flag on every milestone and first in `export/feats.json`, and `hidden()` on `WorldRecord`.
+- The export and the rarity scan only parse player files saved since their last read. With 2,000 player files a
+  read with nothing changed takes about 12 ms instead of 170 to 300 ms.
+- The stale asset pack fix matches the one in Coinage. It compares jar paths without mixing file systems, drops
+  a jar pack directly while the asset monitor runs and lets go of the pack at shutdown. The engine still prints
+  `Failed to reload plugin Ryvrook:Feats!` on a reload and then enables Feats with its pages.
+- Without TrackerAPI, dropping 256 cheap items no longer made Feats forget the drop of a counted item.
+- `%feats_rarity_<featId>%` ignores the case of the id, like the other feat placeholders.
 
 ## 1.5.1
 - Queued bench crafts count one run per craft event. The engine fires one event per finished unit of a queued batch and stamps each with the whole batch quantity, so a batch of a hundred counted as ten thousand crafts. Instant crafts are unchanged.
