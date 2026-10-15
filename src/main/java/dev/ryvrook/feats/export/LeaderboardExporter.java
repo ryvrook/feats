@@ -581,7 +581,7 @@ public final class LeaderboardExporter {
 
     /**
      * Adds {@code "milestones"} and {@code "firsts"}, the records of server.json keyed by feat id, each
-     * with {@code at}, {@code by}, {@code byName}, {@code featName} and {@code tier}. {@code by} and
+     * with {@code at}, {@code by}, {@code byName}, {@code featName}, {@code tier} and {@code hidden}. {@code by} and
      * {@code byName} are null for a milestone reached with nobody named.
      */
     private void appendWorld(StringBuilder sb) {
@@ -611,6 +611,7 @@ public final class LeaderboardExporter {
                     .append(", \"byName\": ").append(v.byName() == null ? "null" : quote(v.byName()))
                     .append(", \"featName\": ").append(quote(feat.name()))
                     .append(", \"tier\": ").append(quote(feat.tier().displayName()))
+                    .append(", \"hidden\": ").append(feat.hidden())
                     .append('}');
         }
     }

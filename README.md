@@ -650,11 +650,11 @@ a minute.
    "tier": "Bronze", "points": 10, "category": "Mining", "hidden": false}
  ],
  "milestones": {
-  "world_power": {"at": 1759980000000, "by": null, "byName": null, "featName": "Lights On", "tier": "Silver"}
+  "world_power": {"at": 1759980000000, "by": null, "byName": null, "featName": "Lights On", "tier": "Silver", "hidden": false}
  },
  "firsts": {
   "first_gobliterator": {"at": 1759990000000, "by": "…", "byName": "Steve", "featName": "Pioneer",
-   "tier": "Platinum"}
+   "tier": "Platinum", "hidden": false}
  }}
 ```
 
@@ -664,7 +664,7 @@ of them who own each feat, from 0 to 1, for every feat, and stays empty until `R
 count. Set `ExportSeconds` to `0` to turn the export off.
 
 `milestones` and `firsts` hold the records of `server.json` keyed by feat id, oldest first, each with `at`,
-`by`, `byName`, `featName` and `tier`. `by` and `byName` are `null` for a milestone reached with nobody named.
+`by`, `byName`, `featName`, `tier` and `hidden`. `by` and `byName` are `null` for a milestone reached with nobody named.
 `totalFeats`, `totalPoints`, `unlocked` and `rarity` cover personal feats only, while a player's `points`
 include the points of the World feats they earned.
 

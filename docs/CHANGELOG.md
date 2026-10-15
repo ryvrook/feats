@@ -15,6 +15,8 @@ semantic versioning.
   whole units into the player's account, per feat, per tier or per threshold. Rewards stay off until
   `RewardsEnabled` is on, and a reward without `Coins` pays nothing, so a server that does not use it sees no
   change. Coinage is a new optional dependency.
+- A `hidden` flag on every milestone and first in `export/feats.json`, and `hidden()` on `WorldRecord` from
+  `FeatsApi.milestones()` and `firsts()`. Every existing field stays as it was.
 
 ### Changed
 

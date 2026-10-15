@@ -139,9 +139,12 @@ public final class FeatsApi {
         return world == null ? Map.of() : records(world.firsts());
     }
 
-    private static Map<String, WorldRecord> records(Map<String, WorldStore.Entry> rows) {
+    private Map<String, WorldRecord> records(Map<String, WorldStore.Entry> rows) {
         Map<String, WorldRecord> out = new LinkedHashMap<>();
-        rows.forEach((id, e) -> out.put(id, new WorldRecord(id, e.at(), e.by(), e.byName())));
+        rows.forEach((id, e) -> {
+            Feat feat = tracker().registry().get(id);
+            out.put(id, new WorldRecord(id, e.at(), e.by(), e.byName(), feat != null && feat.hidden()));
+        });
         return Collections.unmodifiableMap(out);
     }
 
