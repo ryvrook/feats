@@ -66,4 +66,37 @@ class FactionFeatsTest {
         }
         new FeatRegistry(false); // put the shared feat predicates back to the plain list for the other tests
     }
+
+    @Test
+    void removingDominionParksTheFactionFeatsAndAddingItBackRestoresThem() throws Exception {
+        java.nio.file.Path dir = Files.createTempDirectory("feats-factions-gone");
+        UUID uuid = UUID.randomUUID();
+        FeatRegistry with = new FeatRegistry(true);
+        FeatsTracker before = new FeatsTracker(with, new ProgressStore(dir, LOGGER),
+                new UnlockNotifier(() -> null, LOGGER), LOGGER, Runnable::run);
+        PlayerProgress progress = before.load(uuid, "Warden");
+        before.increment(uuid, StatKeys.DOMINION_CLAIMS, 1);
+        before.increment(uuid, "deaths", 1);
+        int withPoints = before.points(progress);
+        int withCount = progress.unlockedCount();
+        before.unload(uuid);
+
+        FeatRegistry without = new FeatRegistry(false); // the next start, Dominion removed
+        FeatsTracker after = new FeatsTracker(without, new ProgressStore(dir, LOGGER),
+                new UnlockNotifier(() -> null, LOGGER), LOGGER, Runnable::run);
+        PlayerProgress back = after.load(uuid, "Warden");
+        assertTrue(back.isUnlocked("staked_claim"), "the unlock stays in the file");
+        assertEquals(1, back.get(StatKeys.DOMINION_CLAIMS), "and so does the counter");
+        assertEquals(withCount - 1, back.unlockedCount(), "but it is not counted");
+        assertEquals(withPoints - with.get("staked_claim").tier().points(), after.points(back));
+        after.unload(uuid);
+
+        FeatRegistry again = new FeatRegistry(true);
+        FeatsTracker readded = new FeatsTracker(again, new ProgressStore(dir, LOGGER),
+                new UnlockNotifier(() -> null, LOGGER), LOGGER, Runnable::run);
+        PlayerProgress restored = readded.load(uuid, "Warden");
+        assertEquals(withCount, restored.unlockedCount());
+        assertEquals(withPoints, readded.points(restored));
+        new FeatRegistry(false);
+    }
 }
