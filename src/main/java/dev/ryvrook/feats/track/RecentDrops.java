@@ -38,7 +38,9 @@ public final class RecentDrops {
         synchronized (mine) {
             prune(mine, now);
             if (size(mine) >= MAX_ENTRIES) {
-                return; // keep memory bounded, a flood of drops simply stops being remembered
+                // Bounded. The oldest drop goes, not the newest, so dropping 256 cheap items first cannot
+                // make the next drop of a counted item forgotten.
+                dropOldest(mine);
             }
             mine.computeIfAbsent(itemId, id -> new ArrayDeque<>()).addLast(new Drop(amount, now));
         }
@@ -91,6 +93,21 @@ public final class RecentDrops {
             }
             if (queue.isEmpty()) {
                 it.remove();
+            }
+        }
+    }
+
+    private static void dropOldest(Map<String, Deque<Drop>> mine) {
+        Map.Entry<String, Deque<Drop>> oldest = null;
+        for (Map.Entry<String, Deque<Drop>> e : mine.entrySet()) {
+            if (oldest == null || e.getValue().peekFirst().at < oldest.getValue().peekFirst().at) {
+                oldest = e;
+            }
+        }
+        if (oldest != null) {
+            oldest.getValue().removeFirst();
+            if (oldest.getValue().isEmpty()) {
+                mine.remove(oldest.getKey());
             }
         }
     }
