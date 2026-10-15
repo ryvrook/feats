@@ -37,6 +37,7 @@ import dev.ryvrook.feats.model.Category;
 import dev.ryvrook.feats.model.Feat;
 import dev.ryvrook.feats.model.FeatRegistry;
 import dev.ryvrook.feats.placeholders.FeatsExpansion;
+import dev.ryvrook.feats.rewards.CoinPayer;
 import dev.ryvrook.feats.rewards.RewardService;
 import dev.ryvrook.feats.stats.PlayerProgress;
 import dev.ryvrook.feats.stats.ProgressStore;
@@ -115,6 +116,8 @@ public final class FeatsPlugin extends JavaPlugin {
     private TrackerSwitch trackerSwitch;
     /** The TrackerAPI hooks while Feats tracks through it, closed at shutdown. */
     private AutoCloseable trackerLink;
+    /** The Coinage link that pays the Coins of Rewards.json, null without Coinage. */
+    private AutoCloseable coinageLink;
     /** The 5 second look at the TrackerAPI plugin object that notices a reload of it. */
     private ScheduledFuture<?> trackerWatch;
     private final Map<UUID, Long> lastChatAt = new ConcurrentHashMap<>();
@@ -392,6 +395,7 @@ public final class FeatsPlugin extends JavaPlugin {
             }
         }
         startTrackerLink();
+        startCoinageLink();
         ticker = HytaleServer.SCHEDULED_EXECUTOR.scheduleAtFixedRate(this::tick, 1, 1, TimeUnit.SECONDS);
         int every = config().autosaveSeconds();
         autosave = HytaleServer.SCHEDULED_EXECUTOR.scheduleAtFixedRate(this::autosave, every, every, TimeUnit.SECONDS);
@@ -434,6 +438,26 @@ public final class FeatsPlugin extends JavaPlugin {
                     getLogger().at(Level.WARNING).log("%s", line);
                 }
             }, 5, 5, TimeUnit.SECONDS);
+        }
+    }
+
+    /**
+     * Links the reward queue to Coinage when it is installed, so the Coins of Rewards.json are paid. The link
+     * class is only loaded after the plugin manager listed Coinage. Rewards are off by default, so nothing is
+     * paid until RewardsEnabled is on and a reward has Coins.
+     */
+    private void startCoinageLink() {
+        if (!Siblings.installed(Siblings.COINAGE)) {
+            return;
+        }
+        try {
+            Class<?> type = Class.forName("dev.ryvrook.feats.integration.CoinageRewards", true, getClass().getClassLoader());
+            Object link = type.getMethod("install").invoke(null);
+            rewards.setCoinPayer((CoinPayer) link);
+            coinageLink = (AutoCloseable) link;
+            getLogger().at(Level.INFO).log("Coinage is installed, so rewards with Coins pay through it");
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            getLogger().at(Level.WARNING).withCause(e).log("Feats could not link to Coinage, rewards with Coins pay nothing");
         }
     }
 
@@ -496,7 +520,15 @@ public final class FeatsPlugin extends JavaPlugin {
         FeatsExpansion.unregister(this);
         FeatsApi.uninstall(api);
         if (rewards != null) {
-            rewards.stop();
+            rewards.stop(); // runs the waiting steps, Coins included, so the Coinage link closes after it
+        }
+        if (coinageLink != null) {
+            try {
+                coinageLink.close();
+            } catch (Exception | LinkageError e) {
+                getLogger().at(Level.FINE).withCause(e).log("Feats could not unlink from Coinage");
+            }
+            coinageLink = null;
         }
         if (ticker != null) {
             ticker.cancel(false);

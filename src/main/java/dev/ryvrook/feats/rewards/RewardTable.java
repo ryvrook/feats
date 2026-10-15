@@ -3,6 +3,7 @@ package dev.ryvrook.feats.rewards;
 import dev.ryvrook.feats.model.Tier;
 import org.bson.Document;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -110,7 +111,26 @@ public record RewardTable(Map<String, Reward> feats, Map<Tier, Reward> tiers, Li
     private static Reward reward(Document d) {
         return new Reward(strings(d.get("Commands")), strings(d.get("Permissions")),
                 d.get("Group") instanceof String g ? g : "",
-                d.get("Message") instanceof String m ? m : "");
+                d.get("Message") instanceof String m ? m : "",
+                amount(d.get("Coins")),
+                d.get("Currency") instanceof String c ? c : "");
+    }
+
+    /** Coins as a number or a string such as "2.50". Anything else, zero or negative is no money. */
+    static BigDecimal amount(Object value) {
+        try {
+            BigDecimal amount = switch (value) {
+                case null -> null;
+                case Integer i -> BigDecimal.valueOf(i);
+                case Long l -> BigDecimal.valueOf(l);
+                case Number n -> new BigDecimal(n.toString());
+                case String s when !s.isBlank() -> new BigDecimal(s.trim().replace(",", ""));
+                default -> null;
+            };
+            return amount == null || amount.signum() <= 0 ? null : amount;
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private static List<String> strings(Object value) {
@@ -130,7 +150,7 @@ public record RewardTable(Map<String, Reward> feats, Map<Tier, Reward> tiers, Li
     /** The file written on first start. Valid as it is and gives nothing until filled in. */
     public static final String EXAMPLE = """
             {
-              "_readme": "Rewards are handed out only while RewardsEnabled is true in Feats.json. Feats holds rewards for single feats, keyed by feat id. Tiers holds rewards for every unlock of a tier, keyed by BRONZE, SILVER, GOLD or PLATINUM. Points holds rewards for reaching a points total and Count holds rewards for reaching a number of unlocked feats, each entry with an At value. Every reward has Commands, which run as the console, Permissions, which are added to the player, a Group the player is added to and a Message sent to the player in chat. Leave a field empty to skip it. Commands and messages can use {player} for the player name, {uuid}, {feat} for the feat id, {name} for the feat name, {tier} and {points} for the player's total after the unlock. Each reward is given once per player and remembered in their player file. That record survives /feats reset, so a player cannot reset to earn the same rewards again. Unlocks found when a player joins count as real unlocks and get their rewards too. Admin grants give rewards only with --rewards. The _example section shows the shape and is never read. Run /feats admin reload after editing.",
+              "_readme": "Rewards are handed out only while RewardsEnabled is true in Feats.json. Feats holds rewards for single feats, keyed by feat id. Tiers holds rewards for every unlock of a tier, keyed by BRONZE, SILVER, GOLD or PLATINUM. Points holds rewards for reaching a points total and Count holds rewards for reaching a number of unlocked feats, each entry with an At value. Every reward has Commands, which run as the console, Permissions, which are added to the player, a Group the player is added to and a Message sent to the player in chat. With Coinage installed a reward can also pay Coins, an amount in whole units such as 25 or 2.50, in the Currency named or the primary one when Currency is empty. Leave a field empty to skip it. Commands and messages can use {player} for the player name, {uuid}, {feat} for the feat id, {name} for the feat name, {tier} and {points} for the player's total after the unlock. Each reward is given once per player and remembered in their player file. That record survives /feats reset, so a player cannot reset to earn the same rewards again. Unlocks found when a player joins count as real unlocks and get their rewards too. Admin grants give rewards only with --rewards. The _example section shows the shape and is never read. Run /feats admin reload after editing.",
               "Feats": {},
               "Tiers": {},
               "Points": [],
@@ -140,6 +160,7 @@ public record RewardTable(Map<String, Reward> feats, Map<Tier, Reward> tiers, Li
                   "digger": {"Commands": ["give {player} Tool_Pickaxe_Iron"], "Permissions": [], "Group": "", "Message": "Your {name} reward is in your inventory"}
                 },
                 "Tiers": {
+                  "GOLD": {"Coins": 50, "Currency": "", "Message": "50 coins for a Gold feat"},
                   "PLATINUM": {"Commands": [], "Permissions": [], "Group": "", "Message": "Platinum feat earned, you now have {points} points"}
                 },
                 "Points": [

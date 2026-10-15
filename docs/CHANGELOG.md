@@ -11,6 +11,10 @@ semantic versioning.
   `dominion:` counters Dominion already sends through `FeatsApi.addStat`, which no feat read before. Those are
   claims, invites, enemy kills, deaths on enemy land, sieges won and lost, missions and coins put in the bank.
   Feats checks for Dominion when it starts, so adding Dominion later needs a restart or `/plugin reload Feats`.
+- `Coins` and `Currency` on every reward in `Rewards.json`. With Coinage installed Feats deposits that many
+  whole units into the player's account, per feat, per tier or per threshold. Rewards stay off until
+  `RewardsEnabled` is on, and a reward without `Coins` pays nothing, so a server that does not use it sees no
+  change. Coinage is a new optional dependency.
 
 ## 1.5.1
 - Queued bench crafts count one run per craft event. The engine fires one event per finished unit of a queued batch and stamps each with the whole batch quantity, so a batch of a hundred counted as ten thousand crafts. Instant crafts are unchanged.

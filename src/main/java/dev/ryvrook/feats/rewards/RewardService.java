@@ -52,6 +52,8 @@ public final class RewardService {
     private final Path file;
     private volatile RewardTable table = RewardTable.EMPTY;
     private volatile boolean stopped;
+    /** Pays the Coins part while Coinage is installed, null without it. */
+    private volatile CoinPayer coins;
 
     private final Queue<Runnable> queue = new ConcurrentLinkedQueue<>();
     private final AtomicBoolean draining = new AtomicBoolean();
@@ -117,6 +119,11 @@ public final class RewardService {
         }
     }
 
+    /** Hands the Coins part of each reward to Coinage. Null leaves Coins unpaid with a warning. */
+    public void setCoinPayer(CoinPayer payer) {
+        this.coins = payer;
+    }
+
     /** Tracker hook, runs on the thread that caused the unlock. Only records and queues. */
     public void onUnlock(FeatsTracker.Unlock unlock) {
         if (stopped || !unlock.rewards() || !config.get().rewardsEnabled()) {
@@ -177,9 +184,27 @@ public final class RewardService {
             String line = ctx.fill(command);
             enqueue(() -> runCommand(command, line));
         }
+        if (reward.coins() != null) {
+            String reason = "feats:" + ctx.feat().id();
+            enqueue(() -> payCoins(ctx.uuid(), reward, reason));
+        }
         if (!reward.permissions().isEmpty() || !reward.group().isEmpty() || !reward.message().isEmpty()) {
             String message = reward.message().isEmpty() ? "" : ctx.fill(reward.message());
             enqueue(() -> grantAccess(ctx.uuid(), reward, message));
+        }
+    }
+
+    /** Deposits the Coins through Coinage. Coinage takes deposits for offline players as well. */
+    private void payCoins(UUID uuid, Reward reward, String reason) {
+        CoinPayer payer = coins;
+        String what = "coins " + reward.coins().toPlainString() + (reward.currency().isEmpty() ? "" : " " + reward.currency());
+        if (payer == null) {
+            failed(what, new IllegalStateException("Coinage is not installed"));
+            return;
+        }
+        String problem = payer.pay(uuid, reward.currency(), reward.coins(), reason);
+        if (problem != null) {
+            failed(what, new IllegalStateException(problem));
         }
     }
 

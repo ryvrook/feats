@@ -460,6 +460,10 @@ section that shows the shape and is never read. A filled in file looks like this
   entry needs a positive `At`.
 - Every reward has `Commands`, run as the console, `Permissions` added to the player, a `Group` the player
   joins and a `Message` sent to them in chat while they are online. Leave any of them empty.
+- With Coinage installed a reward can also pay `Coins`, an amount in whole units such as `25` or `"2.50"`, into
+  the player's Coinage account, online or not. `Currency` names the currency, empty means the primary one. So
+  `"Tiers": {"GOLD": {"Coins": 50}}` pays 50 coins for every Gold feat. Without Coinage the coins are not paid
+  and the server log says so once a minute.
 - Commands and messages can use `{player}`, `{uuid}`, `{feat}` for the id, `{name}` for the feat name, `{tier}`
   and `{points}` for the total after the unlock.
 

@@ -31,10 +31,17 @@ repositories {
     }
 }
 
-// The TrackerAPI jar Feats compiles against. Optional at runtime, see integration/TrackerBridge.
-// Override with -PtrackerApiJar=/path/to/TrackerAPI-1.0.0.jar
-val trackerApiJar = (project.findProperty("trackerApiJar") as String?)?.trim()
-    ?: "../trackerapi/build/libs/TrackerAPI-1.0.0.jar"
+// Sibling jars Feats compiles against, the oldest version it supports so nothing newer is used by accident.
+// Each is given with -PtrackerApiJar=<path> or -PcoinageJar=<path>, else the sibling checkout next to this one,
+// else the checkout under ~/Projects. Both are optional at runtime, see integration/TrackerBridge and
+// integration/CoinageRewards, the only classes that touch them.
+fun siblingJar(property: String, path: String): String {
+    (project.findProperty(property) as String?)?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+    val candidates = listOf("../$path", System.getProperty("user.home") + "/Projects/$path")
+    return candidates.firstOrNull { file(it).exists() } ?: candidates.first()
+}
+val trackerApiJar = siblingJar("trackerApiJar", "trackerapi/build/libs/TrackerAPI-1.0.0.jar")
+val coinageJar = siblingJar("coinageJar", "coinage/build/libs/Coinage-api-1.0.0.jar")
 
 dependencies {
     // Provided by the Hytale server at runtime; never bundled into the mod jar.
@@ -43,10 +50,13 @@ dependencies {
     compileOnly("at.helpch:placeholderapi-hytale:1.0.8")
     // Optional at runtime. Only the bridge touches it, and only when TrackerAPI is installed.
     compileOnly(files(trackerApiJar))
+    // Optional at runtime. Only CoinageRewards touches it, and only when Coinage is installed.
+    compileOnly(files(coinageJar))
 
     // Tests run without a server. The server jar is only on the test classpath for bson and the logger.
     testImplementation("com.hypixel.hytale:Server:$hytaleVersion")
     testImplementation(files(trackerApiJar))
+    testImplementation(files(coinageJar))
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
