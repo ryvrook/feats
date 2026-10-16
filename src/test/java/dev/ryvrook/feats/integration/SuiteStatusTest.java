@@ -21,8 +21,8 @@ class SuiteStatusTest {
         assertEquals(List.of(
                 "TrackerAPI 1.1.0 feeds the counters, setting Tracker auto",
                 "Coinage 1.3.0 is linked, with coin rewards, setting Coinage auto",
-                "Dominion 0.7.2 sends the Factions counters, setting Dominion auto",
-                "ChronicleStats 1.4.0 is older than 1.5.0, so its feats are out, setting Chronicle auto",
+                "Dominion Factions 0.7.2 sends the Factions counters, setting Dominion auto",
+                "Chronicle Stats 1.4.0 is older than 1.5.0, so its feats are out, setting Chronicle auto",
                 "Atlas is ignored, setting Atlas never",
                 "SocialBridge 0.2.0 reads Feats and posts the unlocks, setting DiscordVia auto",
                 "RestAPI is not installed",

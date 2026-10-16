@@ -35,11 +35,16 @@ public final class SuiteStatus {
     }
 
     private static String line(Sibling s, Inputs in) {
-        String name = s.pluginName();
+        String plugin = s.pluginName();
+        String name = switch (s) {
+            case DOMINION -> "Dominion Factions";
+            case CHRONICLE -> "Chronicle Stats";
+            default -> plugin;
+        };
         String mode = in.mode().apply(s);
-        String setting = ", setting " + (s == Sibling.TRACKER_API ? "Tracker " : name.replace("Stats", "") + " ") + mode;
-        boolean installed = in.installed().apply(name);
-        String version = in.version().apply(name);
+        String setting = ", setting " + (s == Sibling.TRACKER_API ? "Tracker " : plugin.replace("Stats", "") + " ") + mode;
+        boolean installed = in.installed().apply(plugin);
+        String version = in.version().apply(plugin);
         String head = version == null ? name : name + " " + version;
         if ("never".equals(mode)) {
             return head + (installed ? " is installed and ignored" : " is ignored") + setting;
