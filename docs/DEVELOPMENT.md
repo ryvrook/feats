@@ -91,6 +91,22 @@ write would run on the caller's thread. `OfflineAddsTest` covers each case.
 Feats, and adds the Factions tab when the jar is there. `FactionFeatsTest` holds the list of keys Dominion 0.5.1
 sends, so a rename on either side fails the build.
 
+SocialBridge and RestAPI read Feats through `FeatsApi` and list it as an optional dependency, Dominion does too.
+They bind through `FeatsApi.onEnable`, which runs at the end of start, and let go in `onDisable`, which runs first
+thing in shutdown. A `/plugin reload` of Feats leaves them holding the old `FeatsApi` class, so `Dependents`
+reloads every enabled plugin that lists Feats two seconds after start, on the `Feats-dependents` thread under the
+suite lock in the System property `ryvrook.dependents.lock`, the same class and lock TrackerAPI and Coinage use.
+On a fresh boot none of them is enabled yet and the pass does nothing.
+
+`DiscordVia` decides who posts unlocks to Discord. On `auto` Feats asks the plugin manager for
+`Ryvrook:SocialBridge` before each webhook post and leaves the post to SocialBridge when it is there, which reads
+`FeatUnlockedEvent` and its admin, hidden, rarity, category and description fields. Feats never names a
+SocialBridge class.
+
+A stop path must never load a sibling class for the first time. The plugin manager holds its write lock during
+shutdown and the bridge class loader needs the read lock, which showed up as a 5 second hang. Everything
+`shutdown` touches of TrackerAPI, Coinage and PlaceholderAPI was loaded in setup or start.
+
 PlaceholderAPI is found by class name and registered in start. `FeatsExpansion` never names a PlaceholderAPI
 type outside its nested `Hook`.
 

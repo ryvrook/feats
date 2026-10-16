@@ -144,6 +144,8 @@ public final class FeatsPlugin extends JavaPlugin {
 
     private RewardService rewards;
     private FeatsApi api;
+    /** Set first thing in shutdown, so a dependents pass still waiting does not start. */
+    private volatile boolean stopping;
     /** Players in Creative mode right now, kept whether or not IgnoreCreative is on. */
     private final Set<UUID> creative = ConcurrentHashMap.newKeySet();
     /** The lower case name of the world each player is in. */
@@ -416,6 +418,39 @@ public final class FeatsPlugin extends JavaPlugin {
                     TimeUnit.SECONDS);
             exporting = true;
         }
+        FeatsApi.enable(api);
+        reloadDependentsAfterReload();
+    }
+
+    /**
+     * After a {@code /plugin reload} of Feats the plugins that list it still hold the old FeatsApi class, so they
+     * are reloaded two seconds after this start, on a thread of their own since the pass may wait for another
+     * reloader's lock and for each plugin. On a fresh boot none of them is enabled yet and nothing happens.
+     */
+    private void reloadDependentsAfterReload() {
+        List<Dependents.Dependent> dependents = Dependents.enabled(getIdentifier(), getLogger());
+        if (dependents.isEmpty()) {
+            return;
+        }
+        getLogger().at(Level.INFO).log("Feats found %d plugins linked to its previous instance and reloads them in two seconds", dependents.size());
+        try {
+            HytaleServer.SCHEDULED_EXECUTOR.schedule(() -> {
+                if (stopping) {
+                    return;
+                }
+                Thread pass = new Thread(() -> {
+                    try {
+                        Dependents.reload(dependents, getLogger());
+                    } catch (RuntimeException | LinkageError e) {
+                        getLogger().at(Level.WARNING).withCause(e).log("Feats could not reload the plugins linked to it");
+                    }
+                }, "Feats-dependents");
+                pass.setDaemon(true);
+                pass.start();
+            }, 2, TimeUnit.SECONDS);
+        } catch (RejectedExecutionException e) {
+            // the server is stopping, nothing to relink
+        }
     }
 
     /**
@@ -520,6 +555,8 @@ public final class FeatsPlugin extends JavaPlugin {
 
     @Override
     protected void shutdown() {
+        stopping = true;
+        FeatsApi.disable(api); // first, so dependents let go while every Feats service still answers
         if (trackerWatch != null) {
             trackerWatch.cancel(false);
         }

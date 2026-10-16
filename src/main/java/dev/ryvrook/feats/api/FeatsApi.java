@@ -13,12 +13,14 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * The public Feats API for other plugins. Get it with {@link #get()}, which returns null while Feats
@@ -31,10 +33,30 @@ import java.util.logging.Level;
  * minute old, and return zero, empty or null for a player Feats has never seen. {@link #addStat}
  * also takes offline players, {@link #grant} only online ones.
  *
- * <p>This class is stable. Methods are only ever added, and existing ones keep their meaning.
+ * <p>Bind from {@link #onEnable(Consumer)}, which runs at once when Feats is already started and again every
+ * time it starts, and drop your state in {@link #onDisable(Runnable)}. The hooks live on this class, and a
+ * {@code /plugin reload} of Feats loads a new copy of it that your classes do not see. Feats makes up for that by
+ * reloading every enabled plugin that lists {@code Ryvrook:Feats} under its dependencies or optional dependencies
+ * two seconds after it started again, so your plugin starts over and registers its hooks on the new copy.
+ *
+ * <p>This class is stable. Methods are only ever added, and existing ones keep their meaning. Check
+ * {@link #API_VERSION} when a newer method is needed.
  */
 public final class FeatsApi {
+    /**
+     * Raised whenever a method, a record component or an event field is added. Version 2 came with Feats 1.7.0
+     * and added the enable and disable hooks, {@link #top}, and the admin, hidden, rarity, category and description
+     * of {@link FeatUnlockedEvent}. Feats before 1.7.0 has no such field, so read it inside a try that catches
+     * {@link NoSuchFieldError} and treat a miss as version 1.
+     */
+    public static final int API_VERSION = 2;
+
+    private static final Logger LOG = Logger.getLogger("Feats");
+    private static final List<Consumer<FeatsApi>> ENABLE = new CopyOnWriteArrayList<>();
+    private static final List<Runnable> DISABLE = new CopyOnWriteArrayList<>();
     private static volatile FeatsApi instance;
+    /** The API once Feats has started, null before and after. */
+    private static volatile FeatsApi started;
     private static final long IGNORED_LOG_MILLIS = 60_000L;
 
     private final FeatsPlugin plugin;
@@ -54,6 +76,70 @@ public final class FeatsApi {
     /** The running API, or null when Feats is not loaded. */
     public static FeatsApi get() {
         return instance;
+    }
+
+    /**
+     * Runs the hook now when Feats has started, and every time it starts. Since API version 2.
+     */
+    public static void onEnable(Consumer<FeatsApi> hook) {
+        Objects.requireNonNull(hook, "hook");
+        ENABLE.add(hook);
+        FeatsApi api = started;
+        if (api != null) {
+            runHook(() -> hook.accept(api));
+        }
+    }
+
+    /**
+     * Runs the hook every time Feats stops, before its unlock listeners are dropped and {@link #get} turns null.
+     * Since API version 2.
+     */
+    public static void onDisable(Runnable hook) {
+        Objects.requireNonNull(hook, "hook");
+        DISABLE.add(hook);
+    }
+
+    /** Removes hooks added with {@link #onEnable} and {@link #onDisable}. Since API version 2. */
+    public static void removeHooks(Consumer<FeatsApi> enable, Runnable disable) {
+        if (enable != null) {
+            ENABLE.remove(enable);
+        }
+        if (disable != null) {
+            DISABLE.remove(disable);
+        }
+    }
+
+    /** True once Feats has started and until it stops. Since API version 2. */
+    public static boolean isEnabled() {
+        return started != null;
+    }
+
+    /** Called by Feats itself at the end of start. Runs the enable hooks. Not for other plugins. */
+    public static void enable(FeatsApi api) {
+        Objects.requireNonNull(api, "api");
+        started = api;
+        for (Consumer<FeatsApi> hook : ENABLE) {
+            runHook(() -> hook.accept(api));
+        }
+    }
+
+    /** Called by Feats itself first thing at shutdown. Runs the disable hooks. Not for other plugins. */
+    public static void disable(FeatsApi api) {
+        if (api == null || started != api) {
+            return;
+        }
+        started = null;
+        for (Runnable hook : DISABLE) {
+            runHook(hook);
+        }
+    }
+
+    private static void runHook(Runnable task) {
+        try {
+            task.run();
+        } catch (RuntimeException | LinkageError e) {
+            LOG.log(Level.WARNING, "A Feats lifecycle hook failed", e);
+        }
     }
 
     /** Called by Feats itself during setup. Not for other plugins. */
