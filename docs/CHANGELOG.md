@@ -3,6 +3,23 @@
 Every notable change to Feats is recorded here. The format follows Keep a Changelog and the project uses
 semantic versioning.
 
+## 1.7.3 - 2026-10-16
+
+Needs the Hytale 0.7.0 release server or newer. With every pack and every sibling mod installed there are 528
+feats worth 23,440 points.
+
+### For players
+
+- New Rank in the Factions tab, Bronze, for being promoted or demoted in your faction. It reads
+  `dominion:rank_changes`, which Dominion Factions sends from 0.7.2. The Factions tab has 30 feats worth 900 points.
+
+### For admins
+
+- Four new settings, `Coinage`, `Dominion`, `Chronicle` and `Atlas`, each `auto`, `always` or `never` like
+  `Tracker`. `auto` links when the mod is installed and new enough, as before. `always` also warns at start when
+  it is missing. `never` leaves its feats, bindings and coin rewards out. Read at start.
+- Coin rewards now link to Coinage only when it is 1.2.0 or newer, the same check as the Coinage tab.
+
 ## 1.7.2 - 2026-10-16
 
 Needs the Hytale 0.7.0 release server or newer. There was no 1.7.1, the version went from 1.7.0 straight to 1.7.2.

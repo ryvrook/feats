@@ -12,7 +12,7 @@ bindings and the hook sets, and starts the timers. Shutdown undoes it in reverse
 
 `model` holds the feat definitions. `FeatRegistry` builds all of them in code from the siblings found at setup
 and the packs that are on. A plain server has 445 personal feats in nine tabs, the default packs make it 455,
-and every pack and sibling 527, with 30 world milestones and server firsts on top. A feat carries `requires`, the
+and every pack and sibling 528, with 30 world milestones and server firsts on top. A feat carries `requires`, the
 `Sibling` set it needs, `pack`, the `Pack` it sits in, and `banner`. `add` leaves out a feat whose sibling is
 missing or whose pack is off and remembers why, which `whySkipped` hands to the admin grant. `track` holds
 `FeatsTracker`, the one entry point every count goes through, plus `Classify`, which turns a block, item,
@@ -158,8 +158,9 @@ without a file is skipped. An admin edit holding the player puts the adds back a
 write would run on the caller's thread. `OfflineAddsTest` covers each case.
 `Siblings.installed("Dominion")` looks at the engine's available plugins in setup, since Dominion sets up after
 Feats, and adds the Factions tab when the jar is there. `FactionFeatsTest` holds the 25 keys Dominion 0.7.1
-lists, the ten from 0.5.1 and fifteen more, so a rename on either side fails the build. Dominion lists
-`dominion:rank_changes` but never sends it, and no feat reads it or `dominion:tutorial_done`.
+lists, the ten from 0.5.1 and fifteen more, so a rename on either side fails the build. New Rank, added in
+1.7.3, reads `dominion:rank_changes`, which Dominion sends from 0.7.2, one per promotion or demotion credited to
+the member. No feat reads `dominion:tutorial_done`.
 
 SocialBridge and RestAPI read Feats through `FeatsApi` and list it as an optional dependency, Dominion does too.
 They bind through `FeatsApi.onEnable`, which runs at the end of start, and let go in `onDisable`, which runs first
@@ -193,6 +194,12 @@ window reads to one per player and key per 10 seconds, and reads the month windo
 once a minute per player, since Chronicle closes a day without a change event. `CrossModFeats` answers the two Dominion facts the Coinage
 binding asks for, allied and at war, and switches off with one warning when the API lacks a method. Every
 sibling counter goes through the tracker, offline players through `addOffline`.
+
+Each sibling has a link setting in `Feats.json`, `Tracker`, `Coinage`, `Dominion`, `Chronicle` and `Atlas`, read
+once in setup through `FeatsConfig.link`. `Siblings.present(mode)` drops a sibling on `never` before it looks the
+plugin up, so nothing of it is loaded, and warns once for a missing sibling on `always`. TrackerAPI's `always`
+warning comes from `TrackerSwitch`. The coin reward link reads the same set, so `Coinage` on `never` also stops
+coin rewards.
 
 `Sibling.minimum` names the oldest version each binding is written against. `Siblings.present` compares the
 loaded plugin's manifest version with it and leaves an older sibling out with one warning, so its tab never

@@ -3,8 +3,8 @@
 Achievements for Hytale servers. Feats adds 455 of them, called feats, in eleven tabs worth 20,735 points,
 with an unlock toast, a chat line, a top of screen banner for the rarest unlocks and a `/feats` browser that
 shows progress on every one, lifetime statistics and a points leaderboard. Two of the tabs are packs an admin can
-turn off, and four more appear with Coinage, Dominion Factions, Chronicle Stats and Atlas, up to 527 feats worth
-23,430 points. It runs on the server with a small UI pack inside the jar, so players join with an unmodified
+turn off, and four more appear with Coinage, Dominion Factions, Chronicle Stats and Atlas, up to 528 feats worth
+23,440 points. It runs on the server with a small UI pack inside the jar, so players join with an unmodified
 client.
 
 ## Requirements
@@ -16,7 +16,7 @@ SocialBridge and RestAPI, which read Feats.
 
 ## Install
 
-Drop `Feats-1.7.2.jar` into `UserData/Mods` for a singleplayer world or into the server's `mods/` folder and
+Drop `Feats-1.7.3.jar` into `UserData/Mods` for a singleplayer world or into the server's `mods/` folder and
 start it. Tracking starts the first time a player joins. Type `/feats`.
 
 To update a running server, swap the jar and run `/plugin reload Ryvrook:Feats`. The engine prints
@@ -103,7 +103,7 @@ packs and siblings are read at start.
 ## Settings
 
 `Feats.json` sits in the plugin's data folder. `/feats admin reload` applies everything except
-`AutosaveSeconds`, `ExportSeconds`, `Tracker` and the five `Pack` keys, which need a restart or
+`AutosaveSeconds`, `ExportSeconds`, `Tracker`, the four sibling link keys and the five `Pack` keys, which need a restart or
 `/plugin reload Ryvrook:Feats`. The reload reply lists the packs that are on so a change that has not taken
 effect yet is easy to spot.
 
@@ -132,6 +132,10 @@ effect yet is easy to spot.
 | `AutosaveSeconds` | `60` | Save interval for changed players, at least 10 |
 | `ExportSeconds` | `15` | Leaderboard export check, at least 5. `0` turns the export off |
 | `Tracker` | `"auto"` | Where counts come from. `auto` uses TrackerAPI when present, `always` only TrackerAPI, `never` own hooks. Read at start |
+| `Coinage` | `"auto"` | The Coinage tab, the cross mod feats and coin rewards. `auto` links when Coinage is installed, `always` also warns at start when it is missing, `never` ignores it. Read at start |
+| `Dominion` | `"auto"` | The Factions tab, same three values. Read at start |
+| `Chronicle` | `"auto"` | The Chronicle tab, same three values. Read at start |
+| `Atlas` | `"auto"` | On the Map and Surveyor's Mark, same three values. Read at start |
 | `PackSocial` | `true` | The Social tab, 6 feats for time with other players. Read at start |
 | `PackHardcore` | `"auto"` | The Hardcore tab, 2 feats. `auto` turns it on when the server runs hardcore lives, `true` and `false` decide outright. Read at start |
 | `PackPvp` | `false` | The PvP tab, 3 feats. Read at start |
@@ -219,6 +223,20 @@ so run it once after installing on a server that already has players. Running it
 
 ## With the other mods
 
+Each link is found by plugin name when Feats starts and has a setting in `Feats.json`. Feats is complete with
+none of them.
+
+| Mod | What appears when it is installed | Setting |
+|---|---|---|
+| TrackerAPI | Feats takes 34 event kinds from it instead of its own hooks | `Tracker` |
+| Coinage | Coinage tab of 24 feats, coin rewards, with Dominion three cross mod feats | `Coinage` |
+| Dominion Factions | Factions tab of 30 feats, unlocks in faction chat | `Dominion` |
+| Chronicle Stats | Chronicle tab of 6 feats, feats on its player sheet | `Chronicle` |
+| Atlas | Two Exploration feats, the leaderboard panel on the web map | `Atlas` |
+| SocialBridge | Unlock posts and Feats on its `/profile` in Discord | `DiscordVia` |
+| RestAPI | Feats routes under `/api/feats` | RestAPI's own |
+| Lullaby | Nothing, the two do not touch | none |
+
 **TrackerAPI.** On `auto`, with TrackerAPI 1.0.0 or newer installed, Feats registers none of its own tracking
 hooks and takes 34 event kinds from TrackerAPI, the 19 it took before plus movement edges, mounts, vitals, armour
 worn, items that broke, projectiles launched and landed, instances discovered, trigger volumes, world events,
@@ -246,12 +264,12 @@ read every five minutes for the players online, and those two and the daily stre
 online. Everything else reaches offline players in their file.
 
 **Dominion Factions.** Dominion sends its `dominion:` counters through `FeatsApi.addStat`, and Feats adds the
-Factions tab of 29 feats worth 890 points on them, such as chunks claimed, sieges won and coins put in the
+Factions tab of 30 feats worth 900 points on them, such as chunks claimed, sieges won and coins put in the
 faction bank. Dominion 0.5.1 or newer keeps the first 15 moving, and Downsizing for a released claim, since it
 reads a key Dominion has always sent. The other 13 added in 1.7.2, joining and being kicked, wars, alliances,
 upgrades, the faction market, foreign land, sieges defended, breaches, hill events, outposts and full power, need
-Dominion 0.7.1, which sends their keys. Dominion lists a rank changes key but never sends it, and no feat reads
-it. Credits for offline members land in their file. Dominion also posts Feats unlocks in faction chat. Feats
+Dominion 0.7.1, which sends their keys. New Rank, added in 1.7.3, reads `dominion:rank_changes`, one for each
+promotion or demotion of the member, which Dominion sends from 0.7.2. Credits for offline members land in their file. Dominion also posts Feats unlocks in faction chat. Feats
 checks for Dominion when it starts, so after adding it restart or reload Feats.
 
 **Chronicle Stats** reads progress through the API and shows feats on its player sheet. With Chronicle Stats
