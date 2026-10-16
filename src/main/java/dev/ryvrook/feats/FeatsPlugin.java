@@ -288,7 +288,7 @@ public final class FeatsPlugin extends JavaPlugin {
         config.save();
 
         io = newIoExecutor();
-        siblings = Siblings.present();
+        siblings = Siblings.present(config()::link);
         boolean factions = siblings.contains(Sibling.DOMINION);
         Set<Pack> packs = config().packs(() -> Hardcore.detect(getLogger()));
         registry = new FeatRegistry(siblings, packs);
@@ -525,7 +525,7 @@ public final class FeatsPlugin extends JavaPlugin {
      * paid until RewardsEnabled is on and a reward has Coins.
      */
     private void startCoinageLink() {
-        if (!Siblings.installed(Siblings.COINAGE)) {
+        if (siblings == null || !siblings.contains(Sibling.COINAGE)) {
             return;
         }
         try {

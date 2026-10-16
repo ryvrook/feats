@@ -68,14 +68,36 @@ public final class Siblings {
      * counts as new enough. Its binding checks the API it needs once the sibling is up.
      */
     public static Set<Sibling> present() {
-        return present(Siblings::installed, Siblings::version, line -> LOGGER.at(Level.WARNING).log("%s", line));
+        return present(s -> "auto");
+    }
+
+    /**
+     * As {@link #present()} with the link setting of each sibling, {@code auto}, {@code always} or {@code never}.
+     * A sibling on {@code never} is left out without a word, one on {@code always} that is missing gets a warning.
+     */
+    public static Set<Sibling> present(Function<Sibling, String> mode) {
+        return present(Siblings::installed, Siblings::version, mode, line -> LOGGER.at(Level.WARNING).log("%s", line));
     }
 
     /** {@link #present()} over any lookup, for the tests. Logs one line per sibling it skips. */
     static Set<Sibling> present(Predicate<String> installed, Function<String, String> version, Consumer<String> log) {
+        return present(installed, version, s -> "auto", log);
+    }
+
+    /** {@link #present(Function)} over any lookup, for the tests. */
+    static Set<Sibling> present(Predicate<String> installed, Function<String, String> version,
+                                Function<Sibling, String> mode, Consumer<String> log) {
         Set<Sibling> out = EnumSet.noneOf(Sibling.class);
         for (Sibling s : Sibling.values()) {
+            String m = mode == null ? "auto" : mode.apply(s);
+            if ("never".equals(m)) {
+                continue;
+            }
             if (!installed.test(s.pluginName())) {
+                if ("always".equals(m) && s != Sibling.TRACKER_API) {
+                    log.accept("Feats is set to always link to " + s.pluginName() + " but " + s.pluginName()
+                            + " is not installed, so its feats are left out");
+                }
                 continue;
             }
             String found = version.apply(s.pluginName());

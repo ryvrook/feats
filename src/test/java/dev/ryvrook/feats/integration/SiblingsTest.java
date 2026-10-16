@@ -35,4 +35,24 @@ class SiblingsTest {
             throw new AssertionError(line);
         }));
     }
+
+    @Test
+    void neverLeavesASiblingOutQuietlyAndAlwaysWarnsWhenItIsMissing() {
+        Map<String, String> versions = Map.of(Sibling.COINAGE.pluginName(), "1.3.0", Sibling.ATLAS.pluginName(), "1.9.0");
+        Map<Sibling, String> modes = Map.of(Sibling.COINAGE, "never", Sibling.CHRONICLE, "always", Sibling.TRACKER_API, "always");
+        List<String> log = new ArrayList<>();
+        Set<Sibling> present = Siblings.present(versions::containsKey, versions::get,
+                s -> modes.getOrDefault(s, "auto"), log::add);
+        assertEquals(EnumSet.of(Sibling.ATLAS), present);
+        assertEquals(1, log.size(), "TrackerAPI warns through its own Tracker setting, " + log);
+        assertTrue(log.getFirst().contains("always link to ChronicleStats"), log.getFirst());
+    }
+
+    @Test
+    void theConfigReadsEachLinkSettingAndDefaultsToAuto() {
+        dev.ryvrook.feats.FeatsConfig config = new dev.ryvrook.feats.FeatsConfig();
+        for (Sibling s : Sibling.values()) {
+            assertEquals("auto", config.link(s), s.name());
+        }
+    }
 }

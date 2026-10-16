@@ -104,6 +104,22 @@ public final class FeatsConfig {
                     (c, v, extra) -> c.tracker = v,
                     (c, extra) -> c.tracker)
             .add()
+            .append(new KeyedCodec<>("Coinage", Codec.STRING),
+                    (c, v, extra) -> c.linkCoinage = v,
+                    (c, extra) -> c.linkCoinage)
+            .add()
+            .append(new KeyedCodec<>("Dominion", Codec.STRING),
+                    (c, v, extra) -> c.linkDominion = v,
+                    (c, extra) -> c.linkDominion)
+            .add()
+            .append(new KeyedCodec<>("Chronicle", Codec.STRING),
+                    (c, v, extra) -> c.linkChronicle = v,
+                    (c, extra) -> c.linkChronicle)
+            .add()
+            .append(new KeyedCodec<>("Atlas", Codec.STRING),
+                    (c, v, extra) -> c.linkAtlas = v,
+                    (c, extra) -> c.linkAtlas)
+            .add()
             .append(new KeyedCodec<>("PackSocial", Codec.BOOLEAN),
                     (c, v, extra) -> c.packSocial = v,
                     (c, extra) -> c.packSocial)
@@ -199,6 +215,10 @@ public final class FeatsConfig {
     private boolean pausePlaytimeWhenDisabled = true;
     private String unlockSound = "SFX_Memories_Unlock_Local";
     private String tracker = "auto";
+    private String linkCoinage = "auto";
+    private String linkDominion = "auto";
+    private String linkChronicle = "auto";
+    private String linkAtlas = "auto";
 
     public boolean showToasts() {
         return showToasts;
@@ -315,6 +335,23 @@ public final class FeatsConfig {
      */
     public String tracker() {
         return tracker == null || tracker.isBlank() ? "auto" : tracker;
+    }
+
+    /**
+     * The link setting for one sibling, {@code auto}, {@code always} or {@code never}. TrackerAPI reads
+     * {@link #tracker()}. {@code auto} links when the sibling is installed and new enough, {@code always} does
+     * the same and warns at start when it is missing, {@code never} ignores it, so its feats and bindings stay
+     * out. Read once at setup.
+     */
+    public String link(dev.ryvrook.feats.model.Sibling sibling) {
+        String v = switch (sibling) {
+            case TRACKER_API -> tracker;
+            case COINAGE -> linkCoinage;
+            case DOMINION -> linkDominion;
+            case CHRONICLE -> linkChronicle;
+            case ATLAS -> linkAtlas;
+        };
+        return v == null || v.isBlank() ? "auto" : v.trim().toLowerCase(Locale.ROOT);
     }
     // ---- 1.7.2 ---------------------------------------------------------------
 
