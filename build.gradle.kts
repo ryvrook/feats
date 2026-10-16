@@ -40,7 +40,7 @@ fun siblingJar(property: String, path: String): String {
     val candidates = listOf("../$path", System.getProperty("user.home") + "/Projects/$path")
     return candidates.firstOrNull { file(it).exists() } ?: candidates.first()
 }
-val trackerApiJar = siblingJar("trackerApiJar", "trackerapi/build/libs/TrackerAPI-1.0.0.jar")
+val trackerApiJar = siblingJar("trackerApiJar", "trackerapi/build/libs/TrackerAPI-1.1.1.jar")
 val coinageJar = siblingJar("coinageJar", "coinage/build/libs/Coinage-api-1.2.0.jar")
 val atlasJar = siblingJar("atlasJar", "atlas/build/libs/Atlas-1.9.0.jar")
 
