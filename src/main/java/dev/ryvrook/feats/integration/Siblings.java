@@ -11,6 +11,7 @@ public final class Siblings {
     public static final String GROUP = "Ryvrook";
     public static final String DOMINION = "Dominion";
     public static final String COINAGE = "Coinage";
+    public static final String SOCIALBRIDGE = "SocialBridge";
 
     private Siblings() {
     }

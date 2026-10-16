@@ -84,6 +84,10 @@ public final class FeatsConfig {
                     (c, v, extra) -> c.discordMinimumTier = v,
                     (c, extra) -> c.discordMinimumTier)
             .add()
+            .append(new KeyedCodec<>("DiscordVia", Codec.STRING),
+                    (c, v, extra) -> c.discordVia = v,
+                    (c, extra) -> c.discordVia)
+            .add()
             .append(new KeyedCodec<>("DisabledWorlds", Codec.STRING_ARRAY),
                     (c, v, extra) -> c.disabledWorlds = v,
                     (c, extra) -> c.disabledWorlds)
@@ -120,6 +124,7 @@ public final class FeatsConfig {
     private String titles = "PREFIX";
     private String discordWebhookUrl = "";
     private String discordMinimumTier = "GOLD";
+    private String discordVia = "auto";
     private String[] disabledWorlds = new String[0];
     private boolean pausePlaytimeWhenDisabled = true;
     private String unlockSound = "SFX_Memories_Unlock_Local";
@@ -198,6 +203,15 @@ public final class FeatsConfig {
 
     public String discordMinimumTier() {
         return discordMinimumTier;
+    }
+
+    /**
+     * Who posts unlocks to Discord. {@code auto} leaves it to SocialBridge when that plugin is installed and
+     * uses {@code DiscordWebhookUrl} otherwise. {@code webhook} always uses the webhook. {@code off} posts
+     * nothing from Feats. Anything else reads as {@code auto}.
+     */
+    public String discordVia() {
+        return DiscordVia.parse(discordVia);
     }
 
     /** World names where every counter stops, compared ignoring case. Never null. */

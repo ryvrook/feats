@@ -4,8 +4,10 @@ import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.HytaleServer;
 import com.hypixel.hytale.server.core.plugin.PluginManager;
 import com.hypixel.hytale.server.core.universe.Universe;
+import dev.ryvrook.feats.DiscordVia;
 import dev.ryvrook.feats.FeatsConfig;
 import dev.ryvrook.feats.FeatsPlugin;
+import dev.ryvrook.feats.integration.Siblings;
 import dev.ryvrook.feats.model.Feat;
 import dev.ryvrook.feats.model.FeatRegistry;
 import dev.ryvrook.feats.stats.PlayerProgress;
@@ -415,6 +417,10 @@ public final class LeaderboardExporter {
         String url = cfg.discordWebhookUrl();
         if (url == null || url.isBlank() || !DiscordWebhook.meetsTier(feat.tier(), cfg.discordMinimumTier())) {
             return;
+        }
+        String via = cfg.discordVia();
+        if (!DiscordVia.useWebhook(via, DiscordVia.AUTO.equals(via) && Siblings.installed(Siblings.SOCIALBRIDGE))) {
+            return; // SocialBridge posts the unlock from the event, or Discord posts are off
         }
         DiscordWebhook hook = discord;
         if (hook == null) {

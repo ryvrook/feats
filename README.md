@@ -100,6 +100,7 @@ with `setstat` first. A reset keeps the record of rewards already given, so they
 | `RewardsEnabled` | `false` | Hand out `Rewards.json`. While off the file is never read |
 | `DiscordWebhookUrl` | `""` | Webhook for unlock posts. Empty is off |
 | `DiscordMinimumTier` | `"GOLD"` | Lowest tier posted |
+| `DiscordVia` | `"auto"` | Who posts unlocks. `auto` leaves it to SocialBridge when installed, else the webhook. `webhook` always uses the webhook, `off` posts nothing |
 | `AutosaveSeconds` | `60` | Save interval for changed players, at least 10 |
 | `ExportSeconds` | `15` | Leaderboard export check, at least 5. `0` turns the export off |
 | `Tracker` | `"auto"` | Where counts come from. `auto` uses TrackerAPI when present, `always` only TrackerAPI, `never` own hooks. Read at start |

@@ -397,6 +397,7 @@ public final class FeatsPlugin extends JavaPlugin {
         }
         startTrackerLink();
         startCoinageLink();
+        logDiscordPath();
         ticker = HytaleServer.SCHEDULED_EXECUTOR.scheduleAtFixedRate(this::tick, 1, 1, TimeUnit.SECONDS);
         int every = config().autosaveSeconds();
         autosave = HytaleServer.SCHEDULED_EXECUTOR.scheduleAtFixedRate(this::autosave, every, every, TimeUnit.SECONDS);
@@ -459,6 +460,18 @@ public final class FeatsPlugin extends JavaPlugin {
             getLogger().at(Level.INFO).log("Coinage is installed, so rewards with Coins pay through it");
         } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
             getLogger().at(Level.WARNING).withCause(e).log("Feats could not link to Coinage, rewards with Coins pay nothing");
+        }
+    }
+
+    /** One line when a webhook is set but SocialBridge takes the unlock posts on {@code DiscordVia} auto. */
+    private void logDiscordPath() {
+        FeatsConfig cfg = config();
+        String url = cfg.discordWebhookUrl();
+        if (url == null || url.isBlank() || !DiscordVia.AUTO.equals(cfg.discordVia())) {
+            return;
+        }
+        if (Siblings.installed(Siblings.SOCIALBRIDGE)) {
+            getLogger().at(Level.INFO).log("SocialBridge is installed, so it posts the unlocks and DiscordWebhookUrl is not used. Set DiscordVia to webhook to post through both");
         }
     }
 
