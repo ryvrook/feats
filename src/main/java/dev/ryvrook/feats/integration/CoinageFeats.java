@@ -30,6 +30,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -45,7 +46,9 @@ import java.util.logging.Level;
  * and closes the subscription on disable, so a Coinage that starts after Feats or stops for a while is picked
  * up again.
  *
- * <p>Amounts arrive in minor units and are written in whole coins, floored. Online players are credited through
+ * <p>Amounts arrive in minor units and are written in whole coins. The minor units under a coin are carried in
+ * memory per player, counter and currency, so small amounts add up, and any payment above zero counts toward
+ * First Coin. Online players are credited through
  * the tracker's increment and raiseTo, offline players through addOffline, which merges the adds into their
  * file. Balance and net worth are read, not counted. {@code afterTransaction} raises the balance of a player
  * account that moved in the primary currency, and a 5 minute timer on the engine scheduler asks
@@ -112,6 +115,16 @@ public final class CoinageFeats implements AutoCloseable {
     private volatile Map<String, Long> units = Map.of();
     private volatile long primaryUnit = 1;
     private volatile boolean closed;
+    /** Held across bind, unbind and close, so an enable racing the shutdown cannot subscribe after it. */
+    private final Object bindLock = new Object();
+    /**
+     * Minor units under one whole coin carried per player, counter and currency, so small amounts such as
+     * 1 percent interest on 30 coins add up instead of flooring to nothing each time. Memory only, dropped
+     * when Coinage unbinds. A negative value is a coin counted early, see {@link #carried}.
+     */
+    private final Map<String, Long> remainders = new ConcurrentHashMap<>();
+    /** Past this many carried remainders the table is cleared, so it cannot grow without end. */
+    static final int REMAINDERS_LIMIT = 50_000;
 
     CoinageFeats(FeatsTracker tracker, HytaleLogger logger, ScheduledExecutorService scheduler, Facts facts) {
         this.tracker = tracker;
@@ -144,46 +157,75 @@ public final class CoinageFeats implements AutoCloseable {
         return listener;
     }
 
+    /**
+     * The Coinage enable hook. Runs under the bind lock, so it cannot interleave with an unbind or the close.
+     * The close sets {@code closed} before it waits for the lock, so a bind that was already past the first
+     * check sees it after subscribing and lets go of what it just made.
+     */
     private void bind(CoinageApi live) {
-        if (closed) {
-            return;
-        }
-        try {
-            Map<String, Long> fresh = new HashMap<>();
-            for (Currency c : live.currencies().all()) {
-                fresh.put(c.id(), c.unit());
+        Subscription late = null;
+        ScheduledFuture<?> lateTimer = null;
+        synchronized (bindLock) {
+            if (closed) {
+                return;
             }
-            Currency p = live.currencies().primary();
-            primary = p.id();
-            primaryUnit = p.unit();
-            units = Map.copyOf(fresh);
-            Subscription old = subscription;
-            if (old != null) {
-                old.close();
-            }
-            api = live;
-            subscription = live.subscribe(OWNER, listener);
-            if (scheduler != null) {
-                ScheduledFuture<?> timer = netWorthTimer;
-                if (timer != null) {
-                    timer.cancel(false);
+            try {
+                Map<String, Long> fresh = new HashMap<>();
+                for (Currency c : live.currencies().all()) {
+                    fresh.put(c.id(), c.unit());
                 }
-                netWorthTimer = scheduler.scheduleWithFixedDelay(this::sampleNetWorth, NET_WORTH_SECONDS, NET_WORTH_SECONDS, TimeUnit.SECONDS);
+                Currency p = live.currencies().primary();
+                primary = p.id();
+                primaryUnit = p.unit();
+                units = Map.copyOf(fresh);
+                Subscription old = subscription;
+                if (old != null) {
+                    old.close();
+                }
+                api = live;
+                subscription = live.subscribe(OWNER, listener);
+                if (scheduler != null) {
+                    ScheduledFuture<?> timer = netWorthTimer;
+                    if (timer != null) {
+                        timer.cancel(false);
+                    }
+                    netWorthTimer = scheduler.scheduleWithFixedDelay(this::sampleNetWorth, NET_WORTH_SECONDS, NET_WORTH_SECONDS, TimeUnit.SECONDS);
+                }
+            } catch (RuntimeException | LinkageError e) {
+                warn(e);
             }
-        } catch (RuntimeException | LinkageError e) {
-            warn(e);
+            if (closed) {
+                // the shutdown began while this bind subscribed
+                api = null;
+                late = subscription;
+                subscription = null;
+                lateTimer = netWorthTimer;
+                netWorthTimer = null;
+            }
         }
+        release(late, lateTimer);
     }
 
+    /** The Coinage disable hook. Drops the live API, the timer and the subscription. */
     private void unbind() {
-        api = null;
-        ScheduledFuture<?> timer = netWorthTimer;
-        netWorthTimer = null;
+        Subscription s;
+        ScheduledFuture<?> timer;
+        synchronized (bindLock) {
+            api = null;
+            timer = netWorthTimer;
+            netWorthTimer = null;
+            s = subscription;
+            subscription = null;
+            remainders.clear();
+        }
+        release(s, timer);
+    }
+
+    /** Closes a subscription and cancels a timer outside the lock, so no Coinage call runs while it is held. */
+    private static void release(Subscription s, ScheduledFuture<?> timer) {
         if (timer != null) {
             timer.cancel(false);
         }
-        Subscription s = subscription;
-        subscription = null;
         if (s != null) {
             try {
                 s.close(); // Coinage closes every subscription when it stops, so this is usually a no op
@@ -196,7 +238,7 @@ public final class CoinageFeats implements AutoCloseable {
     /** Removes the hooks, for the Feats shutdown. */
     @Override
     public void close() {
-        closed = true;
+        closed = true; // before the lock, so a bind holding it sees the close once it subscribed
         unbind();
         try {
             CoinageApi.removeHooks(enable, disable);
@@ -235,6 +277,39 @@ public final class CoinageFeats implements AutoCloseable {
     }
 
     // ---- the writes ----
+
+    /**
+     * Whole coins of an amount added to a counter, with the minor units under a coin carried to the next amount
+     * of the same player, counter and currency. With {@code firstCoin} an amount that leaves the carry under one
+     * coin still counts one coin, and the carry goes negative by the rest of that coin, so later amounts pay it
+     * back and the counter stays within one coin of the true total. Received uses it, so any payment above zero
+     * gives First Coin.
+     */
+    long carried(UUID uuid, String key, long minor, String currency, boolean firstCoin) {
+        if (uuid == null || minor <= 0) {
+            return 0;
+        }
+        long u = unit(currency);
+        if (u <= 1) {
+            return minor;
+        }
+        if (remainders.size() >= REMAINDERS_LIMIT) {
+            remainders.clear();
+        }
+        String id = uuid + "|" + key + "|" + (currency == null ? "" : currency);
+        long[] coins = {0};
+        remainders.compute(id, (k, old) -> {
+            long total = (old == null ? 0 : old) + minor;
+            long whole = total > 0 ? total / u : 0; // a negative carry is a coin already counted
+            if (whole == 0 && firstCoin && total > 0) {
+                whole = 1;
+            }
+            coins[0] = whole;
+            long rest = total - whole * u;
+            return rest == 0 ? null : rest;
+        });
+        return coins[0];
+    }
 
     /** Whole coins of an amount in minor units, floored. An unknown currency uses the primary's unit. */
     long whole(long minor, String currency) {
@@ -335,8 +410,8 @@ public final class CoinageFeats implements AutoCloseable {
         @Override
         public void payment(Payment e) {
             guard(() -> {
-                add(e.to(), RECEIVED, whole(e.net(), e.currency()));
-                add(e.from(), PAID, whole(e.amount(), e.currency()));
+                add(e.to(), RECEIVED, carried(e.to(), RECEIVED, e.net(), e.currency(), true));
+                add(e.from(), PAID, carried(e.from(), PAID, e.amount(), e.currency(), false));
                 add(e.from(), PAYMENTS_SENT, 1);
             });
         }
@@ -379,7 +454,7 @@ public final class CoinageFeats implements AutoCloseable {
 
         @Override
         public void interestPaid(InterestPaid e) {
-            guard(() -> add(e.player(), INTEREST, whole(e.amount(), e.currency())));
+            guard(() -> add(e.player(), INTEREST, carried(e.player(), INTEREST, e.amount(), e.currency(), false)));
         }
 
         @Override
@@ -408,10 +483,10 @@ public final class CoinageFeats implements AutoCloseable {
                 if (e.won()) {
                     add(e.player(), BETS_WON, 1);
                 }
-                add(e.player(), STAKED, whole(e.stake(), e.currency()));
+                add(e.player(), STAKED, carried(e.player(), STAKED, e.stake(), e.currency(), false));
                 long lost = e.stake() - e.payout();
                 if (lost > 0) {
-                    add(e.player(), LOST, whole(lost, e.currency()));
+                    add(e.player(), LOST, carried(e.player(), LOST, lost, e.currency(), false));
                 }
             });
         }

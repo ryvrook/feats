@@ -134,13 +134,22 @@ class CoinageFeatsTest {
     }
 
     @Test
-    void paymentsCountReceivedPaidAndSentInWholeCoinsFloored() {
+    void aCloseDuringABindLetsGoOfTheNewSubscription() {
+        feats = CoinageFeats.install(tracker, LOGGER, null, facts);
+        coinage.onSubscribe = feats::close; // the shutdown arrives while the enable hook is subscribing
+        coinage.start();
+        assertFalse(feats.bound(), "a bind that saw the close after subscribing stays unbound");
+        assertFalse(coinage.subscription.open, "and closes what it subscribed");
+    }
+
+    @Test
+    void paymentsCountReceivedPaidAndSentInWholeCoinsWithTheRestCarried() {
         EconomyListener l = up();
         // 2.99 Coins paid, 2.50 net after the tax
         l.payment(new Payment(1, "Coinage", a, b, "coins", 299, 250, 49, 7));
         l.payment(new Payment(2, "Coinage", a, b, "coins", 1_000, 1_000, 0, 8));
-        assertEquals(12, pb.get(CoinageFeats.RECEIVED), "2.50 floors to 2, then 10 more");
-        assertEquals(12, pa.get(CoinageFeats.PAID), "2.99 floors to 2, then 10 more");
+        assertEquals(12, pb.get(CoinageFeats.RECEIVED), "2.50 then 10.00, the half still carried");
+        assertEquals(12, pa.get(CoinageFeats.PAID), "2.99 then 10.00, 0.99 still carried");
         assertEquals(2, pa.get(CoinageFeats.PAYMENTS_SENT));
         assertEquals(0, pb.get(CoinageFeats.PAYMENTS_SENT));
     }
@@ -188,7 +197,7 @@ class CoinageFeatsTest {
         assertEquals(1, pa.get(CoinageFeats.SAVINGS_DEPOSITS), "a withdrawal is not a deposit");
         l.interestPaid(new InterestPaid(1, "Coinage", "bank", a, "coins", 150, 550));
         l.interestPaid(new InterestPaid(2, "Coinage", "bank", a, "coins", 75, 625));
-        assertEquals(1, pa.get(CoinageFeats.INTEREST), "1.50 then 0.75 floor to 1 and 0");
+        assertEquals(2, pa.get(CoinageFeats.INTEREST), "1.50 then 0.75 make 2.25, the half carried to the 0.75");
 
         l.loanTaken(new LoanTaken(1, "Coinage", "L1", a, null, "bank", "coins", 10_000, 11_000, 7));
         assertEquals(1, pa.get(CoinageFeats.LOANS));
@@ -254,6 +263,43 @@ class CoinageFeatsTest {
         coinage.worth.put(b, 100L);
         feats.sampleNetWorth();
         assertEquals(60_000, pb.get(CoinageFeats.NET_WORTH_MAX), "the max keeps the best");
+    }
+
+    @Test
+    void smallAmountsAddUpInsteadOfFlooringToNothing() {
+        EconomyListener l = up();
+        // 1 percent interest on 30 coins is 0.30, four times over
+        for (int i = 0; i < 4; i++) {
+            l.interestPaid(new InterestPaid(i, "Coinage", "bank", a, "coins", 30, 3_000));
+        }
+        assertEquals(1, pa.get(CoinageFeats.INTEREST), "1.20 in all is one whole coin");
+        for (int i = 0; i < 3; i++) {
+            l.interestPaid(new InterestPaid(10 + i, "Coinage", "bank", a, "coins", 30, 3_000));
+        }
+        assertEquals(2, pa.get(CoinageFeats.INTEREST), "2.10 in all");
+    }
+
+    @Test
+    void anyPaymentAboveZeroGivesTheFirstCoinAndTheTotalStaysTrue() {
+        EconomyListener l = up();
+        l.payment(new Payment(1, "Coinage", a, b, "coins", 40, 40, 0, 1));
+        assertEquals(1, pb.get(CoinageFeats.RECEIVED), "0.40 received still counts for First Coin");
+        assertEquals(0, pa.get(CoinageFeats.PAID), "paying keeps the floor");
+        l.payment(new Payment(2, "Coinage", a, b, "coins", 40, 40, 0, 2));
+        assertEquals(1, pb.get(CoinageFeats.RECEIVED), "0.80 in all, the early coin is paid back first");
+        l.payment(new Payment(3, "Coinage", a, b, "coins", 150, 150, 0, 3));
+        assertEquals(2, pb.get(CoinageFeats.RECEIVED), "2.30 in all");
+        assertEquals(2, pa.get(CoinageFeats.PAID));
+    }
+
+    @Test
+    void theCarryIsDroppedWhenCoinageStops() {
+        EconomyListener l = up();
+        l.interestPaid(new InterestPaid(1, "Coinage", "bank", a, "coins", 60, 3_000));
+        coinage.stop();
+        coinage.start();
+        coinage.listener.interestPaid(new InterestPaid(2, "Coinage", "bank", a, "coins", 60, 3_000));
+        assertEquals(0, pa.get(CoinageFeats.INTEREST), "the 0.60 before the stop is not carried over");
     }
 
     @Test
@@ -346,6 +392,8 @@ class CoinageFeatsTest {
         String owner;
         Sub subscription;
         boolean running;
+        /** Runs inside subscribe, so a test can close Feats while a bind is in the middle of it. */
+        Runnable onSubscribe;
 
         void start() {
             running = true;
@@ -401,6 +449,10 @@ class CoinageFeatsTest {
             this.listener = listener;
             subscription = new Sub();
             subscriptions.add(subscription);
+            Runnable hook = onSubscribe;
+            if (hook != null) {
+                hook.run();
+            }
             return subscription;
         }
 

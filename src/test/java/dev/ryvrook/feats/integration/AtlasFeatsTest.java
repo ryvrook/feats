@@ -146,6 +146,17 @@ class AtlasFeatsTest {
     }
 
     @Test
+    void aCloseWhileTheSessionListenerRegistersLeavesNothingBehind() {
+        feats = AtlasFeats.install(tracker, LOGGER, null);
+        sessions.onRegister = () -> feats.close(); // the shutdown arrives while the enable hook registers
+        startAtlas();
+        assertFalse(feats.bound());
+        assertFalse(feats.countingLinks(), "the session listener set after the close is dropped again");
+        assertEquals(0, sessions.listeners.size());
+        assertEquals(0, atlas.listeners.size());
+    }
+
+    @Test
     void aThrowingListenerCallIsSwallowed() {
         startAtlas();
         feats = AtlasFeats.install(tracker, LOGGER, null);
@@ -252,6 +263,8 @@ class AtlasFeatsTest {
     private static final class Sessions extends SessionApi {
         final List<Consumer<SessionEvent>> listeners = new CopyOnWriteArrayList<>();
         private boolean running;
+        /** Runs inside onChange, so a test can close Feats in the middle of a bind. */
+        Runnable onRegister;
 
         void start() {
             running = true;
@@ -276,6 +289,11 @@ class AtlasFeatsTest {
         public Runnable onChange(Consumer<SessionEvent> listener) {
             assertNotNull(listener);
             listeners.add(listener);
+            Runnable hook = onRegister;
+            onRegister = null;
+            if (hook != null) {
+                hook.run();
+            }
             return () -> listeners.remove(listener);
         }
 

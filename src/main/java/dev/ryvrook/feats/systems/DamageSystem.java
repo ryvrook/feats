@@ -5,11 +5,14 @@ import com.hypixel.hytale.component.ArchetypeChunk;
 import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.component.SystemGroup;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.component.system.EntityEventSystem;
+import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.entity.UUIDComponent;
 import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageCause;
+import com.hypixel.hytale.server.core.modules.entity.damage.DamageModule;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.server.npc.entities.NPCEntity;
@@ -19,6 +22,8 @@ import dev.ryvrook.feats.track.Classify;
 import dev.ryvrook.feats.track.FeatsTracker;
 
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
 
 /**
  * Tracks damage dealt by players and damage taken by players, and notes every player who hits a boss
@@ -35,6 +40,9 @@ public final class DamageSystem extends EntityEventSystem<EntityStore, Damage> {
     static final String FALL_CAUSE = "Fall";
     static final String DROWNING_CAUSE = "Drowning";
 
+    private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
+    private static final AtomicBoolean GROUP_WARNED = new AtomicBoolean();
+
     private final FeatsTracker tracker;
     private final BossLedger ledger;
     private final CombatMemory memory;
@@ -45,6 +53,24 @@ public final class DamageSystem extends EntityEventSystem<EntityStore, Damage> {
         this.tracker = tracker;
         this.ledger = BossLedger.of(tracker);
         this.memory = CombatMemory.of(tracker);
+    }
+
+    /**
+     * Runs in the engine's inspect damage group, as its own TrackLastDamage and PlayerHitIndicators do, so the
+     * hit is seen after the filter group. WieldingDamageReduction sets Damage.BLOCKED there and the armour and
+     * wielding reductions lower the amount there. Without the group a block could be missed and an amount read
+     * before its reductions. A server without the damage module falls back to no group, with one warning.
+     */
+    @Override
+    public SystemGroup<EntityStore> getGroup() {
+        try {
+            return DamageModule.get().getInspectDamageGroup();
+        } catch (RuntimeException | LinkageError e) {
+            if (GROUP_WARNED.compareAndSet(false, true)) {
+                LOGGER.at(Level.WARNING).withCause(e).log("Feats could not find the inspect damage group, so shield blocks and hit sizes may be read early");
+            }
+            return null;
+        }
     }
 
     @Override

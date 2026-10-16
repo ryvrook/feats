@@ -336,7 +336,7 @@ final class AdminCommand extends AbstractCommandCollection {
                 context.sendMessage(ok("Server totals are not loaded."));
                 return;
             }
-            for (String line : totalLines(world, registry)) {
+            for (String line : totalLines(world, registry, plugin.tracker()::targetOf)) {
                 context.sendMessage(line.startsWith(" ") ? ok(line) : Message.raw(line).color(Targets.GOLD).bold(true));
             }
         }
@@ -344,8 +344,10 @@ final class AdminCommand extends AbstractCommandCollection {
         /**
          * The report, one entry per line. Headings have no leading space, rows start with one. Totals come first,
          * sorted by key, then every total milestone with its current value, target and whether it is reached.
+         * {@code target} is the tracker's target, so Full House shows the FullHouse setting.
          */
-        static List<String> totalLines(WorldStore world, FeatRegistry registry) {
+        static List<String> totalLines(WorldStore world, FeatRegistry registry,
+                                       java.util.function.ToLongFunction<Feat> target) {
             List<String> out = new ArrayList<>();
             java.util.Map<String, Long> totals = world.totals();
             out.add("Server totals");
@@ -363,8 +365,9 @@ final class AdminCommand extends AbstractCommandCollection {
             for (Feat f : feats) {
                 Trigger t = f.trigger();
                 long now = world.total(t.key());
-                boolean reached = world.hasMilestone(f.id()) || now >= t.target();
-                out.add(String.format(" %s  %s %,d / %,d  %s", f.name(), t.key(), now, t.target(),
+                long goal = target.applyAsLong(f);
+                boolean reached = world.hasMilestone(f.id()) || now >= goal;
+                out.add(String.format(" %s  %s %,d / %,d  %s", f.name(), t.key(), now, goal,
                         reached ? "reached" : "not yet"));
             }
             return out;

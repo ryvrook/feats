@@ -3,7 +3,7 @@ package dev.ryvrook.feats.model;
 /**
  * The Ryvrook plugins Feats adds feats or tracking for when they are installed. Each one is found by name in the
  * engine's plugin manager at setup, see {@code integration/Siblings}. {@code minimum} is the oldest version the
- * binding is written against, checked by the binding itself once the sibling's API is up.
+ * binding is written against. {@code Siblings.present} leaves out a loaded sibling that is older.
  */
 public enum Sibling {
     TRACKER_API("TrackerAPI", "1.0.0"),

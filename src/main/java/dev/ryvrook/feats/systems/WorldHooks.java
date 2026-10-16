@@ -34,7 +34,6 @@ import com.hypixel.hytale.server.core.universe.world.WorldMapTracker;
 import com.hypixel.hytale.server.core.universe.world.events.ChunkPreLoadProcessEvent;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.ryvrook.feats.FeatsConfig;
-import dev.ryvrook.feats.model.Scope;
 import dev.ryvrook.feats.stats.PlayerProgress;
 import dev.ryvrook.feats.stats.StatKeys;
 import dev.ryvrook.feats.stats.WorldStore;
@@ -150,7 +149,7 @@ public final class WorldHooks implements HookSet {
         } catch (RuntimeException | LinkageError e) {
             ctx.logger().at(Level.WARNING).withCause(e).log("Feats cannot count generated chunks on this server");
         }
-        ctx.tracker().addUnlockHook(this::onUnlock);
+        // Shared First is raised by FeatsTracker.claim, which knows whether the milestone is happening now.
     }
 
     @Override
@@ -166,6 +165,7 @@ public final class WorldHooks implements HookSet {
                 world.raiseTotal(INSTALLED_AT, at);
             }
             installedAt = at;
+            ctx.tracker().seedPlayersKnown(); // only does anything while players_known is still 0
         }
     }
 
@@ -607,17 +607,6 @@ public final class WorldHooks implements HookSet {
             }
         } catch (RuntimeException | LinkageError e) {
             PlayerEventSystem.failed(e);
-        }
-    }
-
-    /** A server milestone with a named holder reaches here. Everyone online shared the moment. */
-    private void onUnlock(FeatsTracker.Unlock unlock) {
-        if (unlock.feat().scope() != Scope.WORLD || unlock.catchUp()) {
-            return;
-        }
-        FeatsTracker tracker = ctx.tracker();
-        for (PlayerProgress online : tracker.loadedPlayers()) {
-            tracker.raiseTo(online.uuid(), StatKeys.MILESTONE_WITNESSED, 1);
         }
     }
 

@@ -679,7 +679,8 @@ public final class TrackerBridge {
 
     void onWorldRemoved(WorldRemoved e) {
         if (e.world() != null) {
-            instanceWorlds.remove(e.world().toLowerCase(Locale.ROOT));
+            instanceWorlds.remove(key(e.world()));
+            skies.remove(key(e.world())); // every portal instance would leave its Sky behind
         }
     }
 
@@ -838,6 +839,7 @@ public final class TrackerBridge {
             return; // a dismount, or a seat or a bed
         }
         b.riding.start(e.at());
+        b.rideBest = known(uuid, StatKeys.LONGEST_RIDE);
         if (minecart) {
             tracker.increment(uuid, StatKeys.MINECART_RIDES, 1);
         } else if (type == null || type.isEmpty()) {
@@ -966,7 +968,13 @@ public final class TrackerBridge {
         }
     }
 
-    /** Ends what the player was doing, as a disconnect does on the own path, and drops their notes. */
+    /**
+     * Ends what the player was doing, as a disconnect does on the own path, and drops their notes. TrackerAPI
+     * publishes PlayerLeft from the disconnect event onto its own queue, while Feats unloads the player on the
+     * same event at once, so the player is usually unloaded by now. The last portal stay and the last ride
+     * then go through {@code addOffline}. A ride is a record and addOffline only adds, so it adds the part of
+     * the ride above the record the player had when the ride started.
+     */
     void onPlayerLeft(PlayerLeft e) {
         UUID uuid = e.player();
         if (uuid == null) {
@@ -974,8 +982,21 @@ public final class TrackerBridge {
         }
         Body body = bodies.remove(uuid);
         if (body != null) {
-            endRide(uuid, body, e.at());
-            leavePortal(uuid, body, e.at());
+            if (tracker.isLoaded(uuid)) {
+                endRide(uuid, body, e.at());
+                leavePortal(uuid, body, e.at());
+            } else {
+                if (body.riding.on) {
+                    long ride = body.riding.end(e.at()) / 1000;
+                    if (body.rideBest >= 0 && ride > body.rideBest) {
+                        tracker.addOffline(uuid, StatKeys.LONGEST_RIDE, ride - body.rideBest);
+                    }
+                }
+                long seconds = body.portal.stop(e.at());
+                if (seconds > 0) {
+                    tracker.addOffline(uuid, StatKeys.PORTAL_SECONDS, seconds);
+                }
+            }
         }
         for (Sky sky : skies.values()) {
             sky.sleepers.remove(uuid);
@@ -990,6 +1011,11 @@ public final class TrackerBridge {
 
     private Body body(UUID uuid) {
         return bodies.computeIfAbsent(uuid, u -> new Body());
+    }
+
+    /** The worlds with clock and weather notes, for the tests. */
+    int skyCount() {
+        return skies.size();
     }
 
     private Sky sky(String world) {
@@ -1011,6 +1037,12 @@ public final class TrackerBridge {
             }
         }
         return out;
+    }
+
+    /** The loaded value of a counter, or -1 when the player is not loaded. */
+    private long known(UUID uuid, String key) {
+        PlayerProgress progress = tracker.loadedProgress(uuid);
+        return progress == null ? -1 : progress.get(key);
     }
 
     private void add(UUID uuid, String key, long amount) {
@@ -1069,6 +1101,8 @@ public final class TrackerBridge {
         final Span crouch = new Span();
         final Span climb = new Span();
         final Span riding = new Span();
+        /** The longest ride on record when this ride started, or -1 when the player was not loaded then. */
+        long rideBest = -1;
         final Span portal = new Span();
         double fallStartY = Double.NaN;
         double landedDrop;

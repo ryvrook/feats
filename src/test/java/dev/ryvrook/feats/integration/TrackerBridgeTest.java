@@ -48,6 +48,8 @@ import dev.ryvrook.trackerapi.api.event.MovementEdge;
 import dev.ryvrook.trackerapi.api.event.PermissionChanged;
 import dev.ryvrook.trackerapi.api.event.PlayerChatted;
 import dev.ryvrook.trackerapi.api.event.PlayerLeft;
+import dev.ryvrook.trackerapi.api.event.WorldRemoved;
+import dev.ryvrook.trackerapi.api.event.WorldAdded;
 import dev.ryvrook.trackerapi.api.event.PlayerMoved;
 import dev.ryvrook.trackerapi.api.event.PlayerSlept;
 import dev.ryvrook.trackerapi.api.event.PlayerWorldChanged;
@@ -794,6 +796,43 @@ class TrackerBridgeTest {
         api.publish(new PlayerWorldChanged(t(p, "instance-Goblin_Breach-9", t0 + 100_000), "default", "Goblin_Breach", true));
         api.publish(new PlayerLeft(t(p, "instance-Goblin_Breach-9", t0 + 110_600), "Bridge", 1L));
         assertEquals(101, progress.get(StatKeys.PORTAL_SECONDS), "a leave ends the stay, with the half second carried");
+    }
+
+    @Test
+    void theLastPortalStayAndRideOfASessionSurviveTheUnload() {
+        long t0 = 12_000_000L;
+        api.publish(new MountChanged(t(p, "default", t0), true, "Horse", UUID.randomUUID()));
+        api.publish(new MountChanged(t(p, "default", t0 + 40_000), false, "Horse", UUID.randomUUID()));
+        assertEquals(40, progress.get(StatKeys.LONGEST_RIDE));
+        api.publish(new PlayerWorldChanged(t(p, "instance-Goblin_Breach-3", t0 + 50_000), "default", "Goblin_Breach", true));
+        api.publish(new MountChanged(t(p, "instance-Goblin_Breach-3", t0 + 60_000), true, "Horse", UUID.randomUUID()));
+        // Feats unloads on the disconnect event before TrackerAPI's queue hands over PlayerLeft
+        tracker.unload(p);
+        api.publish(new PlayerLeft(t(p, "instance-Goblin_Breach-3", t0 + 160_000), "Bridge", 1L));
+        assertEquals(0, tracker.offlineAddsWaiting());
+        PlayerProgress saved = tracker.peek(p);
+        assertEquals(110, saved.get(StatKeys.PORTAL_SECONDS), "the stay from the portal entry to the leave");
+        assertEquals(100, saved.get(StatKeys.LONGEST_RIDE), "the ride raised to its length, not added on top");
+    }
+
+    @Test
+    void aShortLastRideAfterTheUnloadKeepsTheRecord() {
+        long t0 = 13_000_000L;
+        api.publish(new MountChanged(t(p, "default", t0), true, "Horse", UUID.randomUUID()));
+        api.publish(new MountChanged(t(p, "default", t0 + 80_000), false, "Horse", UUID.randomUUID()));
+        api.publish(new MountChanged(t(p, "default", t0 + 90_000), true, "Horse", UUID.randomUUID()));
+        tracker.unload(p);
+        api.publish(new PlayerLeft(t(p, "default", t0 + 100_000), "Bridge", 1L));
+        assertEquals(80, tracker.peek(p).get(StatKeys.LONGEST_RIDE));
+    }
+
+    @Test
+    void aRemovedWorldDropsItsSky() {
+        api.publish(new WorldAdded(h(null, "instance-Goblin_Breach-7"), true, "Goblin_Breach"));
+        api.publish(new WeatherChanged(h(null, "instance-Goblin_Breach-7"), "Zone1_Rain", "Zone1_Sunny"));
+        assertEquals(1, bridge.skyCount());
+        api.publish(new WorldRemoved(h(null, "instance-Goblin_Breach-7")));
+        assertEquals(0, bridge.skyCount());
     }
 
     // ---- fakes ----------------------------------------------------------------------------------------------

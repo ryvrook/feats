@@ -5,6 +5,7 @@ import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.math.vector.Transform;
 import com.hypixel.hytale.protocol.SoundCategory;
+import com.hypixel.hytale.server.core.HytaleServer;
 import com.hypixel.hytale.protocol.packets.interface_.EventTitleStyle;
 import com.hypixel.hytale.protocol.packets.interface_.NotificationStyle;
 import com.hypixel.hytale.server.core.Message;
@@ -29,9 +30,15 @@ import dev.ryvrook.feats.ui.FeatsBannerHud;
 import org.joml.Vector3d;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -41,7 +48,9 @@ import java.util.logging.Level;
 /**
  * Toast, sound, big title, chat and the top of screen banner when a feat unlocks. The banner is a keyed
  * {@link FeatsBannerHud} added on the player's world thread and removed after {@code BannerSeconds},
- * with the rules in {@link BannerQueue}. Nothing in here throws into the tracker, and a missing engine
+ * with the rules in {@link BannerQueue}. The removal is timed on the engine's scheduler from the moment
+ * the banner is granted and hops to the player's current world when it fires, so it never depends on the
+ * add having worked. Nothing in here throws into the tracker, and a missing engine
  * class on the banner path is logged once.
  */
 public final class UnlockNotifier {
@@ -65,6 +74,44 @@ public final class UnlockNotifier {
         void run(Ref<EntityStore> ref, Store<EntityStore> store, World world);
     }
 
+    /** How often a removal is tried again when the player has no world yet or the last try did not land. */
+    static final long RETRY_MILLIS = 1_000L;
+    /** How many tries again before a removal gives up, so about 10 seconds. */
+    static final int RETRIES = 10;
+
+    /** A scheduled banner step that can be called off. */
+    interface Timer {
+        void cancel();
+    }
+
+    /** Runs a task after a delay, off any world thread. The engine's scheduled executor outside tests. */
+    interface Scheduler {
+        Timer schedule(Runnable task, long delayMillis);
+    }
+
+    /** What one try at taking a banner down did. */
+    enum Attempt {
+        /** The player is offline, the HUD went with them. */
+        GONE,
+        /** The player has no world right now, for example between worlds. */
+        WAIT,
+        /** A removal was posted to the player's world. It calls back once the HUD is really gone. */
+        POSTED
+    }
+
+    /**
+     * Takes a player's banner down on whichever world they are in at the time of the call. The player and
+     * the world are looked up by uuid each time, never kept from when the banner was shown.
+     */
+    interface Remover {
+        /**
+         * @param uuid    the player
+         * @param wanted  asked again on the world thread, the removal is skipped when it says no
+         * @param removed run on the world thread once the HUD is gone
+         */
+        Attempt post(UUID uuid, BooleanSupplier wanted, Runnable removed);
+    }
+
     private final Supplier<FeatsConfig> config;
     private final HytaleLogger logger;
     private final SoundSlot unlockSlot = new SoundSlot();
@@ -78,6 +125,12 @@ public final class UnlockNotifier {
     private volatile LongSupplier clock = System::currentTimeMillis;
     private volatile ToDoubleFunction<String> rarity = id -> -1;
     private volatile Predicate<UUID> notifications = uuid -> true;
+    private volatile Scheduler scheduler = UnlockNotifier::engineSchedule;
+    private volatile Remover remover = this::engineRemove;
+    /** The banner timers still waiting, per player, so stop can call them all off. */
+    private final Map<UUID, Set<Timer>> timers = new ConcurrentHashMap<>();
+    /** Set by {@link #stop}. No banner is shown or timed after it. */
+    private volatile boolean stopped;
 
     public UnlockNotifier(Supplier<FeatsConfig> config, HytaleLogger logger) {
         this.config = config;
@@ -106,6 +159,54 @@ public final class UnlockNotifier {
     /** The clock the banner timing runs on, for tests. */
     void setClock(LongSupplier clock) {
         this.clock = clock == null ? System::currentTimeMillis : clock;
+    }
+
+    /** Where the banner timers run, for tests. */
+    void setScheduler(Scheduler scheduler) {
+        this.scheduler = scheduler == null ? UnlockNotifier::engineSchedule : scheduler;
+    }
+
+    /** How a banner is taken down, for tests. */
+    void setRemover(Remover remover) {
+        this.remover = remover == null ? this::engineRemove : remover;
+    }
+
+    /**
+     * The plugin is shutting down. Calls off every banner timer and takes down every banner still up, so
+     * an old timer can never remove a banner the next instance shows under the same key after a reload.
+     * The removals are posted to the players' worlds ahead of anything the next instance posts. A player
+     * between worlds at this moment keeps the banner until the next one replaces it. Never throws.
+     */
+    public void stop() {
+        stopped = true;
+        try {
+            for (Set<Timer> set : timers.values()) {
+                for (Timer timer : set) {
+                    cancelQuietly(timer);
+                }
+            }
+            timers.clear();
+            for (UUID uuid : banners.withBannerUp()) {
+                try {
+                    remover.post(uuid, () -> true, () -> {
+                    });
+                } catch (RuntimeException | LinkageError e) {
+                    warnBannerOnce(e);
+                }
+            }
+            banners.clearAll();
+        } catch (RuntimeException | LinkageError e) {
+            warnBannerOnce(e);
+        }
+    }
+
+    /** How many banner timers are waiting, for tests. */
+    int timersWaiting() {
+        int n = 0;
+        for (Set<Timer> set : timers.values()) {
+            n += set.size();
+        }
+        return n;
     }
 
     public void unlocked(PlayerProgress progress, Feat feat, int unlockedCount, int totalCount) {
@@ -208,22 +309,27 @@ public final class UnlockNotifier {
     }
 
     /**
-     * Asks the queue for a slot and, when granted, adds the banner on the player's world thread, plays
-     * the banner sound, spawns the particles for the holder and schedules the removal. Never throws.
+     * Asks the queue for a slot and, when granted, schedules the removal straight away and then adds the
+     * banner on the player's world thread, plays the banner sound and spawns the particles for the holder.
+     * The removal does not depend on the add, so a banner shown while the player changes world still has a
+     * timer that takes whatever is on screen down. Never throws.
      */
     private void showBanner(PlayerRef player, Feat feat, FeatsConfig cfg, String why, boolean holder) {
         try {
             UUID uuid = player.getUuid();
-            long stay = cfg.bannerSeconds() * 1000L;
-            BannerQueue.Shown shown = banners.offer(uuid, clock.getAsLong(), stay);
+            BannerQueue.Shown shown = grant(uuid, cfg.bannerSeconds() * 1000L);
             if (shown == null) {
                 return; // over the three in a row, the chat line covers it
             }
+            long generation = shown.generation();
             FeatsBannerHud.Frame frame = new FeatsBannerHud.Frame(
                     feat.icon(), feat.name(), feat.tier().color(), feat.description(), why);
             String sound = cfg.bannerSound();
             boolean particles = holder && cfg.bannerParticles();
             onWorldThread(player, (ref, store, world) -> {
+                if (stopped || !banners.pending(uuid, generation)) {
+                    return; // already timed out and taken down, or a later banner replaced it
+                }
                 HudManager hud = hudManager(ref, store);
                 if (hud == null) {
                     return;
@@ -235,28 +341,165 @@ public final class UnlockNotifier {
                 if (particles) {
                     spawnParticles(player, ref, store);
                 }
-                world.scheduleAfter(() -> removeBanner(player, shown.generation()), stay, TimeUnit.MILLISECONDS);
             });
         } catch (RuntimeException | LinkageError e) {
             warnBannerOnce(e);
         }
     }
 
-    /** The removal timer. Hops to the player's current world and removes the banner when it is still ours. */
-    private void removeBanner(PlayerRef player, int generation) {
+    /**
+     * Asks the queue for a slot and, when granted, schedules the removal for the time the queue gives.
+     * Returns the show, or null when there is no slot or the plugin stopped. Never throws.
+     */
+    BannerQueue.Shown grant(UUID uuid, long stayMillis) {
+        if (stopped || uuid == null) {
+            return null;
+        }
         try {
-            if (!banners.expire(player.getUuid(), generation)) {
-                return; // a later banner replaced it and has its own timer
+            long now = clock.getAsLong();
+            BannerQueue.Shown shown = banners.offer(uuid, now, stayMillis);
+            if (shown != null) {
+                long generation = shown.generation();
+                schedule(uuid, () -> fire(uuid, generation, 0), Math.max(0, shown.removeAt() - now));
             }
-            onWorldThread(player, (ref, store, world) -> {
-                HudManager hud = hudManager(ref, store);
-                if (hud != null && hud.getCustomHud(FeatsBannerHud.KEY) != null) {
-                    hud.removeCustomHud(player, FeatsBannerHud.KEY);
-                }
-            });
+            return shown;
+        } catch (RuntimeException | LinkageError e) {
+            warnBannerOnce(e);
+            return null;
+        }
+    }
+
+    /**
+     * The removal timer for one show. Stops when a later show replaced it or it was already taken down.
+     * Otherwise it tries to take the banner down on the player's current world and checks again a second
+     * later, since the player may have no world yet or the world may drop the task while it closes. The
+     * banner is marked as gone only once the HUD really went, or the player went offline, or after
+     * {@link #RETRIES} tries again, where it gives up.
+     */
+    private void fire(UUID uuid, long generation, int tries) {
+        if (stopped) {
+            return;
+        }
+        try {
+            if (!banners.pending(uuid, generation)) {
+                return; // taken down, or a later banner has its own timer
+            }
+            if (tries > RETRIES) {
+                banners.removed(uuid, generation);
+                logger.at(Level.FINE).log("Feats gave up taking the banner down for %s", uuid);
+                return;
+            }
+            Attempt attempt;
+            try {
+                attempt = remover.post(uuid,
+                        () -> !stopped && banners.pending(uuid, generation),
+                        () -> banners.removed(uuid, generation));
+            } catch (RuntimeException | LinkageError e) {
+                logger.at(Level.FINE).withCause(e).log("Feats banner removal failed, trying again");
+                attempt = Attempt.WAIT;
+            }
+            if (attempt == Attempt.GONE) {
+                banners.removed(uuid, generation);
+                return;
+            }
+            schedule(uuid, () -> fire(uuid, generation, tries + 1), RETRY_MILLIS);
         } catch (RuntimeException | LinkageError e) {
             warnBannerOnce(e);
         }
+    }
+
+    /** Schedules a banner step and keeps it under the player until it ran, so stop can call it off. */
+    private void schedule(UUID uuid, Runnable task, long delayMillis) {
+        AtomicReference<Timer> self = new AtomicReference<>();
+        AtomicBoolean ran = new AtomicBoolean();
+        Timer timer = scheduler.schedule(() -> {
+            ran.set(true);
+            Timer me = self.get();
+            if (me != null) {
+                forget(uuid, me);
+            }
+            try {
+                task.run();
+            } catch (RuntimeException | LinkageError e) {
+                warnBannerOnce(e);
+            }
+        }, delayMillis);
+        if (timer == null) {
+            return;
+        }
+        self.set(timer);
+        if (!ran.get()) {
+            timers.compute(uuid, (k, set) -> {
+                Set<Timer> out = set == null ? ConcurrentHashMap.newKeySet() : set;
+                out.add(timer);
+                return out;
+            });
+            if (ran.get()) {
+                forget(uuid, timer); // it ran while being added
+            }
+        }
+        if (stopped) {
+            cancelQuietly(timer); // stop ran while this was being scheduled
+        }
+    }
+
+    private void forget(UUID uuid, Timer timer) {
+        timers.computeIfPresent(uuid, (k, set) -> {
+            set.remove(timer);
+            return set.isEmpty() ? null : set;
+        });
+    }
+
+    private static void cancelQuietly(Timer timer) {
+        try {
+            timer.cancel();
+        } catch (RuntimeException | LinkageError ignored) {
+            // a timer that cannot be called off finds the plugin stopped and does nothing
+        }
+    }
+
+    private static Timer engineSchedule(Runnable task, long delayMillis) {
+        ScheduledFuture<?> future = HytaleServer.SCHEDULED_EXECUTOR.schedule(task, delayMillis, TimeUnit.MILLISECONDS);
+        return () -> future.cancel(false);
+    }
+
+    /**
+     * The engine removal. Looks the player up by uuid, finds the world they are in now and posts the
+     * removal there, where the player and the reference are looked up again before the HUD is touched.
+     */
+    private Attempt engineRemove(UUID uuid, BooleanSupplier wanted, Runnable removed) {
+        Universe universe = Universe.get();
+        PlayerRef player = universe == null ? null : universe.getPlayer(uuid);
+        if (player == null) {
+            return Attempt.GONE;
+        }
+        World world = worldOf(player);
+        if (world == null) {
+            return Attempt.WAIT;
+        }
+        world.execute(() -> {
+            try {
+                if (!wanted.getAsBoolean()) {
+                    return;
+                }
+                PlayerRef current = Universe.get().getPlayer(uuid);
+                Ref<EntityStore> ref = current == null ? null : current.getReference();
+                if (ref == null || !ref.isValid()) {
+                    return; // moved on, the next try finds the new world
+                }
+                HudManager hud = hudManager(ref, ref.getStore());
+                if (hud == null) {
+                    return;
+                }
+                if (hud.getCustomHud(FeatsBannerHud.KEY) != null) {
+                    hud.removeCustomHud(current, FeatsBannerHud.KEY);
+                }
+                removed.run();
+            } catch (RuntimeException | LinkageError e) {
+                warnBannerOnce(e);
+            }
+        });
+        return Attempt.POSTED;
     }
 
     /**

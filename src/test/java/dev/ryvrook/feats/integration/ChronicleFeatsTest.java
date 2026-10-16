@@ -125,6 +125,27 @@ class ChronicleFeatsTest {
     }
 
     @Test
+    void thePollReadsTheMonthWindowOncePerMinuteForEveryLoadedPlayer() {
+        // Chronicle raises days_active when it closes a day and sends no change, so only the poll sees it
+        UUID other = UUID.randomUUID();
+        PlayerProgress otherProgress = tracker.load(other, "Other");
+        windows.set("days_active", "MONTH", 30);
+        feats.tick();
+        assertEquals(30, progress.get(ChronicleFeats.MONTH_DAYS_MAX), "Full Month moves without a change");
+        assertEquals(30, otherProgress.get(ChronicleFeats.MONTH_DAYS_MAX));
+        assertEquals(2, windows.reads.size());
+
+        windows.set("days_active", "MONTH", 31);
+        now.addAndGet(ChronicleFeats.MONTH_GAP_MILLIS - 1);
+        feats.tick();
+        assertEquals(2, windows.reads.size(), "one read per player per minute");
+        now.addAndGet(1);
+        feats.tick();
+        assertEquals(4, windows.reads.size());
+        assertEquals(31, progress.get(ChronicleFeats.MONTH_DAYS_MAX));
+    }
+
+    @Test
     void aFailingReadIsSwallowedAndOtherKeysStillCount() {
         windows.fail = true;
         feats.changed(p, "blocks_broken", 1);

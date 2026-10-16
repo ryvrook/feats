@@ -143,6 +143,8 @@ public final class FeatsPlugin extends JavaPlugin {
     private ScheduledFuture<?> ticker;
     private ScheduledFuture<?> autosave;
     private LeaderboardExporter exporter;
+    /** The unlock announcer, kept so shutdown can stop its banner timers. */
+    private UnlockNotifier notifier;
     private ScheduledFuture<?> export;
     private volatile boolean exporting;
     /**
@@ -293,7 +295,7 @@ public final class FeatsPlugin extends JavaPlugin {
         store = new ProgressStore(getDataDirectory(), getLogger());
         world = new WorldStore(getDataDirectory(), getLogger());
         loadWorld();
-        UnlockNotifier notifier = new UnlockNotifier(this::config, getLogger());
+        notifier = new UnlockNotifier(this::config, getLogger());
         tracker = new FeatsTracker(registry, store, notifier, getLogger(), io, world);
         tracker.setServerTotals(() -> config().serverTotals(), () -> config().fullHouse());
         exporter = new LeaderboardExporter(this);
@@ -649,6 +651,7 @@ public final class FeatsPlugin extends JavaPlugin {
             export.cancel(false);
         }
         exporting = false;
+        if (notifier != null) notifier.stop(); // banner timers off and banners down before a reload's new instance
         if (tracker != null) {
             recordSessions(System.currentTimeMillis()); // the record so far, and the start stays in the file for a reload
             tracker.saveAll();

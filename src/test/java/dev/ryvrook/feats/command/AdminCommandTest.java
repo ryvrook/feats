@@ -6,7 +6,11 @@ import dev.ryvrook.feats.model.FeatRegistry;
 import dev.ryvrook.feats.model.Pack;
 import dev.ryvrook.feats.model.Sibling;
 import dev.ryvrook.feats.model.Trigger;
+import dev.ryvrook.feats.stats.ProgressStore;
+import dev.ryvrook.feats.stats.StatKeys;
 import dev.ryvrook.feats.stats.WorldStore;
+import dev.ryvrook.feats.track.FeatsTracker;
+import dev.ryvrook.feats.track.UnlockNotifier;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
@@ -67,7 +71,7 @@ class AdminCommandTest {
         WorldStore world = new WorldStore(Files.createTempDirectory("feats-totals"), LOGGER);
         world.addTotal("blocks_broken", 1_500L);
         world.addTotal("zzz_last", 1L);
-        List<String> lines = AdminCommand.Totals.totalLines(world, registry);
+        List<String> lines = AdminCommand.Totals.totalLines(world, registry, m -> m.trigger().target());
         assertEquals("Server totals", lines.get(0));
         assertEquals(" blocks_broken  1,500", lines.get(1));
         assertEquals(" zzz_last  1", lines.get(2));
@@ -89,6 +93,21 @@ class AdminCommandTest {
     }
 
     @Test
+    void fullHouseIsJudgedAgainstTheSetting() throws Exception {
+        FeatRegistry registry = new FeatRegistry();
+        java.nio.file.Path dir = Files.createTempDirectory("feats-totals-full-house");
+        WorldStore world = new WorldStore(dir, LOGGER);
+        FeatsTracker tracker = new FeatsTracker(registry, new ProgressStore(dir, LOGGER),
+                new UnlockNotifier(() -> null, LOGGER), LOGGER, Runnable::run, world);
+        tracker.setServerTotals(() -> true, () -> 5);
+        world.raiseTotal(StatKeys.TOTAL_PEAK_ONLINE, 6);
+        Feat fullHouse = registry.get(FeatRegistry.FULL_HOUSE_ID);
+        List<String> lines = AdminCommand.Totals.totalLines(world, registry, tracker::targetOf);
+        String row = lines.stream().filter(l -> l.startsWith(" " + fullHouse.name() + "  ")).findFirst().orElseThrow();
+        assertTrue(row.endsWith("6 / 5  reached"), row);
+    }
+
+    @Test
     void aRecordedMilestoneCountsAsReachedEvenWhenTheTotalIsLower() throws Exception {
         FeatRegistry registry = new FeatRegistry();
         List<Feat> triggered = registry.totalTriggered();
@@ -98,7 +117,7 @@ class AdminCommandTest {
         Feat f = triggered.getFirst();
         WorldStore world = new WorldStore(Files.createTempDirectory("feats-totals-reached"), LOGGER);
         world.putMilestoneIfAbsent(f.id(), new WorldStore.Entry(1L, null, null));
-        List<String> lines = AdminCommand.Totals.totalLines(world, registry);
+        List<String> lines = AdminCommand.Totals.totalLines(world, registry, m -> m.trigger().target());
         String row = lines.stream().filter(l -> l.startsWith(" " + f.name() + "  ")).findFirst().orElseThrow();
         assertTrue(row.endsWith("reached"), row);
         assertFalse(row.contains("not yet"), row);

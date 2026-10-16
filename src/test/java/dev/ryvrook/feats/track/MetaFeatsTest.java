@@ -221,6 +221,79 @@ class MetaFeatsTest {
     }
 
     @Test
+    void anAdminGrantOrABackfillWitnessesNothing() {
+        UUID a = UUID.randomUUID();
+        UUID b = UUID.randomUUID();
+        PlayerProgress holder = tracker.load(a, "Granted");
+        PlayerProgress bystander = tracker.load(b, "Bystander");
+        assertTrue(tracker.adminGrant(holder, registry.get("world_hundred_thousand_kills"), false));
+        assertTrue(holder.isUnlocked("world_hundred_thousand_kills"));
+        assertEquals(0, holder.get(StatKeys.MILESTONE_WITNESSED), "an admin grant is not a shared moment");
+        assertEquals(0, bystander.get(StatKeys.MILESTONE_WITNESSED));
+        long hourAgo = System.currentTimeMillis() - 3_600_000L;
+        assertTrue(tracker.recordMilestone("world_first_year", a, hourAgo)); // as the scan backfills it
+        assertTrue(holder.isUnlocked("world_first_year"));
+        assertEquals(0, bystander.get(StatKeys.MILESTONE_WITNESSED), "a dated backfill is not a shared moment");
+        assertFalse(bystander.isUnlocked("shared_first"));
+        assertTrue(tracker.recordMilestone(FeatRegistry.FULL_HOUSE_ID, null));
+        assertEquals(1, bystander.get(StatKeys.MILESTONE_WITNESSED), "a milestone reached now still is");
+    }
+
+    @Test
+    void anOfflineCatchUpRebuildsThePoints() {
+        UUID uuid = UUID.randomUUID();
+        PlayerProgress progress = tracker.load(uuid, "Away");
+        tracker.increment(uuid, StatKeys.BLOCKS_BROKEN, 1_000);
+        long points = tracker.points(progress);
+        assertTrue(points > 0);
+        progress.set(StatKeys.FEAT_POINTS, 0); // as a file from before 1.7.2 has it
+        tracker.unload(uuid);
+        drainIo();
+        FeatsTracker.Lease lease = tracker.acquire(uuid);
+        assertNotNull(lease);
+        try {
+            tracker.catchUpOffline(lease, false);
+            assertEquals(points, lease.progress().get(StatKeys.FEAT_POINTS));
+        } finally {
+            tracker.release(uuid, lease);
+        }
+    }
+
+    @Test
+    void playersKnownStartsFromThePlayerFiles() {
+        for (int i = 0; i < 3; i++) {
+            store.save(new PlayerProgress(UUID.randomUUID(), "Old" + i));
+        }
+        tracker.seedPlayersKnown();
+        assertEquals(0, world.total(StatKeys.TOTAL_PLAYERS_KNOWN), "the files are listed on the IO thread");
+        drainIo();
+        assertEquals(3, world.total(StatKeys.TOTAL_PLAYERS_KNOWN));
+        store.save(new PlayerProgress(UUID.randomUUID(), "New"));
+        tracker.seedPlayersKnown();
+        drainIo();
+        assertEquals(3, world.total(StatKeys.TOTAL_PLAYERS_KNOWN), "only seeded while the total is 0");
+    }
+
+    @Test
+    void aRevokeUnderLoadKeepsThePointsInStep() throws Exception {
+        UUID uuid = UUID.randomUUID();
+        PlayerProgress progress = tracker.load(uuid, "Busy");
+        tracker.increment(uuid, StatKeys.BLOCKS_BROKEN, 1_000);
+        Thread adder = new Thread(() -> {
+            for (int i = 0; i < 2_000; i++) {
+                tracker.increment(uuid, StatKeys.KILLS, 1); // unlocks the kill ladder as it goes
+            }
+        });
+        adder.start();
+        for (int i = 0; i < 200; i++) {
+            tracker.revoke(progress, "digger");
+            tracker.increment(uuid, StatKeys.BLOCKS_BROKEN, 1); // unlocks it again
+        }
+        adder.join();
+        assertEquals(tracker.points(progress), progress.get(StatKeys.FEAT_POINTS));
+    }
+
+    @Test
     void incrementAllMirrorsOnlyTheTotalsKeys() {
         UUID a = UUID.randomUUID();
         tracker.load(a, "Miner");

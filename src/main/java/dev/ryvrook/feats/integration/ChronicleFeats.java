@@ -6,6 +6,7 @@ import com.hypixel.hytale.server.core.plugin.PluginBase;
 import com.hypixel.hytale.server.core.plugin.PluginManager;
 import com.hypixel.hytale.server.core.plugin.PluginState;
 import dev.ryvrook.feats.model.Sibling;
+import dev.ryvrook.feats.stats.PlayerProgress;
 import dev.ryvrook.feats.stats.StatKeys;
 import dev.ryvrook.feats.track.FeatsTracker;
 import dev.ryvrook.feats.track.Hooks;
@@ -38,7 +39,8 @@ import java.util.logging.Level;
  * registers {@code onChange} for blocks_broken, kills, days_active and rpg_level. On each change the binding
  * reads the window that matters and raises the max counter. Window reads are limited to one per player per key
  * per 10 seconds, and a change dropped by that limit is read on the next poll once the 10 seconds passed, so a
- * burst that ends never misses its last blocks. Every call into Chronicle is guarded and the first failure is
+ * burst that ends never misses its last blocks. The poll also reads the days_active MONTH window of every loaded
+ * player once a minute, since Chronicle raises days_active when it closes a day without a change. Every call into Chronicle is guarded and the first failure is
  * logged once.
  */
 public final class ChronicleFeats implements AutoCloseable {
@@ -64,6 +66,12 @@ public final class ChronicleFeats implements AutoCloseable {
     /** At most one window read per player and key in this many milliseconds. */
     static final long READ_GAP_MILLIS = 10_000;
     static final long POLL_SECONDS = 5;
+    /**
+     * The poll reads each loaded player's days_active MONTH window at most once in this many milliseconds.
+     * Chronicle raises days_active when it closes a day without sending a change, so the change path alone
+     * never sees the month grow.
+     */
+    static final long MONTH_GAP_MILLIS = 60_000;
     /** Past this many remembered read times the table is cleared, so a busy server does not grow it forever. */
     static final int READ_TIMES_LIMIT = 20_000;
 
@@ -90,6 +98,8 @@ public final class ChronicleFeats implements AutoCloseable {
     private final ConcurrentHashMap<String, Long> readTimes = new ConcurrentHashMap<>();
     /** Changes dropped by the read gap, read again by the poll. */
     private final ConcurrentHashMap<String, Pending> pending = new ConcurrentHashMap<>();
+    /** The last MONTH read of days_active the poll made per player. */
+    private final ConcurrentHashMap<UUID, Long> monthReads = new ConcurrentHashMap<>();
     private final Consumer<Object> enable = this::apiUp;
     private final Runnable disable = this::apiDown;
 
@@ -196,6 +206,42 @@ public final class ChronicleFeats implements AutoCloseable {
         return pending.size();
     }
 
+    /** What the poll does while a Chronicle is bound. Package private so the tests can feed it. */
+    void tick() {
+        flushPending();
+        readMonths();
+    }
+
+    /**
+     * Reads the days_active MONTH window for every loaded player, at most once a minute each, and raises the
+     * month max. Chronicle counts a new active day in a path that skips its change bus, so this read is what
+     * moves Full Month. The change path stays for a Chronicle that does send the change.
+     */
+    void readMonths() {
+        Windows w = windows;
+        if (w == null) {
+            return;
+        }
+        long now = clock.getAsLong();
+        if (monthReads.size() >= READ_TIMES_LIMIT) {
+            monthReads.clear();
+        }
+        for (PlayerProgress progress : tracker.loadedPlayers()) {
+            UUID uuid = progress.uuid();
+            Long last = monthReads.get(uuid);
+            if (last != null && now - last < MONTH_GAP_MILLIS) {
+                continue;
+            }
+            monthReads.put(uuid, now);
+            try {
+                tracker.raiseTo(uuid, MONTH_DAYS_MAX, w.window(uuid, DAYS_ACTIVE, MONTH));
+            } catch (RuntimeException | LinkageError e) {
+                warn(e);
+            }
+        }
+        monthReads.keySet().removeIf(uuid -> !tracker.isLoaded(uuid));
+    }
+
     // ---- following the plugin ----
 
     /** Every 5 seconds. Binds to the Chronicle that is loaded, drops one that went away or was replaced. */
@@ -213,7 +259,7 @@ public final class ChronicleFeats implements AutoCloseable {
                 return;
             }
             if (h != null && h.plugin() == plugin) {
-                flushPending();
+                tick();
                 return;
             }
             if (h != null) {
@@ -290,6 +336,7 @@ public final class ChronicleFeats implements AutoCloseable {
         windows = null;
         pending.clear();
         readTimes.clear();
+        monthReads.clear();
         if (stop != null) {
             try {
                 stop.run();

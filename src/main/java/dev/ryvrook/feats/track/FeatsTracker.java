@@ -46,6 +46,8 @@ public final class FeatsTracker {
     private static final int CATCH_UP_ANNOUNCED = 5;
     /** At most this many shared milestones found on join get their own chat line. */
     private static final int SHARED_ANNOUNCED = 3;
+    /** A record dated further back than this is a backfill, nobody online saw it happen. */
+    static final long WITNESS_WINDOW_MILLIS = 60_000L;
 
     private final FeatRegistry registry;
     private final ProgressStore store;
@@ -737,7 +739,10 @@ public final class FeatsTracker {
         }
     }
 
-    /** Lowers the category_done and platinums_done flags that a revoke broke. Never raises one. */
+    /**
+     * Lowers the category_done and platinums_done flags that a revoke broke. Never raises one. Call it while
+     * holding the progress monitor.
+     */
     private void lowerMeta(PlayerProgress progress) {
         for (Map.Entry<Category, List<Feat>> e : categoryPool.entrySet()) {
             String key = StatKeys.CATEGORY_DONE_PREFIX + e.getKey().name();
@@ -750,6 +755,7 @@ public final class FeatsTracker {
         }
     }
 
+    /** Takes a feat's points off the points counter. Call it while holding the progress monitor. */
     private static void lowerPoints(PlayerProgress progress, Feat feat) {
         progress.set(StatKeys.FEAT_POINTS, Math.max(0L, progress.get(StatKeys.FEAT_POINTS) - feat.tier().points()));
     }
@@ -762,28 +768,31 @@ public final class FeatsTracker {
      */
     public List<String> revoke(PlayerProgress progress, String featId) {
         List<String> removed = new ArrayList<>();
-        if (!progress.revoke(featId)) {
-            return removed;
-        }
-        removed.add(featId);
         Feat revoked = registry.get(featId);
-        if (revoked != null) {
-            lowerPoints(progress, revoked);
-        }
-        if (revoked != null && !revoked.isPersonal()) {
-            releaseServer(progress, revoked);
-        }
-        boolean changed = true;
-        while (changed) {
-            changed = false;
-            lowerMeta(progress);
-            for (Feat meta : metaFeats) {
-                if (progress.isUnlocked(meta.id()) && !meta.isSatisfied(progress) && progress.revoke(meta.id())) {
-                    removed.add(meta.id());
-                    lowerPoints(progress, meta);
-                    changed = true;
+        // Under the monitor like increment and afterUnlocks, so a points add racing the revoke is not lost.
+        synchronized (progress) {
+            if (!progress.revoke(featId)) {
+                return removed;
+            }
+            removed.add(featId);
+            if (revoked != null) {
+                lowerPoints(progress, revoked);
+            }
+            boolean changed = true;
+            while (changed) {
+                changed = false;
+                lowerMeta(progress);
+                for (Feat meta : metaFeats) {
+                    if (progress.isUnlocked(meta.id()) && !meta.isSatisfied(progress) && progress.revoke(meta.id())) {
+                        removed.add(meta.id());
+                        lowerPoints(progress, meta);
+                        changed = true;
+                    }
                 }
             }
+        }
+        if (revoked != null && !revoked.isPersonal()) {
+            releaseServer(progress, revoked); // logs and queues a save, so it runs outside the monitor
         }
         return removed;
     }
@@ -825,6 +834,7 @@ public final class FeatsTracker {
         PlayerProgress progress = lease.progress();
         UUID uuid = progress.uuid();
         Set<String> before = new HashSet<>(progress.unlockedSnapshot().keySet());
+        syncMeta(progress); // a file from before 1.7.2 gets its points here too, not only at the next join
         if (isLive(progress)) {
             evaluate(uuid, progress, registry.personal(), new Announcements(CATCH_UP_ANNOUNCED), Source.CATCH_UP);
         } else {
@@ -1127,8 +1137,27 @@ public final class FeatsTracker {
         }
     }
 
+    /**
+     * Seeds the players known total from the player files when it is still 0, so a server that ran Feats
+     * before 1.7.2 starts the player count milestones from the players it already has. Joins only count a
+     * first join after that. Lists the files on the Feats IO thread, then checks the totals with nobody named.
+     */
+    public void seedPlayersKnown() {
+        if (world == null || store == null || !serverTotals.getAsBoolean()
+                || world.total(StatKeys.TOTAL_PLAYERS_KNOWN) > 0) {
+            return;
+        }
+        runInBackground(() -> {
+            int files = store.knownPlayers().size();
+            if (files > 0 && world.raiseTotal(StatKeys.TOTAL_PLAYERS_KNOWN, files)) {
+                logger.at(Level.INFO).log("Feats counted %d known players from the player files", files);
+                checkTotals(null);
+            }
+        });
+    }
+
     /** The target of a total milestone, the FullHouse setting for Full House and the trigger's target otherwise. */
-    private long targetOf(Feat feat) {
+    public long targetOf(Feat feat) {
         Trigger t = feat.trigger();
         if (FeatRegistry.FULL_HOUSE_ID.equals(feat.id())) {
             return Math.max(1, fullHouse.getAsInt());
@@ -1404,10 +1433,15 @@ public final class FeatsTracker {
         } else {
             logger.at(Level.INFO).log("Feats server first %s goes to %s", feat.id(), name);
         }
-        try {
-            notifier.recordBanner(feat, by, name); // the top of screen banner for everyone online
-        } catch (Exception e) {
-            logger.at(Level.WARNING).withCause(e).log("Banner failed for %s", feat.id());
+        // An admin grant or a scan backfill dated in the past is not a moment anyone online shared, so it gets
+        // no banner for everyone and no Shared First.
+        boolean happening = !source.admin() && now >= System.currentTimeMillis() - WITNESS_WINDOW_MILLIS;
+        if (happening) {
+            try {
+                notifier.recordBanner(feat, by, name); // the top of screen banner for everyone online
+            } catch (Exception e) {
+                logger.at(Level.WARNING).withCause(e).log("Banner failed for %s", feat.id());
+            }
         }
         if (holder != null) {
             holder.retainShared(id -> !id.equals(feat.id()));
@@ -1415,7 +1449,9 @@ public final class FeatsTracker {
         }
         if (feat.scope() == Scope.WORLD) {
             shareWithOnline(feat, now, by, name);
-            witness();
+            if (happening) {
+                witness();
+            }
         }
         return true;
     }

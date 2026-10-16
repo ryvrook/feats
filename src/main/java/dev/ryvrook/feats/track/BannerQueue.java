@@ -6,9 +6,12 @@ import dev.ryvrook.feats.model.Tier;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * The rules behind the top of screen banner, with no engine calls so a unit test can drive it. Two
@@ -19,8 +22,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>Timing rules per player. At most {@link #MAX_IN_ROW} banners show within {@link #WINDOW_MILLIS},
  * the rest are dropped, the chat line already covers them. A banner that arrives while one is up replaces
  * it on screen, and the removal moves out to a full stay from now rather than keeping the earlier time.
- * Each show hands out a generation number, and a removal only takes effect when its generation is still
- * the one on screen, so the earlier removal timer becomes a no op.
+ * Each show hands out a generation number from one counter shared by every player, and a removal only
+ * takes effect when its generation is still the one on screen, so the earlier removal timer becomes a no
+ * op. A banner counts as up until {@link #removed} records that its HUD really went away.
  *
  * <p>Every time is a millisecond clock the caller passes in.
  */
@@ -31,12 +35,19 @@ public final class BannerQueue {
     public static final long WINDOW_MILLIS = 60_000L;
 
     /** One banner that was granted. The removal is due at {@code removeAt} unless a later show replaces it. */
-    public record Shown(int generation, long removeAt) {
+    public record Shown(long generation, long removeAt) {
     }
+
+    /**
+     * One counter for every player and every queue, so a generation is never handed out twice, not even
+     * to the same player after a reconnect made a fresh row for them.
+     */
+    private static final AtomicLong GENERATIONS = new AtomicLong();
 
     private static final class State {
         final Deque<Long> recent = new ArrayDeque<>();
-        int generation;
+        long generation;
+        /** When the banner is due to go, or 0 once it was taken down. */
         long removeAt;
     }
 
@@ -127,7 +138,7 @@ public final class BannerQueue {
                 return null;
             }
             st.recent.addLast(now);
-            st.generation++;
+            st.generation = GENERATIONS.incrementAndGet();
             // A banner that is already up is replaced, and the new one gets a full stay from now.
             st.removeAt = Math.max(st.removeAt, now + Math.max(0, stayMillis));
             return new Shown(st.generation, st.removeAt);
@@ -135,18 +146,33 @@ public final class BannerQueue {
     }
 
     /**
-     * A removal timer firing. True when the banner from that show is still the one on screen, in which
-     * case the player is marked as having nothing up and the caller removes the HUD. False when a later
-     * show replaced it, that show has its own timer due at its own time.
+     * True while the banner from that show is the latest one and has not been taken down yet. The removal
+     * timer asks this before every try, and the world task asks it again before it touches the HUD.
      */
-    public boolean expire(UUID uuid, int generation) {
+    public boolean pending(UUID uuid, long generation) {
+        State st = uuid == null ? null : states.get(uuid);
+        if (st == null) {
+            return false;
+        }
+        synchronized (st) {
+            return st.generation == generation && st.removeAt != 0;
+        }
+    }
+
+    /**
+     * The HUD from that show was taken down, or the player is gone so there is nothing left to take down.
+     * True when the show was still the latest one, in which case the player is marked as having nothing
+     * up. False when a later show replaced it or the removal was already recorded. Called only after the
+     * HUD is really gone, so a removal that failed on the way leaves the banner marked as up.
+     */
+    public boolean removed(UUID uuid, long generation) {
         State st = uuid == null ? null : states.get(uuid);
         if (st == null) {
             return false;
         }
         synchronized (st) {
             if (st.generation != generation || st.removeAt == 0) {
-                return false; // replaced by a later show, or already taken down
+                return false;
             }
             st.removeAt = 0;
             return true;
@@ -164,10 +190,31 @@ public final class BannerQueue {
         }
     }
 
-    /** The player left, forget their row. */
+    /** The players with a banner not yet taken down, for the stop of the plugin. */
+    public Set<UUID> withBannerUp() {
+        Set<UUID> out = new HashSet<>();
+        states.forEach((uuid, st) -> {
+            synchronized (st) {
+                if (st.removeAt != 0) {
+                    out.add(uuid);
+                }
+            }
+        });
+        return out;
+    }
+
+    /**
+     * The player left, forget their row. A removal timer still running for them finds nothing pending and
+     * stops. Generations are never reused, so a timer from before a reconnect cannot match a new banner.
+     */
     public void clear(UUID uuid) {
         if (uuid != null) {
             states.remove(uuid);
         }
+    }
+
+    /** Forgets every player, for the stop of the plugin. */
+    public void clearAll() {
+        states.clear();
     }
 }

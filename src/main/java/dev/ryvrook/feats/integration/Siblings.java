@@ -1,12 +1,17 @@
 package dev.ryvrook.feats.integration;
 
 import com.hypixel.hytale.common.plugin.PluginIdentifier;
+import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.plugin.PluginBase;
 import com.hypixel.hytale.server.core.plugin.PluginManager;
 import dev.ryvrook.feats.model.Sibling;
 
 import java.util.EnumSet;
 import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.logging.Level;
 
 /**
  * Asks the engine's plugin manager whether another Ryvrook plugin is on this server. Touches no class of
@@ -17,6 +22,7 @@ public final class Siblings {
     public static final String DOMINION = "Dominion";
     public static final String COINAGE = "Coinage";
     public static final String SOCIALBRIDGE = "SocialBridge";
+    private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
 
     private Siblings() {
     }
@@ -56,13 +62,29 @@ public final class Siblings {
         }
     }
 
-    /** Every sibling installed on this server, read once at setup. */
+    /**
+     * Every sibling installed on this server at its minimum version or newer, read once at setup. A sibling
+     * that is not loaded yet has no version to read, since a plugin that lists Feats sets up after it, and
+     * counts as new enough. Its binding checks the API it needs once the sibling is up.
+     */
     public static Set<Sibling> present() {
+        return present(Siblings::installed, Siblings::version, line -> LOGGER.at(Level.WARNING).log("%s", line));
+    }
+
+    /** {@link #present()} over any lookup, for the tests. Logs one line per sibling it skips. */
+    static Set<Sibling> present(Predicate<String> installed, Function<String, String> version, Consumer<String> log) {
         Set<Sibling> out = EnumSet.noneOf(Sibling.class);
         for (Sibling s : Sibling.values()) {
-            if (installed(s.pluginName())) {
-                out.add(s);
+            if (!installed.test(s.pluginName())) {
+                continue;
             }
+            String found = version.apply(s.pluginName());
+            if (found != null && VersionCompare.below(found, s.minimum())) {
+                log.accept("Feats leaves out the " + s.pluginName() + " feats because " + s.pluginName() + " " + found
+                        + " is older than " + s.minimum());
+                continue;
+            }
+            out.add(s);
         }
         return out;
     }

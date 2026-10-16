@@ -240,7 +240,8 @@ older one, reload Feats by hand and the log reminds you.
 feats worth 720 points on what players do with their coins, payments received and sent, the highest balance and
 net worth, shop and market sales, auctions, trades, savings and interest, loans, bets, the lottery, the daily
 reward streak and coin notes. Feats reads Coinage's own events, so the tab needs Coinage 1.2.0 or newer and
-nothing else. Amounts count in whole coins. The highest balance counts in the primary currency only, net worth is
+nothing else. Amounts count in whole coins, and the fraction left over is carried to the next payment or
+interest so small amounts add up. The highest balance counts in the primary currency only, net worth is
 read every five minutes for the players online, and those two and the daily streak only move while the player is
 online. Everything else reaches offline players in their file.
 
@@ -259,7 +260,8 @@ most blocks broken in one day, the most creatures defeated in one week, a month 
 levels 10, 25 and 50 in RPG Leveling. The three level feats only move while Chronicle reports an RPG Leveling
 level. Chronicle and Feats each find the other by name, since neither can list the other as a dependency, so Feats
 looks for Chronicle every 5 seconds and follows it through a reload. Each player's window is read at most once
-every 10 seconds per counter, and a change held back by that is read on the next look.
+every 10 seconds per counter, a change held back by that is read on the next look, and the month of active days
+is read once a minute from the poll.
 
 **Atlas** reads `export/feats.json` for its leaderboard panel. With Atlas 1.9.0 installed Feats adds two feats
 to Exploration, On the Map for linking an account to the web map and Surveyor's Mark for placing 10 shared map

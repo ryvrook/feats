@@ -79,8 +79,7 @@ plugin, tracker, registry, config supplier, logger, world store, siblings, `ownP
   once a second. `DamageSystem` and `DeathSystem` stay in `registerOwnTracking` and feed the kill context, the
   multikill `Windows`, creature kinds, damage kinds, blocks, co-op bosses, vendettas and the player streak.
 - `WorldHooks` registers the instance discovery and world event end systems and the trigger volume listener on
-  the own path, and on both paths the referral, permission group and chunk generation listeners and an unlock
-  hook for Shared First. Its tick runs `Presence` and `JoinCalendar` and raises the peak online and server days
+  the own path, and on both paths the referral, permission group and chunk generation listeners. Its tick runs `Presence` and `JoinCalendar` and raises the peak online and server days
   totals. Its world sample reads the clock, weather, sleep and portal state once per world, then each player's
   biome, weather, moon, vitals, respawn points and lives, with the biome, weather, moon, portal and sleep reads
   only on the own path. Start reads the hardcore mode and `installed_at`.
@@ -105,11 +104,15 @@ fails once is skipped for that sample.
 - The TrackerAPI dispatch thread runs the bridge listeners. The tracker is safe from any thread.
 - Coinage and Atlas call the Coinage and Atlas bindings on their own threads. The Coinage net worth read runs
   every 5 minutes and the Chronicle poll every 5 seconds on the engine scheduler.
-- The banner hops twice. `UnlockNotifier.showBanner` asks `BannerQueue` for a slot on the unlocking thread, then
-  posts to the player's world with `world.execute`, where it adds the keyed `FeatsBannerHud`, plays the sound,
-  spawns the particles and schedules the removal with `world.scheduleAfter`. The removal checks the generation it
-  was given against the queue and, when the banner is still the one on screen, posts again to whichever world the
-  player is in now and removes the HUD there. A player between worlds is skipped and the banner is not retried.
+- The banner hops twice. `UnlockNotifier.showBanner` asks `BannerQueue` for a slot on the unlocking thread and
+  schedules the removal on the engine scheduler at once, so a removal exists whether or not the add works, then
+  posts to the player's world with `world.execute`, where it adds the keyed `FeatsBannerHud` unless the slot has
+  already been replaced or timed out, plays the sound and spawns the particles. The removal looks the player up
+  by uuid when it fires, posts to whichever world they are in now, removes the HUD there and only then marks the
+  slot gone. A player with no world is tried again once a second for 10 seconds, an offline player is marked gone
+  at once. Generations come from one counter shared by every player, so a timer from before a reconnect never
+  matches a new banner. `UnlockNotifier.stop` cancels every timer and takes every banner down at shutdown, so a
+  reload's new instance starts clean.
 - Chat runs on the engine's async chat future, at LATE priority so moderation plugins cancel first.
 
 Nothing in Feats touches a store, ref or component off its world thread, and nothing does file work on a world
@@ -179,18 +182,22 @@ loaded by name only when `Siblings.present()` listed its sibling in setup, so no
 touched. `CoinageFeats` and `AtlasFeats` link directly, since both mods publish an API Feats can list as an
 optional dependency and compile against. They follow the sibling with its enable and disable hooks, subscribe an
 `EconomyListener` under owner `Feats` and an Atlas marker and session listener, and survive a reload of either
-side. The Coinage binding reads the currency units on each bind, so amounts land in whole coins of the live
-setup, and the Atlas binding retries the session API every 2 seconds for 30 seconds after Atlas starts, since
+side. The Coinage binding reads the currency units live, counts amounts in whole coins and carries the minor unit
+remainder per player and counter so small payments and interest add up, and a payment under one coin still counts
+as the first coin received. The Atlas binding retries the session API every 2 seconds for 30 seconds after Atlas starts, since
 Atlas publishes it a moment after the marker API. `ChronicleFeats` and `CrossModFeats` are reflective. Chronicle Stats and Dominion list Feats as an optional
 dependency, so Feats cannot list them back without a cycle and their classes are not on its class path. Both find
 the plugin in the plugin manager and build method handles through its own class loader, the way Chronicle binds
-Feats. `ChronicleFeats` polls every 5 seconds, binds again when a reload gives a new plugin object, and limits
-window reads to one per player and key per 10 seconds. `CrossModFeats` answers the two Dominion facts the Coinage
+Feats. `ChronicleFeats` polls every 5 seconds, binds again when a reload gives a new plugin object, limits
+window reads to one per player and key per 10 seconds, and reads the month window of days active from the poll
+once a minute per player, since Chronicle closes a day without a change event. `CrossModFeats` answers the two Dominion facts the Coinage
 binding asks for, allied and at war, and switches off with one warning when the API lacks a method. Every
 sibling counter goes through the tracker, offline players through `addOffline`.
 
-`Sibling.minimum` names the oldest version each binding is written against. Setup only checks that the plugin is
-there. The bindings check what they need themselves, such as `AtlasApi.version()` 3 for marker events.
+`Sibling.minimum` names the oldest version each binding is written against. `Siblings.present` compares the
+loaded plugin's manifest version with it and leaves an older sibling out with one warning, so its tab never
+appears with counters that cannot move. A sibling that sets up after Feats has no version yet and is kept. The
+bindings still check what they need at bind time, such as `AtlasApi.version()` 3 for marker events.
 
 PlaceholderAPI is found by class name and registered in start. `FeatsExpansion` never names a PlaceholderAPI
 type outside its nested `Hook`.

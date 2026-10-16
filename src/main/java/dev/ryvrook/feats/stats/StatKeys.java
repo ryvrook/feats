@@ -1,6 +1,7 @@
 package dev.ryvrook.feats.stats;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -296,7 +297,7 @@ public final class StatKeys {
      * items that a feat counts, so taking your own stash back out does not count twice.
      */
     public static final String STASH_PREFIX = "stash:";
-    // 1.7.2 per id prefixes
+    // 1.7.2 prefixes. The discovery ones are in DISCOVERY_PREFIXES, the rest are per id.
     public static final String BIOME_PREFIX = "biome:";
     public static final String WEATHER_PREFIX = "weather:";
     public static final String MOON_PREFIX = "moon:";
@@ -328,10 +329,23 @@ public final class StatKeys {
     private static final List<String> PER_ID_PREFIXES = List.of(
             BROKEN_PREFIX, ORE_PREFIX, PLACED_PREFIX, CRAFTED_PREFIX, PICKED_PREFIX, USE_PREFIX,
             OBTAINED_PREFIX, KILL_PREFIX, DEATH_CAUSE_PREFIX, CAST_PREFIX, PORTAL_PREFIX,
-            BIOME_PREFIX, WEATHER_PREFIX, MOON_PREFIX, INSTANCE_PREFIX, VOLUME_PREFIX, TOOL_BROKEN_PREFIX,
-            WOOD_PREFIX, PLACED_KIND_PREFIX, RECIPE_PREFIX, ARMOUR_SET_PREFIX, DAMAGE_TYPE_PREFIX, SEAT_PREFIX,
-            MOUNT_PREFIX, TAMED_PREFIX, KILL_KIND_PREFIX, SEED_PREFIX, WORLD_EVENT_PREFIX, MERCHANT_PREFIX,
+            VOLUME_PREFIX, TOOL_BROKEN_PREFIX, MOUNT_PREFIX, TAMED_PREFIX, SEED_PREFIX, WORLD_EVENT_PREFIX,
             TALK_PREFIX, GROUP_ADDED_PREFIX, DATE_PREFIX, CATEGORY_DONE_PREFIX);
+
+    /**
+     * Each prefix whose markers feed a distinct kinds total through {@code FeatsTracker.discover}, with that total.
+     * None of them is in {@link #PER_ID_PREFIXES}, like the older zone, memory and portal type markers. A marker
+     * dropped at load would let the next sighting count as new and raise the total again at every login.
+     */
+    public static final Map<String, String> DISCOVERIES = Map.ofEntries(
+            Map.entry(ZONE_PREFIX, ZONES_DISCOVERED), Map.entry(MEMORY_PREFIX, MEMORIES),
+            Map.entry(PORTAL_TYPE_PREFIX, PORTAL_TYPES), Map.entry(BIOME_PREFIX, BIOMES_VISITED),
+            Map.entry(WEATHER_PREFIX, WEATHERS_SEEN), Map.entry(MOON_PREFIX, MOONS_SEEN),
+            Map.entry(INSTANCE_PREFIX, INSTANCES_DISCOVERED), Map.entry(WOOD_PREFIX, WOOD_SPECIES),
+            Map.entry(PLACED_KIND_PREFIX, PLACED_KINDS), Map.entry(RECIPE_PREFIX, RECIPES_KNOWN),
+            Map.entry(ARMOUR_SET_PREFIX, ARMOUR_SETS), Map.entry(DAMAGE_TYPE_PREFIX, DAMAGE_TYPES),
+            Map.entry(SEAT_PREFIX, SEATS), Map.entry(KILL_KIND_PREFIX, KILL_KINDS),
+            Map.entry(MERCHANT_PREFIX, MERCHANTS));
 
     /** True for a per id counter key, see {@link #PER_ID_PREFIXES}. */
     public static boolean isPerId(String key) {

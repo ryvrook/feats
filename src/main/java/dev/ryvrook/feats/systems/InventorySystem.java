@@ -33,7 +33,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Reads every change to the inventory a player carries (hotbar, storage, backpack and utility belt).
@@ -67,6 +69,10 @@ public final class InventorySystem extends PlayerEventSystem<InventoryChangeEven
     private final RecentDrops drops;
     /** The player's own inventory sections, read once since the engine registers them at start. */
     private final List<ComponentType<EntityStore, ? extends InventoryComponent>> sections;
+    /** The armour item id last seen per slot, per player, so a durability tick skips the set check. */
+    private final Map<UUID, String[]> lastArmour = new ConcurrentHashMap<>();
+    /** Past this many players noted, the notes of players no longer loaded are dropped. */
+    private static final int ARMOUR_PRUNE_AT = 256;
 
     public InventorySystem(FeatsTracker tracker, RecentPlacements placements, RecentDrops drops) {
         super(InventoryChangeEvent.class, tracker);
@@ -83,7 +89,7 @@ public final class InventorySystem extends PlayerEventSystem<InventoryChangeEven
      * What one inventory change moved, item id to amount. Each map is only created once something lands
      * in it, so a change that moves nothing countable allocates no maps at all.
      */
-    private static final class Totals {
+    static final class Totals {
         Map<String, Long> gained;
         Map<String, Long> putAway;
         Map<String, Long> dropped;
@@ -165,47 +171,74 @@ public final class InventorySystem extends PlayerEventSystem<InventoryChangeEven
 
     /**
      * Visits every slot change in the transaction and notes the stacks that broke, were repaired or caught
-     * an animal. Only slots whose item id stayed the same are looked at, a swap is never wear.
+     * an animal. Only slots whose item id stayed the same are looked at, a swap is never wear. Moves and
+     * swaps arrive as move transactions and are skipped whole. A durability rise also does not count when
+     * another slot of the same transaction lost that item or saw its durability fall, since that is two
+     * copies of one tool changing places through plain slot sets and not a repair.
      */
-    private static void scanWear(Transaction transaction, Totals totals, boolean breaks) {
-        if (transaction == null || !transaction.succeeded()) {
-            return;
-        }
-        if (transaction instanceof ListTransaction<?> list) {
-            for (Transaction part : list.getList()) {
-                scanWear(part, totals, breaks);
-            }
-            return;
-        }
-        if (transaction instanceof ItemStackTransaction stack) {
-            for (ItemStackSlotTransaction part : stack.getSlotTransactions()) {
-                scanWear(part, totals, breaks);
-            }
-            return;
-        }
-        if (transaction instanceof SlotTransaction slot) {
+    static void scanWear(Transaction transaction, Totals totals, boolean breaks) {
+        List<SlotTransaction> slots = new ArrayList<>(4);
+        slots(transaction, slots);
+        for (SlotTransaction slot : slots) {
             ItemStack before = slot.getSlotBefore();
             ItemStack after = slot.getSlotAfter();
             if (isEmpty(before) || isEmpty(after) || !before.getItemId().equals(after.getItemId())) {
-                return;
+                continue;
             }
             String itemId = after.getItemId();
             if (Classify.isWearable(itemId)) {
                 if (after.isBroken() && !before.isBroken()) {
                     if (!breaks) {
-                        return;
+                        continue;
                     }
                     if (totals.broken == null) {
                         totals.broken = new ArrayList<>(2);
                     }
                     totals.broken.add(itemId);
-                } else if (after.getDurability() > before.getDurability() && !after.isBroken()) {
+                } else if (after.getDurability() > before.getDurability() && !after.isBroken()
+                        && !pairedLoss(slots, slot, itemId)) {
                     totals.repairs++;
                 }
             } else if (Classify.CAPTURE_CRATE.equals(itemId) && hasCapture(after) && !hasCapture(before)) {
                 totals.captures++;
             }
         }
+    }
+
+    /** Collects the plain slot changes of a transaction, leaving out every move and swap. */
+    private static void slots(Transaction transaction, List<SlotTransaction> out) {
+        if (transaction == null || !transaction.succeeded() || transaction instanceof MoveTransaction<?>) {
+            return; // a move or swap carries a tool to another slot, its durability rising there is no repair
+        }
+        if (transaction instanceof ListTransaction<?> list) {
+            for (Transaction part : list.getList()) {
+                slots(part, out);
+            }
+        } else if (transaction instanceof ItemStackTransaction stack) {
+            for (ItemStackSlotTransaction part : stack.getSlotTransactions()) {
+                slots(part, out);
+            }
+        } else if (transaction instanceof SlotTransaction slot) {
+            out.add(slot);
+        }
+    }
+
+    /** True when another slot in the same transaction lost this item or saw its durability fall. */
+    private static boolean pairedLoss(List<SlotTransaction> slots, SlotTransaction rise, String itemId) {
+        for (SlotTransaction other : slots) {
+            if (other == rise) {
+                continue;
+            }
+            ItemStack before = other.getSlotBefore();
+            if (isEmpty(before) || !itemId.equals(before.getItemId())) {
+                continue;
+            }
+            ItemStack after = other.getSlotAfter();
+            if (isEmpty(after) || !itemId.equals(after.getItemId()) || after.getDurability() < before.getDurability()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void countWear(UUID uuid, Totals totals) {
@@ -232,7 +265,11 @@ public final class InventorySystem extends PlayerEventSystem<InventoryChangeEven
 
     // ---- armour sets --------------------------------------------------------------
 
-    /** Reads every armour slot after the change and credits a full set once per material. */
+    /**
+     * Reads every armour slot after the change and credits a full set once per material. The armour section
+     * changes on every durability tick, so the item id last seen per slot is kept per player and the set
+     * check only runs when one of them changed, which is a real equip or unequip.
+     */
     private void wornSet(UUID uuid, InventoryChangeEvent event) {
         ItemContainer container = event.getItemContainer();
         if (container == null && event.getInventory() != null) {
@@ -242,16 +279,45 @@ public final class InventorySystem extends PlayerEventSystem<InventoryChangeEven
             return;
         }
         short capacity = container.getCapacity();
+        String[] seen = lastArmour.get(uuid);
+        if (seen == null || seen.length != capacity) {
+            seen = new String[capacity];
+            pruneArmour();
+            lastArmour.put(uuid, seen);
+        } else if (sameArmour(container, seen)) {
+            return; // a durability tick or a stack of the same piece, nothing was put on or taken off
+        }
         List<String> worn = new ArrayList<>(capacity);
         for (short i = 0; i < capacity; i++) {
             ItemStack stack = container.getItemStack(i);
-            if (!isEmpty(stack)) {
-                worn.add(stack.getItemId());
+            String itemId = isEmpty(stack) ? null : stack.getItemId();
+            seen[i] = itemId;
+            if (itemId != null) {
+                worn.add(itemId);
             }
         }
         String material = ArmourSets.completeSet(worn);
         if (material != null) {
             tracker.discover(uuid, StatKeys.ARMOUR_SET_PREFIX, material, StatKeys.ARMOUR_SETS);
+        }
+    }
+
+    /** True when every armour slot holds the item id it held last time. Allocates nothing. */
+    private static boolean sameArmour(ItemContainer container, String[] seen) {
+        for (short i = 0; i < seen.length; i++) {
+            ItemStack stack = container.getItemStack(i);
+            String itemId = isEmpty(stack) ? null : stack.getItemId();
+            if (!Objects.equals(itemId, seen[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Drops the armour notes of players who left, checked only when a new player is noted. */
+    private void pruneArmour() {
+        if (lastArmour.size() >= ARMOUR_PRUNE_AT) {
+            lastArmour.keySet().removeIf(id -> !tracker.isLoaded(id));
         }
     }
 

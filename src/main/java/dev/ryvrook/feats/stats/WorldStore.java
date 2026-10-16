@@ -255,6 +255,9 @@ public final class WorldStore {
         synchronized (fileLock) {
             Document doc;
             synchronized (this) {
+                // Cleared before the copy, so a total added while the copy is taken marks the file dirty again
+                // and the next autosave writes it. addTotal does not take this monitor.
+                dirty = false;
                 Document totalsDoc = new Document();
                 totals().forEach(totalsDoc::append);
                 doc = new Document()
@@ -262,7 +265,6 @@ public final class WorldStore {
                         .append("milestones", write(milestones))
                         .append("firsts", write(firsts))
                         .append("totals", totalsDoc);
-                dirty = false;
             }
             try {
                 Files.createDirectories(file.getParent());

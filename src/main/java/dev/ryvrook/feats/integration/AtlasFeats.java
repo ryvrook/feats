@@ -53,6 +53,8 @@ public final class AtlasFeats implements AutoCloseable {
     private volatile Runnable sessionStop;
     private volatile ScheduledFuture<?> sessionRetry;
     private volatile boolean closed;
+    /** Held across bind, the session retries, unbind and close. */
+    private final Object bindLock = new Object();
 
     AtlasFeats(FeatsTracker tracker, HytaleLogger logger, ScheduledExecutorService scheduler) {
         this.tracker = tracker;
@@ -92,64 +94,101 @@ public final class AtlasFeats implements AutoCloseable {
         return e != null && e.kind() == MarkerEvent.Kind.ADDED && e.player() != null && !ADMIN_LAYER.equals(e.layer());
     }
 
+    /**
+     * The Atlas enable hook. Bind, the session retries, unbind and close share one lock, so a retry cannot set
+     * a session listener after an unbind ran. The close sets {@code closed} before it waits for the lock, so a
+     * bind that was past the first check sees it after registering and drops what it registered.
+     */
     private void bind(AtlasApi live) {
-        if (closed) {
-            return;
-        }
-        api = live;
-        try {
-            int version = live.version();
-            if (version >= MARKER_API_VERSION) {
-                Runnable old = markerStop;
-                if (old != null) {
-                    old.run();
-                }
-                markerStop = live.onMarker(this::marker);
-            } else if (oldAtlasWarned.compareAndSet(false, true)) {
-                logger.at(Level.WARNING).log("Atlas API version %d has no marker events, so Surveyor's Mark cannot count. Atlas 1.9.0 or newer has them", version);
-            }
-        } catch (RuntimeException | LinkageError e) {
-            warn(e);
-        }
-        bindSessions(0);
-    }
-
-    /** Registers the session listener, or tries again shortly when Atlas has not published the session API yet. */
-    private void bindSessions(int attempt) {
-        if (closed || api == null) {
-            return;
-        }
-        try {
-            SessionApi sessions = SessionApi.get();
-            if (sessions == null) {
-                if (attempt < SESSION_RETRIES && scheduler != null) {
-                    sessionRetry = scheduler.schedule(() -> bindSessions(attempt + 1), SESSION_RETRY_SECONDS, TimeUnit.SECONDS);
-                } else if (warned.compareAndSet(false, true)) {
-                    logger.at(Level.WARNING).log("Atlas published no session API, so On the Map cannot count until Atlas is reloaded");
-                }
+        Runnable late;
+        synchronized (bindLock) {
+            if (closed) {
                 return;
             }
-            Runnable old = sessionStop;
-            if (old != null) {
-                old.run();
+            api = live;
+            try {
+                int version = live.version();
+                if (version >= MARKER_API_VERSION) {
+                    Runnable old = markerStop;
+                    markerStop = null;
+                    stop(old);
+                    markerStop = live.onMarker(this::marker);
+                } else if (oldAtlasWarned.compareAndSet(false, true)) {
+                    logger.at(Level.WARNING).log("Atlas API version %d has no marker events, so Surveyor's Mark cannot count. Atlas 1.9.0 or newer has them", version);
+                }
+            } catch (RuntimeException | LinkageError e) {
+                warn(e);
             }
-            sessionStop = sessions.onChange(this::session);
-        } catch (RuntimeException | LinkageError e) {
-            warn(e);
+            bindSessions(live, 0);
+            late = closed ? drop() : null;
+        }
+        if (late != null) {
+            late.run();
         }
     }
 
+    /**
+     * Registers the session listener, or tries again shortly when Atlas has not published the session API yet.
+     * A retry from an earlier bind finds another api, or none, and does nothing.
+     */
+    private void bindSessions(AtlasApi live, int attempt) {
+        Runnable late;
+        synchronized (bindLock) {
+            if (closed || api == null || api != live) {
+                return;
+            }
+            try {
+                SessionApi sessions = SessionApi.get();
+                if (sessions == null) {
+                    if (attempt < SESSION_RETRIES && scheduler != null) {
+                        sessionRetry = scheduler.schedule(() -> bindSessions(live, attempt + 1), SESSION_RETRY_SECONDS, TimeUnit.SECONDS);
+                    } else if (warned.compareAndSet(false, true)) {
+                        logger.at(Level.WARNING).log("Atlas published no session API, so On the Map cannot count until Atlas is reloaded");
+                    }
+                    return;
+                }
+                Runnable old = sessionStop;
+                sessionStop = null;
+                stop(old);
+                sessionStop = sessions.onChange(this::session);
+            } catch (RuntimeException | LinkageError e) {
+                warn(e);
+            }
+            late = closed ? drop() : null;
+        }
+        if (late != null) {
+            late.run();
+        }
+    }
+
+    /** The Atlas disable hook. Drops the api, the retry and both listeners. */
     private void unbind() {
+        Runnable handles;
+        synchronized (bindLock) {
+            handles = drop();
+        }
+        handles.run();
+    }
+
+    /**
+     * Clears the binding under the lock and hands back what is left to stop, which the caller runs after the
+     * lock is released, so no Atlas call runs while close holds it.
+     */
+    private Runnable drop() {
         api = null;
         ScheduledFuture<?> retry = sessionRetry;
         sessionRetry = null;
-        if (retry != null) {
-            retry.cancel(false);
-        }
-        stop(markerStop);
+        Runnable markers = markerStop;
         markerStop = null;
-        stop(sessionStop);
+        Runnable sessions = sessionStop;
         sessionStop = null;
+        return () -> {
+            if (retry != null) {
+                retry.cancel(false);
+            }
+            stop(markers);
+            stop(sessions);
+        };
     }
 
     private void stop(Runnable handle) {
@@ -198,7 +237,7 @@ public final class AtlasFeats implements AutoCloseable {
     /** Removes the hooks, for the Feats shutdown. */
     @Override
     public void close() {
-        closed = true;
+        closed = true; // before the lock, so a bind or retry holding it sees the close once it registered
         unbind();
         try {
             AtlasApi.removeHooks(enable, disable);

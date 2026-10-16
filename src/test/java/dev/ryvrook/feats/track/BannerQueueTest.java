@@ -127,12 +127,46 @@ class BannerQueueTest {
         BannerQueue.Shown two = queue.offer(p, 4_000, 6_000);
         assertEquals(10_000, two.removeAt(), "a full stay from the second show, not the first one's end");
         assertTrue(two.generation() > one.generation());
-        assertFalse(queue.expire(p, one.generation()), "the first timer must not remove the second banner");
+        assertFalse(queue.pending(p, one.generation()), "the first timer has nothing left to do");
+        assertFalse(queue.removed(p, one.generation()), "the first timer must not remove the second banner");
         assertTrue(queue.isUp(p, 6_000), "still up after the first timer fired");
-        assertTrue(queue.expire(p, two.generation()), "the second timer removes it");
+        assertTrue(queue.pending(p, two.generation()));
+        assertTrue(queue.removed(p, two.generation()), "the second timer removes it");
         assertFalse(queue.isUp(p, 10_000));
-        assertFalse(queue.expire(p, two.generation()), "a removal only counts once");
-        assertFalse(queue.expire(UUID.randomUUID(), 1), "an unknown player has nothing up");
+        assertFalse(queue.pending(p, two.generation()));
+        assertFalse(queue.removed(p, two.generation()), "a removal only counts once");
+        assertFalse(queue.removed(UUID.randomUUID(), 1), "an unknown player has nothing up");
+    }
+
+    @Test
+    void aBannerStaysPendingUntilTheRemovalIsRecorded() {
+        BannerQueue queue = new BannerQueue();
+        UUID p = UUID.randomUUID();
+        BannerQueue.Shown shown = queue.offer(p, 0, 6_000);
+        assertTrue(queue.pending(p, shown.generation()), "asking does not take it down");
+        assertTrue(queue.pending(p, shown.generation()), "a removal that did not land leaves it pending");
+        assertEquals(java.util.Set.of(p), queue.withBannerUp());
+        assertTrue(queue.removed(p, shown.generation()));
+        assertTrue(queue.withBannerUp().isEmpty());
+    }
+
+    @Test
+    void generationsAreNeverReusedAcrossPlayersQueuesOrAReconnect() {
+        BannerQueue queue = new BannerQueue();
+        UUID p = UUID.randomUUID();
+        BannerQueue.Shown before = queue.offer(p, 0, 6_000);
+        queue.clear(p); // the player left
+        BannerQueue.Shown after = queue.offer(p, 1_000, 6_000);
+        assertTrue(after.generation() > before.generation(), "a reconnect does not start the count again");
+        assertFalse(queue.pending(p, before.generation()));
+        assertFalse(queue.removed(p, before.generation()), "the timer from before the reconnect cannot match");
+        assertTrue(queue.pending(p, after.generation()), "the new banner is still up");
+        BannerQueue.Shown other = queue.offer(UUID.randomUUID(), 1_000, 6_000);
+        BannerQueue.Shown elsewhere = new BannerQueue().offer(p, 1_000, 6_000);
+        assertTrue(other.generation() > after.generation(), "one count for every player");
+        assertTrue(elsewhere.generation() > other.generation(), "and for every queue");
+        queue.clearAll();
+        assertTrue(queue.withBannerUp().isEmpty());
     }
 
     @Test
