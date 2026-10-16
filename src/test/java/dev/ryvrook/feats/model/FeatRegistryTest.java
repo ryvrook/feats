@@ -78,6 +78,8 @@ class FeatRegistryTest {
             "defaulted", "gambler", "lucky", "high_roller", "heavy_losses", "jackpot", "daily_week", "daily_month", "paper_trail");
     private static final List<String> FACTIONS = List.of("enlisted", "exiled", "declaration", "pact", "upgraded", "fortified",
             "faction_market", "trespasser", "held_the_line", "breacher", "king_of_the_hill", "outpost", "powerhouse", "downsizing");
+    /** 1.7.3, read from dominion:rank_changes that Dominion 0.7.2 starts sending. */
+    private static final List<String> FACTIONS_173 = List.of("faction_rank");
     private static final List<String> CHRONICLE = List.of("busy_day", "big_week", "full_month", "level_10", "level_25", "level_50");
     private static final List<String> ATLAS = List.of("on_the_map", "surveyors_mark");
     private static final List<String> CROSS = List.of("war_chest", "allied_trade", "treasurer");
@@ -192,8 +194,9 @@ class FeatRegistryTest {
         block(CHRONICLE, 6, 300);
         block(ATLAS, 2, 35);
         block(CROSS, 3, 175);
-        assertEquals(OLD_FACTIONS + 14, new FeatRegistry(true).inCategory(Category.FACTIONS).size(), "Dominion alone");
-        assertEquals(OLD_FACTIONS_POINTS + 430, new FeatRegistry(true).inCategory(Category.FACTIONS).stream().mapToInt(f -> f.tier().points()).sum());
+        block(FACTIONS_173, 1, 10);
+        assertEquals(OLD_FACTIONS + 14 + 1, new FeatRegistry(true).inCategory(Category.FACTIONS).size(), "Dominion alone");
+        assertEquals(OLD_FACTIONS_POINTS + 430 + 10, new FeatRegistry(true).inCategory(Category.FACTIONS).stream().mapToInt(f -> f.tier().points()).sum());
         assertEquals(24, new FeatRegistry(EnumSet.of(Sibling.COINAGE), EnumSet.noneOf(Pack.class)).inCategory(Category.COINAGE).size(), "Coinage alone");
         assertEquals(6, new FeatRegistry(EnumSet.of(Sibling.CHRONICLE), EnumSet.noneOf(Pack.class)).inCategory(Category.CHRONICLE).size());
         FeatRegistry atlas = new FeatRegistry(EnumSet.of(Sibling.ATLAS), EnumSet.noneOf(Pack.class));
@@ -201,6 +204,9 @@ class FeatRegistryTest {
         assertEquals(Category.EXPLORATION, atlas.get("on_the_map").category());
         for (String id : COINAGE) {
             assertEquals(Set.of(Sibling.COINAGE), FULL.get(id).requires(), id);
+        }
+        for (String id : FACTIONS_173) {
+            assertEquals(Set.of(Sibling.DOMINION), FULL.get(id).requires(), id);
         }
         for (String id : FACTIONS) {
             assertEquals(Set.of(Sibling.DOMINION), FULL.get(id).requires(), id);
@@ -212,8 +218,8 @@ class FeatRegistryTest {
         assertTrue(new FeatRegistry(true).whySkipped("war_chest").startsWith("needs "), "Coinage is missing");
         assertNull(new FeatRegistry(true).get("war_chest"), "one of the two is missing");
         // Everything on at once. The plan's 512 leaves out the 15 Factions feats from 1.6.0.
-        assertEquals(OLD_COUNT + 118 + 18 + 24 + OLD_FACTIONS + 14 + 6 + 2 + 3, FULL.count());
-        assertEquals(OLD_POINTS + 5_370 + 865 + 720 + OLD_FACTIONS_POINTS + 430 + 300 + 35 + 175, FULL.totalPoints());
+        assertEquals(OLD_COUNT + 118 + 18 + 24 + OLD_FACTIONS + 14 + 1 + 6 + 2 + 3, FULL.count());
+        assertEquals(OLD_POINTS + 5_370 + 865 + 720 + OLD_FACTIONS_POINTS + 430 + 10 + 300 + 35 + 175, FULL.totalPoints());
     }
 
     @Test

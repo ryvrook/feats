@@ -37,9 +37,9 @@ class FactionFeatsTest {
         FeatRegistry without = new FeatRegistry(false);
         FeatRegistry with = new FeatRegistry(true);
         assertTrue(without.inCategory(Category.FACTIONS).isEmpty());
-        assertEquals(29, with.inCategory(Category.FACTIONS).size(), "15 from 1.6.0 and 14 from 1.7.2");
-        assertEquals(without.count() + 29, with.count());
-        assertEquals(without.totalPoints() + 460 + 430, with.totalPoints());
+        assertEquals(30, with.inCategory(Category.FACTIONS).size(), "15 from 1.6.0, 14 from 1.7.2 and 1 from 1.7.3");
+        assertEquals(without.count() + 30, with.count());
+        assertEquals(without.totalPoints() + 460 + 430 + 10, with.totalPoints());
     }
 
     @Test
@@ -72,6 +72,24 @@ class FactionFeatsTest {
             assertEquals(Category.FACTIONS, registry.get(id).category());
         }
         new FeatRegistry(false); // put the shared feat predicates back to the plain list for the other tests
+    }
+
+    @Test
+    void aRankChangeFromDominionUnlocksNewRank() throws Exception {
+        FeatRegistry registry = new FeatRegistry(true);
+        ProgressStore store = new ProgressStore(Files.createTempDirectory("feats-rank"), LOGGER);
+        FeatsTracker tracker = new FeatsTracker(registry, store, new UnlockNotifier(() -> null, LOGGER), LOGGER,
+                Runnable::run);
+        UUID uuid = UUID.randomUUID();
+        PlayerProgress progress = tracker.load(uuid, "Warden");
+        assertTrue(tracker.isPersisted(StatKeys.DOMINION_RANK_CHANGES));
+        assertTrue(tracker.isWatched(StatKeys.DOMINION_RANK_CHANGES));
+        assertFalse(progress.isUnlocked("faction_rank"));
+        tracker.increment(uuid, StatKeys.DOMINION_RANK_CHANGES, 1);
+        assertTrue(progress.isUnlocked("faction_rank"));
+        assertEquals(Category.FACTIONS, registry.get("faction_rank").category());
+        assertFalse(progress.isUnlocked("promoted"), "the permission group feat in Misc is a different one");
+        new FeatRegistry(false);
     }
 
     @Test

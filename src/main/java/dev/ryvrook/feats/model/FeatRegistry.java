@@ -939,6 +939,8 @@ public final class FeatRegistry {
         feat("outpost", "Outpost", "Hold an outpost for your faction.", FACTIONS, SILVER, "Furniture_Flag_Orange", StatKeys.DOMINION_OUTPOSTS_HELD, 1);
         feat("powerhouse", "Powerhouse", "Reach full power.", FACTIONS, GOLD, "Potion_Stamina_Greater", StatKeys.DOMINION_POWER_MAX, 1);
         hidden("downsizing", "Downsizing", "Release a claim.", FACTIONS, BRONZE, "Deco_Map", StatKeys.DOMINION_UNCLAIMS, 1);
+        // 1.7.3, Dominion 0.7.2 credits one rank change to the member for each promotion or demotion
+        feat("faction_rank", "New Rank", "Be promoted or demoted in your faction.", FACTIONS, BRONZE, "Deco_Scroll", StatKeys.DOMINION_RANK_CHANGES, 1);
         // Cross mod, Dominion and Coinage together. Keys written by the Coinage binding and Dominion's bridge.
         define(of("war_chest", "War Chest", "Hold a net worth of 50,000 coins while your faction is at war.", FACTIONS, GOLD, "Deco_Treasure_Pile_Large", true,
                 req(StatKeys.COINAGE_PREFIX + "war_chest", 1)).requiring(Sibling.DOMINION, Sibling.COINAGE));
