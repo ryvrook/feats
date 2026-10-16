@@ -79,8 +79,12 @@ public final class TrackerSwitch {
     /**
      * How long a TrackerAPI that reloads its dependents may be gone before Feats warns. A {@code /plugin reload}
      * of TrackerAPI leaves it unloaded for about 10 seconds while it sets up again, and it reloads Feats after.
+     * Until then Feats logs {@link #RELOADING} as INFO.
      */
-    static final long UNLOAD_GRACE_NANOS = java.util.concurrent.TimeUnit.SECONDS.toNanos(60);
+    static final long UNLOAD_GRACE_NANOS = java.util.concurrent.TimeUnit.SECONDS.toNanos(30);
+    /** The INFO line {@link #poll()} returns when such a TrackerAPI goes away, see {@link #isNotice(String)}. */
+    public static final String RELOADING = "TrackerAPI stopped. It reloads Feats by itself about two seconds after it is back,"
+            + " and Feats warns if it is not back within 30 seconds";
 
     private final java.util.function.LongSupplier clock;
     private Object seen;
@@ -160,7 +164,7 @@ public final class TrackerSwitch {
         seenVersion = now.version();
         if (current == null && path == Path.TRACKER_API && reloadsDependents(before)) {
             missingSince = clock.getAsLong(); // most likely a /plugin reload, which reloads Feats after
-            return null;
+            return RELOADING;
         }
         missingSince = -1;
         if (path == Path.TRACKER_API && current != null && reloadsDependents(now.version())) {
@@ -178,6 +182,11 @@ public final class TrackerSwitch {
                     ? "TrackerAPI is now loaded but Feats chose its own tracking at setup. Run /plugin reload Feats to track through TrackerAPI."
                     : null;
         };
+    }
+
+    /** True for a line that is logged as INFO rather than as a warning. */
+    public static boolean isNotice(String line) {
+        return RELOADING.equals(line);
     }
 
     private String unloaded() {

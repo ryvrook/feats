@@ -523,7 +523,7 @@ public final class FeatsPlugin extends JavaPlugin {
             trackerWatch = HytaleServer.SCHEDULED_EXECUTOR.scheduleWithFixedDelay(() -> {
                 String line = trackerSwitch.poll();
                 if (line != null) {
-                    getLogger().at(Level.WARNING).log("%s", line);
+                    getLogger().at(TrackerSwitch.isNotice(line) ? Level.INFO : Level.WARNING).log("%s", line);
                 }
             }, 5, 5, TimeUnit.SECONDS);
         }
