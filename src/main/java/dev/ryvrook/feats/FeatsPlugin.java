@@ -36,6 +36,11 @@ import dev.ryvrook.feats.integration.TrackerSwitch;
 import dev.ryvrook.feats.model.Category;
 import dev.ryvrook.feats.model.Feat;
 import dev.ryvrook.feats.model.FeatRegistry;
+import dev.ryvrook.feats.model.Pack;
+import dev.ryvrook.feats.model.Sibling;
+import dev.ryvrook.feats.integration.SiblingLinks;
+import dev.ryvrook.feats.track.Hardcore;
+import dev.ryvrook.feats.track.Hooks;
 import dev.ryvrook.feats.placeholders.FeatsExpansion;
 import dev.ryvrook.feats.rewards.CoinPayer;
 import dev.ryvrook.feats.rewards.RewardService;
@@ -118,6 +123,12 @@ public final class FeatsPlugin extends JavaPlugin {
     private AutoCloseable trackerLink;
     /** The Coinage link that pays the Coins of Rewards.json, null without Coinage. */
     private AutoCloseable coinageLink;
+    /** The bindings that write sibling counters, see SiblingLinks. */
+    private SiblingLinks siblingLinks;
+    /** The 1.7.2 tracking hooks and what they can reach. */
+    private final Hooks hooks = new Hooks(getLogger());
+    private Hooks.Context hookContext;
+    private Set<Sibling> siblings = Set.of();
     /** The 5 second look at the TrackerAPI plugin object that notices a reload of it. */
     private ScheduledFuture<?> trackerWatch;
     private final Map<UUID, Long> lastChatAt = new ConcurrentHashMap<>();
@@ -275,8 +286,10 @@ public final class FeatsPlugin extends JavaPlugin {
         config.save();
 
         io = newIoExecutor();
-        boolean factions = Siblings.installed(Siblings.DOMINION);
-        registry = new FeatRegistry(factions);
+        siblings = Siblings.present();
+        boolean factions = siblings.contains(Sibling.DOMINION);
+        Set<Pack> packs = config().packs(() -> Hardcore.detect(getLogger()));
+        registry = new FeatRegistry(siblings, packs);
         store = new ProgressStore(getDataDirectory(), getLogger());
         world = new WorldStore(getDataDirectory(), getLogger());
         loadWorld();
@@ -310,9 +323,13 @@ public final class FeatsPlugin extends JavaPlugin {
                 : TrackerSwitch.ENGINE.find();
         TrackerSwitch.Path path = TrackerSwitch.decide(mode, found);
         trackerSwitch = new TrackerSwitch(mode, path, found, TrackerSwitch.ENGINE);
+        hookContext = new Hooks.Context(this, tracker, registry, this::config, getLogger(), world, siblings,
+                path == TrackerSwitch.Path.OWN, sessions);
         if (path == TrackerSwitch.Path.OWN) {
             registerOwnTracking();
+            hooks.registerOwn(hookContext, getEntityStoreRegistry(), getEventRegistry());
         }
+        hooks.registerAlways(hookContext, getEntityStoreRegistry(), getEventRegistry());
         memories = new MemoryTracker(tracker, getLogger());
         sampler = new PlayerSampler(tracker, memories, getLogger());
         try {
@@ -328,6 +345,25 @@ public final class FeatsPlugin extends JavaPlugin {
         if (factions) {
             getLogger().at(Level.INFO).log("Dominion is installed, so the %d Factions feats are in", registry.inCategory(Category.FACTIONS).size());
         }
+        for (Sibling s : siblings) {
+            if (s != Sibling.DOMINION && s != Sibling.TRACKER_API) {
+                getLogger().at(Level.INFO).log("%s is installed, so its %d feats are in", s.pluginName(),
+                        registry.personal().stream().filter(f -> f.requires().contains(s)).count());
+            }
+        }
+        if (!packs.isEmpty()) {
+            getLogger().at(Level.INFO).log("Packs on: %s", packs);
+        }
+    }
+
+    /** The siblings the plugin manager listed at setup. */
+    public Set<Sibling> siblings() {
+        return siblings;
+    }
+
+    /** What the tracking hooks and sibling bindings can reach. Null before setup. */
+    public Hooks.Context hookContext() {
+        return hookContext;
     }
 
     /**
@@ -399,6 +435,8 @@ public final class FeatsPlugin extends JavaPlugin {
         }
         startTrackerLink();
         startCoinageLink();
+        siblingLinks = SiblingLinks.start(hookContext);
+        hooks.start(hookContext);
         logDiscordPath();
         ticker = HytaleServer.SCHEDULED_EXECUTOR.scheduleAtFixedRate(this::tick, 1, 1, TimeUnit.SECONDS);
         int every = config().autosaveSeconds();
@@ -551,6 +589,11 @@ public final class FeatsPlugin extends JavaPlugin {
         public HytaleLogger logger() {
             return getLogger();
         }
+
+        @Override
+        public Hooks.Context context() {
+            return hookContext;
+        }
     }
 
     @Override
@@ -583,6 +626,17 @@ public final class FeatsPlugin extends JavaPlugin {
         }
         if (ticker != null) {
             ticker.cancel(false);
+        }
+        if (siblingLinks != null) {
+            try {
+                siblingLinks.close();
+            } catch (Exception | LinkageError e) {
+                getLogger().at(Level.FINE).withCause(e).log("Feats could not unlink from a sibling");
+            }
+            siblingLinks = null;
+        }
+        if (hookContext != null) {
+            hooks.stop(hookContext);
         }
         if (flags != null) {
             flags.stop();
@@ -686,7 +740,9 @@ public final class FeatsPlugin extends JavaPlugin {
         long joinedAt = System.currentTimeMillis();
         sessions.start(uuid, joinedAt);
         progress.setSessionStart(joinedAt); // read back only if Feats reloads during this session
+        progress.setFirstSeenIfAbsent(joinedAt);
         tracker.increment(uuid, StatKeys.JOINS, 1);
+        hooks.joined(hookContext, uuid, playerRef, progress, joinedAt);
         if (config().welcomeHint()) {
             int unlocked = progress.unlockedCount();
             playerRef.sendMessage(Message.join(
@@ -812,7 +868,9 @@ public final class FeatsPlugin extends JavaPlugin {
             return;
         }
         UUID uuid = playerRef.getUuid();
-        tracker.raiseTo(uuid, StatKeys.LONGEST_SESSION, sessions.end(uuid, System.currentTimeMillis()));
+        long leftAt = System.currentTimeMillis();
+        hooks.left(hookContext, uuid, leftAt);
+        tracker.raiseTo(uuid, StatKeys.LONGEST_SESSION, sessions.end(uuid, leftAt));
         PlayerProgress leaving = tracker.loadedProgress(uuid);
         if (leaving != null) {
             leaving.setSessionStart(0); // the session is over, the leaving save clears it from the file
@@ -924,16 +982,18 @@ public final class FeatsPlugin extends JavaPlugin {
             boolean sample = ownTracking(); // with TrackerAPI the samples arrive as PlayerMoved and MemoryRecorded
             long now = System.currentTimeMillis();
             Map<World, List<PlayerRef>> byWorld = null;
+            List<PlayerRef> online = new ArrayList<>();
             for (PlayerRef ref : Universe.get().getPlayers()) {
                 UUID uuid = ref.getUuid();
                 if (!tracker.isLoaded(uuid)) {
                     continue;
                 }
+                online.add(ref);
                 tracker.increment(uuid, StatKeys.PLAYTIME, 1);
                 if (recordSessions) {
                     tracker.raiseTo(uuid, StatKeys.LONGEST_SESSION, sessions.seconds(uuid, now));
                 }
-                World world = sample ? worldOf(ref) : null;
+                World world = worldOf(ref);
                 if (world != null) {
                     if (byWorld == null) {
                         byWorld = new HashMap<>(4);
@@ -941,11 +1001,18 @@ public final class FeatsPlugin extends JavaPlugin {
                     byWorld.computeIfAbsent(world, w -> new ArrayList<>()).add(ref);
                 }
             }
-            if (byWorld != null && ownTracking()) {
+            hooks.tick(hookContext, now, online);
+            if (byWorld != null) {
                 for (Map.Entry<World, List<PlayerRef>> e : byWorld.entrySet()) {
                     List<PlayerRef> players = e.getValue();
+                    World world = e.getKey();
                     try {
-                        e.getKey().execute(() -> sampler.sampleWorld(players, trackDistance));
+                        world.execute(() -> {
+                            if (sample) {
+                                sampler.sampleWorld(players, trackDistance);
+                            }
+                            hooks.sampleWorld(hookContext, world, players, sample, now);
+                        });
                     } catch (RuntimeException rejected) {
                         // the world is closing, its players are sampled again once they are elsewhere
                     }

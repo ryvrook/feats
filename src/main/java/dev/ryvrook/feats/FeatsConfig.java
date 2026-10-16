@@ -104,6 +104,62 @@ public final class FeatsConfig {
                     (c, v, extra) -> c.tracker = v,
                     (c, extra) -> c.tracker)
             .add()
+            .append(new KeyedCodec<>("PackSocial", Codec.BOOLEAN),
+                    (c, v, extra) -> c.packSocial = v,
+                    (c, extra) -> c.packSocial)
+            .add()
+            .append(new KeyedCodec<>("PackHardcore", Codec.STRING),
+                    (c, v, extra) -> c.packHardcore = v,
+                    (c, extra) -> c.packHardcore)
+            .add()
+            .append(new KeyedCodec<>("PackPvp", Codec.BOOLEAN),
+                    (c, v, extra) -> c.packPvp = v,
+                    (c, extra) -> c.packPvp)
+            .add()
+            .append(new KeyedCodec<>("PackCalendar", Codec.BOOLEAN),
+                    (c, v, extra) -> c.packCalendar = v,
+                    (c, extra) -> c.packCalendar)
+            .add()
+            .append(new KeyedCodec<>("PackGrind", Codec.BOOLEAN),
+                    (c, v, extra) -> c.packGrind = v,
+                    (c, extra) -> c.packGrind)
+            .add()
+            .append(new KeyedCodec<>("Banner", Codec.STRING),
+                    (c, v, extra) -> c.banner = v,
+                    (c, extra) -> c.banner)
+            .add()
+            .append(new KeyedCodec<>("BannerSeconds", Codec.INTEGER),
+                    (c, v, extra) -> c.bannerSeconds = v,
+                    (c, extra) -> c.bannerSeconds)
+            .add()
+            .append(new KeyedCodec<>("BannerRareBelowPercent", Codec.INTEGER),
+                    (c, v, extra) -> c.bannerRareBelowPercent = v,
+                    (c, extra) -> c.bannerRareBelowPercent)
+            .add()
+            .append(new KeyedCodec<>("BannerBroadcast", Codec.BOOLEAN),
+                    (c, v, extra) -> c.bannerBroadcast = v,
+                    (c, extra) -> c.bannerBroadcast)
+            .add()
+            .append(new KeyedCodec<>("BannerSound", Codec.STRING),
+                    (c, v, extra) -> c.bannerSound = v,
+                    (c, extra) -> c.bannerSound)
+            .add()
+            .append(new KeyedCodec<>("BannerParticles", Codec.BOOLEAN),
+                    (c, v, extra) -> c.bannerParticles = v,
+                    (c, extra) -> c.bannerParticles)
+            .add()
+            .append(new KeyedCodec<>("FullHouse", Codec.INTEGER),
+                    (c, v, extra) -> c.fullHouse = v,
+                    (c, extra) -> c.fullHouse)
+            .add()
+            .append(new KeyedCodec<>("CalendarZone", Codec.STRING),
+                    (c, v, extra) -> c.calendarZone = v,
+                    (c, extra) -> c.calendarZone)
+            .add()
+            .append(new KeyedCodec<>("ServerTotals", Codec.BOOLEAN),
+                    (c, v, extra) -> c.serverTotals = v,
+                    (c, extra) -> c.serverTotals)
+            .add()
             .build();
 
     private boolean showToasts = true;
@@ -125,6 +181,20 @@ public final class FeatsConfig {
     private String discordWebhookUrl = "";
     private String discordMinimumTier = "GOLD";
     private String discordVia = "auto";
+    private boolean packSocial = true;
+    private String packHardcore = "auto";
+    private boolean packPvp = false;
+    private boolean packCalendar = true;
+    private boolean packGrind = false;
+    private String banner = "RARE";
+    private int bannerSeconds = 6;
+    private int bannerRareBelowPercent = 1;
+    private boolean bannerBroadcast = true;
+    private String bannerSound = "SFX_Event_Chapter_1_Complete_Sting";
+    private boolean bannerParticles = false;
+    private int fullHouse = 20;
+    private String calendarZone = "";
+    private boolean serverTotals = true;
     private String[] disabledWorlds = new String[0];
     private boolean pausePlaytimeWhenDisabled = true;
     private String unlockSound = "SFX_Memories_Unlock_Local";
@@ -245,5 +315,89 @@ public final class FeatsConfig {
      */
     public String tracker() {
         return tracker == null || tracker.isBlank() ? "auto" : tracker;
+    }
+    // ---- 1.7.2 ---------------------------------------------------------------
+
+    /**
+     * The packs that are on. {@code hardcore} answers whether the universe runs hardcore mode, read once at
+     * start, for the {@code auto} value of PackHardcore.
+     */
+    public java.util.Set<dev.ryvrook.feats.model.Pack> packs(java.util.function.BooleanSupplier hardcore) {
+        java.util.Set<dev.ryvrook.feats.model.Pack> out = java.util.EnumSet.noneOf(dev.ryvrook.feats.model.Pack.class);
+        if (packSocial) {
+            out.add(dev.ryvrook.feats.model.Pack.SOCIAL);
+        }
+        String hc = packHardcore == null ? "auto" : packHardcore.trim().toLowerCase(Locale.ROOT);
+        boolean hardcoreOn = switch (hc) {
+            case "true", "on", "yes" -> true;
+            case "false", "off", "no" -> false;
+            default -> hardcore != null && hardcore.getAsBoolean();
+        };
+        if (hardcoreOn) {
+            out.add(dev.ryvrook.feats.model.Pack.HARDCORE);
+        }
+        if (packPvp) {
+            out.add(dev.ryvrook.feats.model.Pack.PVP);
+        }
+        if (packCalendar) {
+            out.add(dev.ryvrook.feats.model.Pack.CALENDAR);
+        }
+        if (packGrind) {
+            out.add(dev.ryvrook.feats.model.Pack.GRIND);
+        }
+        return out;
+    }
+
+    /** OFF, PLATINUM, RARE or ALL, upper case. Unknown reads as RARE. */
+    public String banner() {
+        String b = banner == null ? "RARE" : banner.trim().toUpperCase(Locale.ROOT);
+        return switch (b) {
+            case "OFF", "PLATINUM", "RARE", "ALL" -> b;
+            default -> "RARE";
+        };
+    }
+
+    /** 2 to 30 seconds. */
+    public int bannerSeconds() {
+        return Math.max(2, Math.min(30, bannerSeconds));
+    }
+
+    /** 0 to 100. */
+    public int bannerRareBelowPercent() {
+        return Math.max(0, Math.min(100, bannerRareBelowPercent));
+    }
+
+    public boolean bannerBroadcast() {
+        return bannerBroadcast;
+    }
+
+    /** The sound id, or empty for none. */
+    public String bannerSound() {
+        return bannerSound == null ? "" : bannerSound.trim();
+    }
+
+    public boolean bannerParticles() {
+        return bannerParticles;
+    }
+
+    /** The online count for the Full House milestone, at least 2. */
+    public int fullHouse() {
+        return Math.max(2, fullHouse);
+    }
+
+    /** The zone for the Calendar pack and the join hour feats, the system default when empty or unknown. */
+    public java.time.ZoneId calendarZone() {
+        if (calendarZone == null || calendarZone.isBlank()) {
+            return java.time.ZoneId.systemDefault();
+        }
+        try {
+            return java.time.ZoneId.of(calendarZone.trim());
+        } catch (RuntimeException e) {
+            return java.time.ZoneId.systemDefault();
+        }
+    }
+
+    public boolean serverTotals() {
+        return serverTotals;
     }
 }

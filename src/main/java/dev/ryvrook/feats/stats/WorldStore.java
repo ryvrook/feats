@@ -44,6 +44,9 @@ public final class WorldStore {
     private final HytaleLogger logger;
     private final Map<String, Entry> milestones = new LinkedHashMap<>();
     private final Map<String, Entry> firsts = new LinkedHashMap<>();
+    /** Server totals such as blocks broken by everyone, raised on hot paths and flushed with the file. */
+    private final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicLong> totals =
+            new java.util.concurrent.ConcurrentHashMap<>();
     private final Object fileLock = new Object();
     private volatile boolean dirty;
 
@@ -138,6 +141,48 @@ public final class WorldStore {
         return true;
     }
 
+    // ---- server totals, safe from any thread ---------------------------------
+
+    /** A server total, 0 when unknown. */
+    public long total(String key) {
+        java.util.concurrent.atomic.AtomicLong v = key == null ? null : totals.get(key);
+        return v == null ? 0L : v.get();
+    }
+
+    /** Adds to a server total and returns the new value. Marks the file dirty. */
+    public long addTotal(String key, long amount) {
+        if (key == null || amount == 0) {
+            return total(key);
+        }
+        long v = totals.computeIfAbsent(key, k -> new java.util.concurrent.atomic.AtomicLong()).addAndGet(amount);
+        dirty = true;
+        return v;
+    }
+
+    /** Raises a server total to {@code value} when it is higher. Returns true when it rose. */
+    public boolean raiseTotal(String key, long value) {
+        if (key == null) {
+            return false;
+        }
+        java.util.concurrent.atomic.AtomicLong v = totals.computeIfAbsent(key, k -> new java.util.concurrent.atomic.AtomicLong());
+        long seen = v.get();
+        while (value > seen) {
+            if (v.compareAndSet(seen, value)) {
+                dirty = true;
+                return true;
+            }
+            seen = v.get();
+        }
+        return false;
+    }
+
+    /** Every server total, a copy. */
+    public Map<String, Long> totals() {
+        Map<String, Long> out = new java.util.TreeMap<>();
+        totals.forEach((k, v) -> out.put(k, v.get()));
+        return out;
+    }
+
     public boolean isDirty() {
         return dirty;
     }
@@ -168,6 +213,14 @@ public final class WorldStore {
                 firsts.clear();
                 read(doc.get("milestones"), milestones, false);
                 read(doc.get("firsts"), firsts, true);
+                totals.clear();
+                if (doc.get("totals") instanceof Document t) {
+                    for (Map.Entry<String, Object> e : t.entrySet()) {
+                        if (e.getValue() instanceof Number n) {
+                            totals.put(e.getKey(), new java.util.concurrent.atomic.AtomicLong(n.longValue()));
+                        }
+                    }
+                }
                 dirty = false;
             }
         }
@@ -202,10 +255,13 @@ public final class WorldStore {
         synchronized (fileLock) {
             Document doc;
             synchronized (this) {
+                Document totalsDoc = new Document();
+                totals().forEach(totalsDoc::append);
                 doc = new Document()
                         .append("version", 1)
                         .append("milestones", write(milestones))
-                        .append("firsts", write(firsts));
+                        .append("firsts", write(firsts))
+                        .append("totals", totalsDoc);
                 dirty = false;
             }
             try {

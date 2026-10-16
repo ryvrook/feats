@@ -39,6 +39,14 @@ public final class PlayerProgress {
      * for the next join. Cleared once handed to the rewards, and by a reset.
      */
     private final Set<String> pendingRewards = new LinkedHashSet<>();
+    /** Other players seen online at the same time, oldest first, at most {@link #MET_CAP}. */
+    private final Set<UUID> met = new LinkedHashSet<>();
+    /** Past this the met set stops growing, which is far above any feat target. */
+    public static final int MET_CAP = 2_000;
+    /** Epoch millis of the first time Feats saw the player. Set on first load, so for a file from before 1.7.2 it is the upgrade. */
+    private long firstSeen;
+    /** The local date of the last counted join as yyyymmdd, for the join streak. 0 before the first. */
+    private int lastJoinDay;
     /** The feat id shown as this player's title, or null for none. */
     private String title;
     /** False when the player muted their own toasts, sounds and big titles with /feats notify off. */
@@ -239,6 +247,49 @@ public final class PlayerProgress {
         return Set.copyOf(rewarded);
     }
 
+    public synchronized long firstSeen() {
+        return firstSeen;
+    }
+
+    /** Sets the first seen time once. Returns true when this call set it. */
+    public synchronized boolean setFirstSeenIfAbsent(long epochMillis) {
+        if (firstSeen > 0 || epochMillis <= 0) {
+            return false;
+        }
+        firstSeen = epochMillis;
+        dirty = true;
+        return true;
+    }
+
+    public synchronized int lastJoinDay() {
+        return lastJoinDay;
+    }
+
+    public synchronized void setLastJoinDay(int yyyymmdd) {
+        if (lastJoinDay != yyyymmdd) {
+            lastJoinDay = yyyymmdd;
+            dirty = true;
+        }
+    }
+
+    /** Remembers another player seen online. Returns true when they were new and the set was not full. */
+    public synchronized boolean meet(UUID other) {
+        if (other == null || other.equals(uuid) || met.size() >= MET_CAP || met.contains(other)) {
+            return false;
+        }
+        met.add(other);
+        dirty = true;
+        return true;
+    }
+
+    public synchronized int metCount() {
+        return met.size();
+    }
+
+    public synchronized boolean hasMet(UUID other) {
+        return other != null && met.contains(other);
+    }
+
     public synchronized Long unlockedAt(String featId) {
         return unlocked.get(featId);
     }
@@ -357,6 +408,8 @@ public final class PlayerProgress {
         unlocked.clear();
         shared.clear(); // refilled from the server milestones by the tracker
         pendingRewards.clear(); // the feats went with the reset, earning them again rewards them then
+        met.clear();
+        lastJoinDay = 0; // firstSeen stays, the player did first arrive when they did
         title = null;
         dirty = true;
     }
@@ -393,6 +446,19 @@ public final class PlayerProgress {
         }
         if (!notify) {
             doc.append("Notify", false);
+        }
+        if (firstSeen > 0) {
+            doc.append("FirstSeen", firstSeen);
+        }
+        if (lastJoinDay > 0) {
+            doc.append("LastJoinDay", lastJoinDay);
+        }
+        if (!met.isEmpty()) {
+            List<String> ids = new ArrayList<>(met.size());
+            for (UUID m : met) {
+                ids.add(m.toString());
+            }
+            doc.append("Met", ids);
         }
         return doc;
     }
@@ -444,6 +510,23 @@ public final class PlayerProgress {
         }
         if (doc.get("Notify") instanceof Boolean b) {
             progress.notify = b;
+        }
+        if (doc.get("FirstSeen") instanceof Number n && n.longValue() > 0) {
+            progress.firstSeen = n.longValue();
+        }
+        if (doc.get("LastJoinDay") instanceof Number n && n.intValue() > 0) {
+            progress.lastJoinDay = n.intValue();
+        }
+        if (doc.get("Met") instanceof List<?> list) {
+            for (Object o : list) {
+                if (o instanceof String id && progress.met.size() < MET_CAP) {
+                    try {
+                        progress.met.add(UUID.fromString(id));
+                    } catch (IllegalArgumentException ignored) {
+                        // skip a bad entry
+                    }
+                }
+            }
         }
         progress.dirty = false;
         return progress;

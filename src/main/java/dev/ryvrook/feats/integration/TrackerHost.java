@@ -32,4 +32,9 @@ public interface TrackerHost {
     void countChat(UUID uuid, long atMillis);
 
     HytaleLogger logger();
+
+    /** What the 1.7.2 hooks reach, so the bridge can feed the same in memory state they do. */
+    default dev.ryvrook.feats.track.Hooks.Context context() {
+        return null;
+    }
 }

@@ -85,7 +85,7 @@ class LifecycleHooksTest {
 
     @Test
     void theApiVersionCountsTheHooks() {
-        assertEquals(2, FeatsApi.API_VERSION);
+        assertEquals(3, FeatsApi.API_VERSION);
     }
 
     /** FeatsApi objects without a plugin behind them. The hooks never read the plugin. */

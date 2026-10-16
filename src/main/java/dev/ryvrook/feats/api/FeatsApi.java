@@ -46,10 +46,11 @@ public final class FeatsApi {
     /**
      * Raised whenever a method, a record component or an event field is added. Version 2 came with Feats 1.7.0
      * and added the enable and disable hooks, {@link #top}, and the admin, hidden, rarity, category and description
-     * of {@link FeatUnlockedEvent}. Feats before 1.7.0 has no such field, so read it inside a try that catches
-     * {@link NoSuchFieldError} and treat a miss as version 1.
+     * of {@link FeatUnlockedEvent}. Version 3 came with Feats 1.7.2 and added the banner, pack and requires of
+     * {@link FeatInfo}, {@link #packs()}, {@link #siblings()} and {@link #serverStat}. Feats before 1.7.0 has no
+     * such field, so read it inside a try that catches {@link NoSuchFieldError} and treat a miss as version 1.
      */
-    public static final int API_VERSION = 2;
+    public static final int API_VERSION = 3;
 
     private static final Logger LOG = Logger.getLogger("Feats");
     private static final List<Consumer<FeatsApi>> ENABLE = new CopyOnWriteArrayList<>();
@@ -229,6 +230,30 @@ public final class FeatsApi {
         return Collections.unmodifiableList(out);
     }
 
+    /** The packs that are on, such as SOCIAL, in display order. Since API version 3. */
+    public List<String> packs() {
+        List<String> out = new ArrayList<>();
+        for (dev.ryvrook.feats.model.Pack p : plugin.tracker().registry().packs()) {
+            out.add(p.name());
+        }
+        return Collections.unmodifiableList(out);
+    }
+
+    /** The plugin names of the siblings Feats found at setup, such as Coinage. Since API version 3. */
+    public List<String> siblings() {
+        List<String> out = new ArrayList<>();
+        for (dev.ryvrook.feats.model.Sibling s : plugin.siblings()) {
+            out.add(s.pluginName());
+        }
+        return Collections.unmodifiableList(out);
+    }
+
+    /** A server total from server.json, such as {@code blocks_broken} by everyone. 0 when unknown. Since API version 3. */
+    public long serverStat(String key) {
+        dev.ryvrook.feats.stats.WorldStore world = plugin.world();
+        return world == null ? 0L : world.total(key);
+    }
+
     /** Every feat in display order. Unmodifiable. */
     public List<FeatInfo> feats() {
         return feats;
@@ -342,7 +367,12 @@ public final class FeatsApi {
     }
 
     static FeatInfo info(Feat f) {
+        java.util.Set<String> requires = new java.util.TreeSet<>();
+        for (dev.ryvrook.feats.model.Sibling s : f.requires()) {
+            requires.add(s.pluginName());
+        }
         return new FeatInfo(f.id(), f.name(), f.description(), f.category().displayName(), f.tier().name(),
-                f.hidden(), f.tier().points(), f.scope().name());
+                f.hidden(), f.tier().points(), f.scope().name(), f.banner(), f.pack() == null ? null : f.pack().name(),
+                requires);
     }
 }

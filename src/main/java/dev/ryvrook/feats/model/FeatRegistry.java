@@ -9,6 +9,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.EnumSet;
 
 import static dev.ryvrook.feats.model.Category.*;
 import static dev.ryvrook.feats.model.Tier.*;
@@ -25,21 +27,39 @@ public final class FeatRegistry {
     private final List<Feat> personal = new ArrayList<>();
     private final List<Feat> server = new ArrayList<>();
 
-    /** The built-in feats without the Factions tab. */
+    /** The siblings and packs this registry was built for. */
+    private final Set<Sibling> present;
+    private final Set<Pack> packs;
+    private final List<Feat> totalTriggered = new ArrayList<>();
+    /** Feats skipped because a sibling or pack is missing, by id, so a grant of one can say why. */
+    private final Map<String, String> skipped = new HashMap<>();
+
+    /** The built-in feats without the Factions tab, no sibling and no pack. */
     public FeatRegistry() {
-        this(false);
+        this(EnumSet.noneOf(Sibling.class), EnumSet.noneOf(Pack.class));
     }
 
     /**
      * The built-in feats. {@code factions} adds the Factions tab, read from the {@code dominion:} counters
-     * Dominion Factions mirrors into Feats, so it is only worth adding when Dominion is installed.
+     * Dominion Factions mirrors into Feats, so it is only worth adding when Dominion is installed. No packs.
      */
     public FeatRegistry(boolean factions) {
+        this(factions ? EnumSet.of(Sibling.DOMINION) : EnumSet.noneOf(Sibling.class), EnumSet.noneOf(Pack.class));
+    }
+
+    /**
+     * The built-in feats for the installed siblings and the packs that are on. A feat that requires a sibling not
+     * in {@code present}, or sits in a pack not in {@code packs}, is left out, so its tab is not shown and it is
+     * not counted. Its counters keep moving and a later registry with it in credits the player at their next join.
+     */
+    public FeatRegistry(Set<Sibling> present, Set<Pack> packs) {
+        this.present = present == null || present.isEmpty() ? EnumSet.noneOf(Sibling.class) : EnumSet.copyOf(present);
+        this.packs = packs == null || packs.isEmpty() ? EnumSet.noneOf(Pack.class) : EnumSet.copyOf(packs);
         for (Category c : Category.values()) {
             byCategory.put(c, new ArrayList<>());
         }
         defineAll();
-        if (factions) {
+        if (this.present.contains(Sibling.DOMINION)) {
             defineFactions();
         }
         defineWorld();
@@ -128,9 +148,18 @@ public final class FeatRegistry {
     // ------------------------------------------------------------------
 
     private void add(Feat feat) {
-        if (byId.putIfAbsent(feat.id(), feat) != null) {
+        if (byId.containsKey(feat.id()) || skipped.containsKey(feat.id())) {
             throw new IllegalStateException("duplicate feat id " + feat.id());
         }
+        if (!present.containsAll(feat.requires())) {
+            skipped.put(feat.id(), "needs " + feat.requires());
+            return;
+        }
+        if (feat.pack() != null && !packs.contains(feat.pack())) {
+            skipped.put(feat.id(), "pack " + feat.pack() + " is off");
+            return;
+        }
+        byId.put(feat.id(), feat);
         byCategory.get(feat.category()).add(feat);
         for (Requirement r : feat.requirements()) {
             byKey.computeIfAbsent(r.key(), k -> new ArrayList<>()).add(feat);
@@ -147,11 +176,42 @@ public final class FeatRegistry {
         }
         server.add(feat);
         Trigger t = feat.trigger();
-        if (t.kind() == Trigger.Kind.AFTER) {
-            byAfter.computeIfAbsent(t.key(), k -> new ArrayList<>()).add(feat);
-        } else {
-            flagged.add(feat);
+        switch (t.kind()) {
+            case AFTER -> byAfter.computeIfAbsent(t.key(), k -> new ArrayList<>()).add(feat);
+            case FLAG -> flagged.add(feat);
+            case TOTAL -> totalTriggered.add(feat);
         }
+    }
+
+    /** World feats raised by a server total in server.json. */
+    public List<Feat> totalTriggered() {
+        return Collections.unmodifiableList(totalTriggered);
+    }
+
+    /** The siblings this registry was built with. */
+    public Set<Sibling> present() {
+        return Collections.unmodifiableSet(present);
+    }
+
+    /** The packs this registry was built with. */
+    public Set<Pack> packs() {
+        return Collections.unmodifiableSet(packs);
+    }
+
+    /** Why a defined feat is not in this registry, such as "pack GRIND is off", or null when it is in or unknown. */
+    public String whySkipped(String id) {
+        return id == null ? null : skipped.get(id);
+    }
+
+    /** Every tab that has at least one feat, in display order. */
+    public List<Category> tabs() {
+        List<Category> out = new ArrayList<>();
+        for (Category c : Category.values()) {
+            if (!byCategory.get(c).isEmpty()) {
+                out.add(c);
+            }
+        }
+        return out;
     }
 
     /** A server milestone, reached once for the whole server. */
@@ -174,6 +234,20 @@ public final class FeatRegistry {
 
     private void feat(String id, String name, String desc, Category cat, Tier tier, String icon, String key, long target) {
         add(new Feat(id, name, desc, cat, tier, icon, List.of(new Requirement(key, target)), false));
+    }
+
+    /** A personal feat built with the record's {@code withBanner}, {@code requiring} and {@code inPack}. */
+    private void define(Feat feat) {
+        add(feat);
+    }
+
+    /** A personal feat as a value, to decorate with {@code withBanner}, {@code requiring} or {@code inPack} before {@link #define}. */
+    private static Feat of(String id, String name, String desc, Category cat, Tier tier, String icon, boolean hidden, Requirement... reqs) {
+        return new Feat(id, name, desc, cat, tier, icon, List.of(reqs), hidden);
+    }
+
+    private static Trigger total(String key, long target) {
+        return Trigger.total(key, target);
     }
 
     private void hidden(String id, String name, String desc, Category cat, Tier tier, String icon, String key, long target) {
