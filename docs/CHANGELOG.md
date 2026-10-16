@@ -3,6 +3,17 @@
 Every notable change to Feats is recorded here. The format follows Keep a Changelog and the project uses
 semantic versioning.
 
+## 1.7.4 - 2026-10-16
+
+Needs the Hytale 0.7.0 release server or newer. No feat was added or removed.
+
+### For players
+
+- Planting a crop seed counts toward Green Thumb, Farmer, Agriculturist and Breadbasket. Those read
+  `placed:crop`, which only a `Plant_Crop_` item set down as a block gave, and the seed bag is what is in hand when
+  a crop is planted. Planting a tree seed counts toward Arborist the same way, it read `placed:sapling` and only
+  a sapling item set down by hand gave it.
+
 ## 1.7.3 - 2026-10-16
 
 Needs the Hytale 0.7.0 release server or newer. With every pack and every sibling mod installed there are 528

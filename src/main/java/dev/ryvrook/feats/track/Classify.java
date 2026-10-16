@@ -607,7 +607,21 @@ public final class Classify {
         return species.isEmpty() || species.equals("Trunk") ? null : species;
     }
 
-    /** Keys to bump when a player places seeds, or an empty list for any other item. */
+    /**
+     * The seed names whose bag plants a {@code Plant_Crop_} block, without the tier digits. Every other
+     * {@code Plant_Seeds_} item is a tree seed and plants a {@code Plant_Sapling_} block, apart from the
+     * sunflower, which plants {@code Plant_Sunflower_Stage_0} [Assets.zip 0.7.1, the SeedId var of each seed
+     * item].
+     */
+    private static final Set<String> CROP_SEEDS = Set.of("Aubergine", "Carrot", "Cauliflower", "Chilli", "Corn",
+            "Cotton", "Health", "Lettuce", "Mana", "Mushroom", "Onion", "Potato", "Pumpkin", "Rice", "Stamina",
+            "Tomato", "Turnip", "Wheat", "Wild");
+
+    /**
+     * Keys to bump when a player places seeds, or an empty list for any other item. The seed bag is the item
+     * in hand when a seed is planted, so a crop seed also counts {@code placed:crop} and a tree seed
+     * {@code placed:sapling}, the same keys a crop or sapling item set down by hand gives.
+     */
     public static List<String> seedPlanted(String itemId) {
         return itemId == null || !itemId.startsWith("Plant_Seeds_") ? List.of() : SEED.get(itemId);
     }
@@ -626,7 +640,14 @@ public final class Classify {
         if (end == 0) {
             return List.of(StatKeys.SEEDS_PLANTED);
         }
-        return List.of(StatKeys.SEEDS_PLANTED, StatKeys.SEED_PREFIX + crop.substring(0, end));
+        String name = crop.substring(0, end);
+        if (CROP_SEEDS.contains(name)) {
+            return List.of(StatKeys.SEEDS_PLANTED, StatKeys.SEED_PREFIX + name, StatKeys.PLACED_PREFIX + "crop");
+        }
+        if (name.equals("Sunflower")) {
+            return List.of(StatKeys.SEEDS_PLANTED, StatKeys.SEED_PREFIX + name);
+        }
+        return List.of(StatKeys.SEEDS_PLANTED, StatKeys.SEED_PREFIX + name, StatKeys.PLACED_PREFIX + "sapling");
     }
 
     /** Keys to bump when a player tames an animal that arrives under the given Tamed_ role. */

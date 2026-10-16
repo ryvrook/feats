@@ -138,6 +138,17 @@ class ClassifyTest {
     }
 
     @Test
+    void cropSeedsCountAsCropsAndTreeSeedsAsSaplings() {
+        assertEquals(List.of("seeds_planted", "seed:Carrot", "placed:crop"), Classify.seedPlanted("Plant_Seeds_Carrot"));
+        assertEquals(List.of("seeds_planted", "seed:Health", "placed:crop"), Classify.seedPlanted("Plant_Seeds_Health2"));
+        assertEquals(List.of("seeds_planted", "seed:Mushroom", "placed:crop"), Classify.seedPlanted("Plant_Seeds_Mushroom"));
+        assertEquals(List.of("seeds_planted", "seed:Oak", "placed:sapling"), Classify.seedPlanted("Plant_Seeds_Oak"));
+        assertEquals(List.of("seeds_planted", "seed:Fir", "placed:sapling"), Classify.seedPlanted("Plant_Seeds_Fir"));
+        assertEquals(List.of("seeds_planted", "seed:Sunflower"), Classify.seedPlanted("Plant_Seeds_Sunflower"));
+        assertEquals(List.of(), Classify.seedPlanted("Plant_Seeds_Carrot_Eternal"), "creative seeds stay out");
+    }
+
+    @Test
     void woodSpeciesAndSeeds() {
         assertEquals("Oak", Classify.woodSpecies("Wood_Oak_Trunk"));
         assertEquals("Oak", Classify.woodSpecies("Wood_Oak_Trunk_Stairs"));
@@ -145,8 +156,8 @@ class ClassifyTest {
         assertNull(Classify.woodSpecies("Wood_Hardwood_Planks"));
         assertNull(Classify.woodSpecies("Rock_Stone"));
         assertNull(Classify.woodSpecies(null));
-        assertEquals(List.of("seeds_planted", "seed:Wheat"), Classify.seedPlanted("Plant_Seeds_Wheat"));
-        assertEquals(List.of("seeds_planted", "seed:Chilli"), Classify.seedPlanted("Plant_Seeds_Chilli"));
+        assertEquals(List.of("seeds_planted", "seed:Wheat", "placed:crop"), Classify.seedPlanted("Plant_Seeds_Wheat"));
+        assertEquals(List.of("seeds_planted", "seed:Chilli", "placed:crop"), Classify.seedPlanted("Plant_Seeds_Chilli"));
         assertEquals(List.of(), Classify.seedPlanted("Plant_Seeds_Wheat_Eternal"));
         assertEquals(List.of(), Classify.seedPlanted("Plant_Seeds_Test_Tree"));
         assertEquals(List.of(), Classify.seedPlanted("Plant_Crop_Wheat"));
