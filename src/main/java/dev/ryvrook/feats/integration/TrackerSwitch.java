@@ -76,13 +76,29 @@ public final class TrackerSwitch {
     private final Mode mode;
     private final Path path;
     private final Lookup lookup;
+    /**
+     * How long a TrackerAPI that reloads its dependents may be gone before Feats warns. A {@code /plugin reload}
+     * of TrackerAPI leaves it unloaded for about 10 seconds while it sets up again, and it reloads Feats after.
+     */
+    static final long UNLOAD_GRACE_NANOS = java.util.concurrent.TimeUnit.SECONDS.toNanos(60);
+
+    private final java.util.function.LongSupplier clock;
     private Object seen;
+    private String seenVersion;
+    /** When a TrackerAPI that reloads its dependents went missing, or -1. */
+    private long missingSince = -1;
 
     public TrackerSwitch(Mode mode, Path path, Found atSetup, Lookup lookup) {
+        this(mode, path, atSetup, lookup, System::nanoTime);
+    }
+
+    TrackerSwitch(Mode mode, Path path, Found atSetup, Lookup lookup, java.util.function.LongSupplier clock) {
         this.mode = mode;
         this.path = path;
         this.lookup = lookup;
+        this.clock = clock;
         this.seen = atSetup.plugin();
+        this.seenVersion = atSetup.version();
     }
 
     public static Path decide(Mode mode, Found found) {
@@ -133,9 +149,20 @@ public final class TrackerSwitch {
         }
         Object current = now.plugin();
         if (current == seen) {
+            if (current == null && missingSince >= 0 && clock.getAsLong() - missingSince >= UNLOAD_GRACE_NANOS) {
+                missingSince = -1; // gone for longer than a reload takes, warn once
+                return unloaded();
+            }
             return null;
         }
+        String before = seenVersion;
         seen = current;
+        seenVersion = now.version();
+        if (current == null && path == Path.TRACKER_API && reloadsDependents(before)) {
+            missingSince = clock.getAsLong(); // most likely a /plugin reload, which reloads Feats after
+            return null;
+        }
+        missingSince = -1;
         if (path == Path.TRACKER_API && current != null && reloadsDependents(now.version())) {
             return null; // TrackerAPI reloads Feats right after, which links again
         }
@@ -143,7 +170,7 @@ public final class TrackerSwitch {
                 ? " Feats cannot switch to its own tracking after setup, so the reload is needed either way." : "";
         return switch (path) {
             case TRACKER_API -> current == null
-                    ? "TrackerAPI was unloaded, so Feats counts nothing until TrackerAPI is back and /plugin reload Feats has run." + noSwitch
+                    ? unloaded()
                     : "TrackerAPI was reloaded, so Feats lost its link to it and counts nothing. Run /plugin reload Feats to link again." + noSwitch;
             case NONE -> current == null ? null
                     : "TrackerAPI is now loaded. Run /plugin reload Feats to start tracking through it.";
@@ -151,6 +178,12 @@ public final class TrackerSwitch {
                     ? "TrackerAPI is now loaded but Feats chose its own tracking at setup. Run /plugin reload Feats to track through TrackerAPI."
                     : null;
         };
+    }
+
+    private String unloaded() {
+        String noSwitch = mode == Mode.AUTO
+                ? " Feats cannot switch to its own tracking after setup, so the reload is needed either way." : "";
+        return "TrackerAPI was unloaded, so Feats counts nothing until TrackerAPI is back and /plugin reload Feats has run." + noSwitch;
     }
 
     /** True when this TrackerAPI version reloads Feats after its own reload. Null or unreadable is false. */

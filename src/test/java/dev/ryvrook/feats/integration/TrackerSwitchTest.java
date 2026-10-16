@@ -66,8 +66,32 @@ class TrackerSwitchTest {
         now[0] = new TrackerSwitch.Found(new Object(), "1.0.3", true);
         assertNull(watch.poll(), "a 1.0.3 reload reloads Feats, nothing to say");
         now[0] = TrackerSwitch.Found.MISSING;
-        String line = watch.poll();
-        assertNotNull(line, "an unload is still logged");
+        assertNull(watch.poll(), "an unload of a 1.0.3 waits out the reload window");
+        TrackerSwitch old = new TrackerSwitch(TrackerSwitch.Mode.AUTO, TrackerSwitch.Path.TRACKER_API, RUNNING,
+                () -> TrackerSwitch.Found.MISSING);
+        String line = old.poll();
+        assertNotNull(line, "an unload of an older one is logged at once");
         assertTrue(line.contains("unloaded"));
+    }
+
+    @Test
+    void aTrackerApiThatReloadsFeatsGetsAMinuteBeforeTheUnloadWarning() {
+        long[] clock = {0};
+        TrackerSwitch.Found running = new TrackerSwitch.Found(new Object(), "1.1.0", true);
+        TrackerSwitch.Found[] now = {running};
+        TrackerSwitch watch = new TrackerSwitch(TrackerSwitch.Mode.AUTO, TrackerSwitch.Path.TRACKER_API, running,
+                () -> now[0], () -> clock[0]);
+        now[0] = TrackerSwitch.Found.MISSING;
+        assertNull(watch.poll(), "the reload window of a plugin reload");
+        clock[0] = java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+        now[0] = new TrackerSwitch.Found(new Object(), "1.1.0", true);
+        assertNull(watch.poll(), "back within the window, it reloads Feats itself");
+        now[0] = TrackerSwitch.Found.MISSING;
+        assertNull(watch.poll());
+        clock[0] += TrackerSwitch.UNLOAD_GRACE_NANOS;
+        String line = watch.poll();
+        assertNotNull(line, "still gone after a minute");
+        assertTrue(line.contains("unloaded"));
+        assertNull(watch.poll(), "once");
     }
 }
