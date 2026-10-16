@@ -270,15 +270,16 @@ faction bank. Dominion 0.5.1 or newer keeps the first 15 moving, and Downsizing 
 reads a key Dominion has always sent. The other 13 added in 1.7.2, joining and being kicked, wars, alliances,
 upgrades, the faction market, foreign land, sieges defended, breaches, hill events, outposts and full power, need
 Dominion 0.7.1, which sends their keys. New Rank, added in 1.7.3, reads `dominion:rank_changes`, one for each
-promotion or demotion of the member, which Dominion sends from 0.7.2. Credits for offline members land in their file. Dominion also posts Feats unlocks in faction chat. Feats
-checks for Dominion when it starts, so after adding it restart or reload Feats.
+promotion or demotion of the member, which Dominion sends from 0.7.2. Credits for offline members land in their
+file. Dominion also posts Feats unlocks in faction chat. Feats checks for Dominion when it starts, so after adding
+it restart or reload Feats.
 
 **Chronicle Stats** reads progress through the API and shows feats on its player sheet. With Chronicle Stats
 1.5.0 installed Feats also adds the Chronicle tab of 6 feats worth 300 points on what only Chronicle keeps, the
 most blocks broken in one day, the most creatures defeated in one week, a month with every day active, and
 levels 10, 25 and 50 in RPG Leveling. The three level feats only move while Chronicle reports an RPG Leveling
-level. Chronicle and Feats each find the other by name, since neither can list the other as a dependency, so Feats
-looks for Chronicle every 5 seconds and follows it through a reload. Each player's window is read at most once
+level. Chronicle lists Feats as an optional dependency, so Feats cannot list Chronicle back without a cycle and
+finds it by name instead. Feats looks for Chronicle every 5 seconds and follows it through a reload. Each player's window is read at most once
 every 10 seconds per counter, a change held back by that is read on the next look, and the month of active days
 is read once a minute from the poll.
 
