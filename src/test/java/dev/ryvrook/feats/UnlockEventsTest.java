@@ -29,6 +29,14 @@ class UnlockEventsTest {
         assertEquals(0.031, e.rarity());
         assertEquals(feat.category().displayName(), e.category());
         assertEquals(feat.description(), e.description());
+        assertFalse(e.banner());
+    }
+
+    @Test
+    void theBannerFlagComesFromTheFeat() {
+        Feat feat = registry.all().getFirst().withBanner();
+        assertTrue(UnlockEvents.of(UUID.randomUUID(), "Ryv", feat, 5, false, false, -1, feat.banner()).banner());
+        assertFalse(UnlockEvents.of(UUID.randomUUID(), "Ryv", feat, 5, false, false, -1).banner());
     }
 
     @Test
@@ -45,5 +53,9 @@ class UnlockEventsTest {
         assertEquals(-1, e.rarity());
         assertEquals("", e.category());
         assertEquals("", e.description());
+        assertFalse(e.banner());
+        FeatUnlockedEvent v2 = new FeatUnlockedEvent(UUID.randomUUID(), "Ryv", "digger", "Digger", "BRONZE", 5, 5,
+                false, false, false, -1, "Mining", "Dig");
+        assertFalse(v2.banner());
     }
 }

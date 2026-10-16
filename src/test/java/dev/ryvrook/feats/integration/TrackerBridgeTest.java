@@ -5,11 +5,14 @@ import dev.ryvrook.feats.model.FeatRegistry;
 import dev.ryvrook.feats.stats.PlayerProgress;
 import dev.ryvrook.feats.stats.ProgressStore;
 import dev.ryvrook.feats.stats.StatKeys;
+import dev.ryvrook.feats.systems.CombatKinds;
+import dev.ryvrook.feats.systems.CombatMemory;
 import dev.ryvrook.feats.systems.DeepworksRuns;
 import dev.ryvrook.feats.systems.LabUses;
 import dev.ryvrook.feats.track.Classify;
 import dev.ryvrook.feats.track.FeatsTracker;
 import dev.ryvrook.feats.track.UnlockNotifier;
+import dev.ryvrook.feats.track.Windows;
 import dev.ryvrook.feats.track.WorldBounds;
 import dev.ryvrook.trackerapi.api.Actor;
 import dev.ryvrook.trackerapi.api.Counters;
@@ -28,16 +31,34 @@ import dev.ryvrook.trackerapi.api.event.BlockUsed;
 import dev.ryvrook.trackerapi.api.event.CreatureTamed;
 import dev.ryvrook.trackerapi.api.event.DamageDealt;
 import dev.ryvrook.trackerapi.api.event.EntityDied;
+import dev.ryvrook.trackerapi.api.event.EntityUsed;
 import dev.ryvrook.trackerapi.api.event.GameModeChanged;
+import dev.ryvrook.trackerapi.api.event.GameTimeSampled;
+import dev.ryvrook.trackerapi.api.event.InstanceDiscovered;
 import dev.ryvrook.trackerapi.api.event.InteractionStarted;
+import dev.ryvrook.trackerapi.api.event.ItemBroke;
 import dev.ryvrook.trackerapi.api.event.ItemConsumed;
 import dev.ryvrook.trackerapi.api.event.ItemCrafted;
+import dev.ryvrook.trackerapi.api.event.ItemEquipped;
 import dev.ryvrook.trackerapi.api.event.ItemPickedUp;
 import dev.ryvrook.trackerapi.api.event.ItemsGained;
 import dev.ryvrook.trackerapi.api.event.MemoryRecorded;
+import dev.ryvrook.trackerapi.api.event.MountChanged;
+import dev.ryvrook.trackerapi.api.event.MovementEdge;
+import dev.ryvrook.trackerapi.api.event.PermissionChanged;
 import dev.ryvrook.trackerapi.api.event.PlayerChatted;
+import dev.ryvrook.trackerapi.api.event.PlayerLeft;
 import dev.ryvrook.trackerapi.api.event.PlayerMoved;
+import dev.ryvrook.trackerapi.api.event.PlayerSlept;
 import dev.ryvrook.trackerapi.api.event.PlayerWorldChanged;
+import dev.ryvrook.trackerapi.api.event.PortalEntered;
+import dev.ryvrook.trackerapi.api.event.ProjectileLanded;
+import dev.ryvrook.trackerapi.api.event.ProjectileLaunched;
+import dev.ryvrook.trackerapi.api.event.RecipeLearned;
+import dev.ryvrook.trackerapi.api.event.TriggerVolumeFired;
+import dev.ryvrook.trackerapi.api.event.VitalsSampled;
+import dev.ryvrook.trackerapi.api.event.WeatherChanged;
+import dev.ryvrook.trackerapi.api.event.WorldEventEnded;
 import dev.ryvrook.trackerapi.api.event.ZoneDiscovered;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -103,6 +124,11 @@ class TrackerBridgeTest {
         return new Header(System.currentTimeMillis(), ++seq, world, player);
     }
 
+    /** A header at a chosen wall clock time, for the records whose timing matters. */
+    private Header t(UUID player, String world, long at) {
+        return new Header(at, ++seq, world, player);
+    }
+
     /** Every counter of {@code keys} the tracker keeps, at {@code value}. */
     private void assertKeys(List<String> keys, long value) {
         assertKeys(progress, keys, value);
@@ -119,12 +145,16 @@ class TrackerBridgeTest {
 
     @Test
     void bindSubscribesEveryListenerAndUnbindClosesThem() {
-        assertEquals(19, bridge.subscriptionCount());
-        assertEquals(19, api.live().size());
+        assertEquals(34, bridge.subscriptionCount());
+        assertEquals(34, api.live().size());
         assertTrue(api.listeners.containsKey(BlockBroken.class));
         assertTrue(api.listeners.containsKey(EntityDied.class));
+        assertTrue(api.listeners.containsKey(MovementEdge.class));
+        assertFalse(api.listeners.containsKey(RecipeLearned.class), "the recipe poll runs on both paths");
+        assertFalse(api.listeners.containsKey(PermissionChanged.class), "the group listener runs on both paths");
+        assertFalse(api.listeners.containsKey(PortalEntered.class), "world changes already give the portal keys");
         bridge.bind(api); // a second enable replaces the first set
-        assertEquals(19, api.live().size());
+        assertEquals(34, api.live().size());
         bridge.unbind();
         assertEquals(0, api.live().size());
         bridge.unbind();
@@ -163,6 +193,7 @@ class TrackerBridgeTest {
 
         api.publish(new CreatureTamed(h(p), "Cow", UUID.randomUUID(), "Tamed_Cow"));
         assertEquals(1, progress.get(StatKeys.TAMED));
+        assertKeys(Classify.tamed("Tamed_Cow"), 1);
     }
 
     @Test
@@ -385,6 +416,384 @@ class TrackerBridgeTest {
         assertTrue(host.creative.contains(p));
         api.publish(new GameModeChanged(h(p), "Creative", "Adventure"));
         assertFalse(host.creative.contains(p));
+    }
+
+    // ---- 1.7.2 kinds ----------------------------------------------------------------------------------------
+
+    private MovementEdge edge(MovementEdge.Edge edge, double y, double fall, long at) {
+        return new MovementEdge(t(p, "default", at), edge, y, fall);
+    }
+
+    @Test
+    void movementEdgesCountJumpsGlidesAndWholeSeconds() {
+        long t0 = 1_000_000L;
+        api.publish(edge(MovementEdge.Edge.JUMP, 64, 0, t0));
+        api.publish(edge(MovementEdge.Edge.JUMP, 64, 0, t0 + 500));
+        api.publish(edge(MovementEdge.Edge.GLIDE_START, 90, 0, t0));
+        api.publish(edge(MovementEdge.Edge.GLIDE_END, 70, 0, t0 + 3_500));
+        api.publish(edge(MovementEdge.Edge.GLIDE_START, 90, 0, t0 + 4_000));
+        api.publish(edge(MovementEdge.Edge.GLIDE_END, 70, 0, t0 + 5_200));
+        // Sprints of 1.6 s and 0.6 s make 2 whole seconds, the fraction carried as the own path does.
+        api.publish(edge(MovementEdge.Edge.SPRINT_START, 64, 0, t0));
+        api.publish(edge(MovementEdge.Edge.SPRINT_END, 64, 0, t0 + 1_600));
+        api.publish(edge(MovementEdge.Edge.SPRINT_START, 64, 0, t0 + 2_000));
+        api.publish(edge(MovementEdge.Edge.SPRINT_END, 64, 0, t0 + 2_600));
+        api.publish(edge(MovementEdge.Edge.CROUCH_START, 64, 0, t0));
+        api.publish(edge(MovementEdge.Edge.CROUCH_END, 64, 0, t0 + 2_000));
+        api.publish(edge(MovementEdge.Edge.CLIMB_START, 64, 0, t0));
+        api.publish(edge(MovementEdge.Edge.CLIMB_END, 64, 0, t0 + 999));
+        api.publish(edge(MovementEdge.Edge.CLIMB_END, 64, 0, t0 + 5_000)); // an end without a start adds nothing
+        assertEquals(2, progress.get(StatKeys.JUMPS));
+        assertEquals(2, progress.get(StatKeys.GLIDES));
+        assertEquals(3, progress.get(StatKeys.LONGEST_GLIDE_SECONDS));
+        assertEquals(2, progress.get(StatKeys.SPRINT_SECONDS));
+        assertEquals(2, progress.get(StatKeys.CROUCH_SECONDS));
+        assertEquals(0, progress.get(StatKeys.CLIMB_SECONDS));
+        assertEquals(0, progress.get(StatKeys.ROLLS), "rolls have no edge, own path only");
+    }
+
+    @Test
+    void waterLandingNeedsThirtyMetresOfFall() {
+        long t0 = 2_000_000L;
+        api.publish(edge(MovementEdge.Edge.FALL_START, 100, 0, t0));
+        api.publish(edge(MovementEdge.Edge.FALL_FAR, 90, 0, t0 + 500));
+        api.publish(edge(MovementEdge.Edge.SWIM_START, 65, 0, t0 + 1_500));
+        assertEquals(1, progress.get(StatKeys.WATER_LANDINGS));
+        api.publish(edge(MovementEdge.Edge.SWIM_END, 66, 0, t0 + 3_000));
+        api.publish(edge(MovementEdge.Edge.FALL_START, 80, 0, t0 + 4_000));
+        api.publish(edge(MovementEdge.Edge.SWIM_START, 60, 0, t0 + 5_000));
+        assertEquals(1, progress.get(StatKeys.WATER_LANDINGS), "twenty metres is not enough");
+        // A landing in the same moment as the swim start is the same fall.
+        api.publish(edge(MovementEdge.Edge.FALL_START, 100, 0, t0 + 6_000));
+        api.publish(edge(MovementEdge.Edge.LANDED, 64, 36, t0 + 7_000));
+        api.publish(edge(MovementEdge.Edge.SWIM_START, 64, 0, t0 + 7_050));
+        assertEquals(2, progress.get(StatKeys.WATER_LANDINGS));
+        // A dry landing and a swim much later is not.
+        api.publish(edge(MovementEdge.Edge.FALL_START, 100, 0, t0 + 8_000));
+        api.publish(edge(MovementEdge.Edge.LANDED, 64, 36, t0 + 9_000));
+        api.publish(edge(MovementEdge.Edge.SWIM_START, 63, 0, t0 + 20_000));
+        assertEquals(2, progress.get(StatKeys.WATER_LANDINGS));
+    }
+
+    @Test
+    void mountsMinecartsAndTheLongestRide() {
+        long t0 = 3_000_000L;
+        api.publish(new MountChanged(t(p, "default", t0), true, "Horse", UUID.randomUUID()));
+        api.publish(new MountChanged(t(p, "default", t0 + 65_400), false, "Horse", UUID.randomUUID()));
+        assertEquals(1, progress.get(StatKeys.MOUNTS));
+        assertKeys(List.of(Classify.mountKey("Horse")), 1);
+        assertEquals(65, progress.get(StatKeys.LONGEST_RIDE));
+        api.publish(new MountChanged(t(p, "default", t0 + 70_000), true, "Minecart", UUID.randomUUID()));
+        api.publish(new MountChanged(t(p, "default", t0 + 80_000), false, "Minecart", null));
+        assertEquals(1, progress.get(StatKeys.MINECART_RIDES));
+        assertEquals(1, progress.get(StatKeys.MOUNTS));
+        assertEquals(65, progress.get(StatKeys.LONGEST_RIDE));
+        api.publish(new MountChanged(t(p, "default", t0 + 90_000), true, "Seat", null));
+        api.publish(new MountChanged(t(p, "default", t0 + 990_000), false, "Seat", null));
+        assertEquals(0, progress.get(StatKeys.SEATS), "the seat block is not on the record");
+        assertEquals(65, progress.get(StatKeys.LONGEST_RIDE), "sitting is not a ride");
+    }
+
+    private ItemEquipped wear(int slot, String itemId) {
+        return new ItemEquipped(h(p), "Armor", slot, itemId, null);
+    }
+
+    @Test
+    void armourSetsFromTheSlotsSeen() {
+        api.publish(wear(0, "Armor_Iron_Head"));
+        api.publish(wear(1, "Armor_Iron_Chest"));
+        api.publish(wear(2, "Armor_Iron_Hands"));
+        api.publish(new ItemEquipped(h(p), "Tool", 3, "Armor_Iron_Legs", null));
+        assertEquals(0, progress.get(StatKeys.ARMOUR_SETS), "the tool section is not armour");
+        api.publish(wear(3, "Armor_Iron_Legs"));
+        assertEquals(1, progress.get(StatKeys.ARMOUR_SETS));
+        api.publish(wear(3, null));
+        api.publish(wear(3, "Armor_Iron_Legs"));
+        assertEquals(1, progress.get(StatKeys.ARMOUR_SETS), "each set counts once");
+        // Kweebec ships only a head and a chest.
+        api.publish(wear(2, null));
+        api.publish(wear(3, null));
+        api.publish(wear(0, "Armor_Kweebec_Head"));
+        api.publish(wear(1, "Armor_Kweebec_Chest"));
+        assertEquals(2, progress.get(StatKeys.ARMOUR_SETS));
+    }
+
+    @Test
+    void brokenToolsButNotArmour() {
+        api.publish(new ItemBroke(h(p), "Tool_Pickaxe_Iron"));
+        api.publish(new ItemBroke(h(p), "Armor_Iron_Chest"));
+        api.publish(new ItemBroke(h(p), "Tool_Watering_Can"));
+        assertKeys(Classify.toolBroken("Tool_Pickaxe_Iron"), 1);
+        assertEquals(1, progress.get(StatKeys.TOOLS_BROKEN));
+    }
+
+    @Test
+    void shotsFiredOnlyByWeapon() {
+        Actor me = Actor.player(p, "Bridge");
+        api.publish(new ProjectileLaunched(h(p), me, "Arrow", true));
+        api.publish(new ProjectileLaunched(h(p), me, "Fireball", false));
+        api.publish(new ProjectileLaunched(h(null), Actor.creature(null, "Goblin_Archer"), "Arrow", true));
+        assertEquals(1, progress.get(StatKeys.SHOTS_FIRED));
+    }
+
+    @Test
+    void longRangeKillsFromTheLandedHit() {
+        UUID other = UUID.randomUUID();
+        tracker.load(other, "Victim");
+        Actor me = Actor.player(p, "Bridge");
+        Actor them = Actor.player(other, "Victim");
+        Actor goblin = Actor.creature(UUID.randomUUID(), "Goblin_Scrapper");
+        api.publish(new PlayerMoved(h(p), 0, 64, 0, 0, PlayerMoved.Mode.WALK, null, null));
+        api.publish(new ProjectileLanded(h(p), me, "Arrow", goblin, 0, 64, 60));
+        api.publish(death(goblin, me, "Physical", null, true, "default", List.of(), Set.of(), false, null));
+        assertEquals(1, progress.get(StatKeys.KILLS_FAR));
+        api.publish(new ProjectileLanded(h(p), me, "Arrow", goblin, 0, 64, 20));
+        api.publish(death(goblin, me, "Physical", null, true, "default", List.of(), Set.of(), false, null));
+        assertEquals(1, progress.get(StatKeys.KILLS_FAR), "twenty metres is not far");
+        api.publish(new ProjectileLanded(h(p), me, "Arrow", them, 35, 64, 0));
+        api.publish(death(them, me, "Physical", null, true, "default", List.of(), Set.of(), false, null));
+        assertEquals(1, progress.get(StatKeys.PLAYER_KILLS_FAR));
+        assertEquals(1, progress.get(StatKeys.KILLS_FAR), "a player kill is counted on its own key");
+    }
+
+    @Test
+    void killKindsAndMultikillWindowsMatchTheOwnPath() {
+        Actor me = Actor.player(p, "Bridge");
+        String[] roles = {"Skeleton_Scout_Patrol", "Skeleton_Scout_Wander", "Goblin_Scrapper", "Cow"};
+        long[] times = {10_000L, 11_000L, 12_000L, 30_000L};
+        Windows mirror = new Windows();
+        int doubles = 0;
+        int triples = 0;
+        Set<String> kinds = new HashSet<>();
+        for (int i = 0; i < roles.length; i++) {
+            Actor victim = Actor.creature(UUID.randomUUID(), roles[i]);
+            api.publish(new EntityDied(t(p, "default", times[i]), victim, me, "Physical", null, false, false, 0, 0, 0,
+                    false, List.of(), Set.of(), false, null, 0, Set.of()));
+            int filled = mirror.kill(p, times[i]);
+            doubles += (filled & Windows.DOUBLE) != 0 ? 1 : 0;
+            triples += (filled & Windows.TRIPLE) != 0 ? 1 : 0;
+            kinds.add(CombatKinds.kind(roles[i]));
+        }
+        assertEquals(3, kinds.size(), "the patrol and wander scouts are one kind");
+        assertEquals(kinds.size(), progress.get(StatKeys.KILL_KINDS));
+        assertEquals(doubles, progress.get(StatKeys.MULTIKILL_2));
+        assertEquals(triples, progress.get(StatKeys.MULTIKILL_3));
+        assertEquals(1, progress.get(StatKeys.MULTIKILL_2));
+        assertEquals(1, progress.get(StatKeys.MULTIKILL_3));
+    }
+
+    @Test
+    void killContextFromTheKeptState() {
+        Actor me = Actor.player(p, "Bridge");
+        Actor goblin = Actor.creature(UUID.randomUUID(), "Goblin_Scrapper");
+        api.publish(death(goblin, me, "Physical", null, false, "default", List.of(), Set.of(), false, null));
+        for (String key : List.of(StatKeys.KILLS_UNDERWATER, StatKeys.KILLS_GLIDING, StatKeys.KILLS_MOUNTED,
+                StatKeys.KILLS_LOW_HEALTH, StatKeys.KILLS_NIGHT, StatKeys.KILLS_BLOOD_MOON)) {
+            assertEquals(0, progress.get(key), key);
+        }
+        long now = System.currentTimeMillis();
+        api.publish(new GameTimeSampled(h(null), 22, 0.9f, 3, 4));
+        api.publish(new WeatherChanged(h(null), "Blood_Moon", "Zone1_Sunny"));
+        api.publish(new MovementEdge(t(p, "default", now), MovementEdge.Edge.SWIM_START, 60, 0));
+        api.publish(new MovementEdge(t(p, "default", now), MovementEdge.Edge.GLIDE_START, 90, 0));
+        api.publish(new MountChanged(h(p), true, "Horse", UUID.randomUUID()));
+        api.publish(new VitalsSampled(h(p), 1, 20, 5, 10, 0, 0));
+        api.publish(death(goblin, me, "Physical", null, false, "default", List.of(), Set.of(), false, null));
+        for (String key : List.of(StatKeys.KILLS_UNDERWATER, StatKeys.KILLS_GLIDING, StatKeys.KILLS_MOUNTED,
+                StatKeys.KILLS_LOW_HEALTH, StatKeys.KILLS_NIGHT, StatKeys.KILLS_BLOOD_MOON)) {
+            assertEquals(1, progress.get(key), key);
+        }
+        api.publish(new GameTimeSampled(h(null), 9, 0.4f, 3, 5));
+        api.publish(new VitalsSampled(h(p), 20, 20, 5, 10, 0, 0));
+        api.publish(new MovementEdge(t(p, "default", now), MovementEdge.Edge.SWIM_END, 60, 0));
+        api.publish(death(goblin, me, "Physical", null, false, "default", List.of(), Set.of(), false, null));
+        assertEquals(1, progress.get(StatKeys.KILLS_NIGHT), "day by the clock");
+        assertEquals(1, progress.get(StatKeys.KILLS_LOW_HEALTH));
+        assertEquals(1, progress.get(StatKeys.KILLS_UNDERWATER));
+        assertEquals(2, progress.get(StatKeys.KILLS_GLIDING));
+    }
+
+    @Test
+    void bossCoopKeysAndKindForEveryCredited() {
+        List<UUID> group = new ArrayList<>(List.of(p));
+        for (int i = 0; i < 4; i++) {
+            UUID helper = UUID.randomUUID();
+            tracker.load(helper, "Helper" + i);
+            group.add(helper);
+        }
+        Actor me = Actor.player(p, "Bridge");
+        Actor boss = Actor.creature(UUID.randomUUID(), "Bear_Voidtaken");
+        api.publish(death(boss, me, "Physical", null, false, "default", group.subList(0, 3), Set.of(), false, null));
+        assertEquals(1, progress.get(StatKeys.BOSS_COOP_3));
+        assertEquals(0, progress.get(StatKeys.BOSS_COOP_5));
+        assertEquals(1, tracker.loadedProgress(group.get(2)).get(StatKeys.BOSS_COOP_3));
+        assertEquals(1, tracker.loadedProgress(group.get(2)).get(StatKeys.KILL_KINDS));
+        assertEquals(0, tracker.loadedProgress(group.get(4)).get(StatKeys.BOSS_COOP_3));
+        api.publish(death(boss, me, "Physical", null, false, "default", group, Set.of(), false, null));
+        assertEquals(2, progress.get(StatKeys.BOSS_COOP_3));
+        assertEquals(1, progress.get(StatKeys.BOSS_COOP_5));
+        assertEquals(1, tracker.loadedProgress(group.get(4)).get(StatKeys.BOSS_COOP_5));
+        assertEquals(1, progress.get(StatKeys.KILL_KINDS), "one kind however often");
+        assertEquals(1, progress.get(StatKeys.MULTIKILL_2), "the killing blow feeds the windows");
+    }
+
+    @Test
+    void hardModeGobliteratorDeathlessAndFast() {
+        String world = "instance-The_Deepworks-3";
+        host.worlds.put(p, world.toLowerCase(Locale.ROOT));
+        DeepworksRuns.of(tracker).entered(p, DeepworksRuns.PORTAL_TYPE, world, System.currentTimeMillis());
+        Actor me = Actor.player(p, "Bridge");
+        Actor boss = Actor.creature(UUID.randomUUID(), "Goblin_Gobliterator_Phase3_HM");
+        api.publish(death(boss, me, "Physical", null, false, world, List.of(p), Set.of(), true,
+                DeepworksRuns.PORTAL_TYPE, Set.of()));
+        assertEquals(1, progress.get(StatKeys.GOBLITERATOR_HARD_DEATHLESS));
+        assertEquals(1, progress.get(StatKeys.GOBLITERATOR_HARD_FAST));
+        assertEquals(1, progress.get(StatKeys.GOBLITERATOR_HM_UNARMOURED), "killerArmourless stands in for the list");
+    }
+
+    @Test
+    void playerKillStreakAndVendetta() {
+        UUID other = UUID.randomUUID();
+        PlayerProgress rival = tracker.load(other, "Rival");
+        Actor me = Actor.player(p, "Bridge");
+        Actor them = Actor.player(other, "Rival");
+        api.publish(death(me, them, "Physical", null, false, "default", List.of(), Set.of(), false, null));
+        api.publish(death(them, me, "Physical", null, false, "default", List.of(), Set.of(), false, null));
+        assertEquals(1, progress.get(StatKeys.VENDETTAS));
+        assertEquals(1, progress.get(StatKeys.PLAYER_KILL_STREAK));
+        api.publish(death(them, me, "Physical", null, false, "default", List.of(), Set.of(), false, null));
+        assertEquals(1, progress.get(StatKeys.VENDETTAS), "the score was settled");
+        assertEquals(2, progress.get(StatKeys.PLAYER_KILL_STREAK));
+        assertEquals(1, rival.get(StatKeys.PLAYER_KILL_STREAK));
+        assertEquals(0, progress.get(StatKeys.KILL_KINDS), "players are no creature kind");
+    }
+
+    private DamageDealt hurt(String cause, double amount, long at) {
+        return new DamageDealt(t(p, "default", at), Actor.WORLD, Actor.player(p, "Bridge"), amount, cause, false, null,
+                0, 0, 0, false);
+    }
+
+    private void tick(long at) {
+        api.publish(new PlayerMoved(t(p, "default", at), 0, 64, 0, 0, PlayerMoved.Mode.WALK, null, null));
+    }
+
+    @Test
+    void damageTypesAndSurvivedFallsAndDrowning() {
+        long t0 = 5_000_000L;
+        api.publish(hurt("Fall", 7, t0));
+        assertEquals(0, progress.get(StatKeys.FALL_SURVIVED_MAX), "a fall is settled a moment later");
+        tick(t0 + CombatMemory.SETTLE_MILLIS + 1);
+        assertEquals(7, progress.get(StatKeys.FALL_SURVIVED_MAX));
+        assertEquals(1, progress.get(StatKeys.DAMAGE_TYPES));
+
+        api.publish(hurt("Drowning", 2, t0 + 2_000));
+        api.publish(hurt("Drowning", 2, t0 + 3_000));
+        tick(t0 + 4_000);
+        assertEquals(0, progress.get(StatKeys.DROWNING_SURVIVED), "the episode is still going");
+        tick(t0 + 3_000 + CombatMemory.EPISODE_GAP_MILLIS);
+        assertEquals(1, progress.get(StatKeys.DROWNING_SURVIVED));
+        assertEquals(2, progress.get(StatKeys.DAMAGE_TYPES));
+
+        api.publish(hurt("Fall", 30, t0 + 10_000));
+        api.publish(new EntityDied(t(p, "default", t0 + 10_000), Actor.player(p, "Bridge"), Actor.WORLD, "Fall", null,
+                false, false, 0, 0, 0, false, List.of(), Set.of(), false, null, 0, Set.of()));
+        tick(t0 + 20_000);
+        assertEquals(7, progress.get(StatKeys.FALL_SURVIVED_MAX), "a fatal fall was not survived");
+        assertEquals(0, progress.get(StatKeys.BLOCKS), "blocks stay on the own path");
+    }
+
+    @Test
+    void seedsTrapsPlacedKindsAndWoodSpecies() {
+        api.publish(new BlockPlaced(h(p), 0, 0, 0, "Plant_Seeds_Wheat", null, false, false));
+        api.publish(new BlockPlaced(h(p), 0, 0, 0, "Plant_Seeds_Wheat", null, true, false));
+        api.publish(new BlockPlaced(h(p), 1, 0, 0, "Tool_Fishing_Trap", null, false, false));
+        api.publish(new BlockPlaced(h(p), 2, 0, 0, "Rock_Stone_Cobble", null, false, false));
+        assertKeys(Classify.seedPlanted("Plant_Seeds_Wheat"), 2);
+        assertEquals(1, progress.get(StatKeys.TRAPS_PLACED));
+        assertEquals(3, progress.get(StatKeys.PLACED_KINDS), "the repeat spot counts the seed but no kind");
+
+        api.publish(new BlockBroken(h(p), 0, 0, 0, "Wood_Oak_Trunk", null, false, false));
+        api.publish(new BlockBroken(h(p), 0, 0, 0, "Wood_Oak_Trunk_Half", null, false, false));
+        api.publish(new BlockBroken(h(p), 0, 0, 0, "Wood_Birch_Trunk", null, true, false));
+        api.publish(new BlockBroken(h(p), 0, 0, 0, "Wood_Birch_Planks", null, false, false));
+        assertEquals(1, progress.get(StatKeys.WOOD_SPECIES), "own placements and planks are no new species");
+        api.publish(new BlockBroken(h(p), 0, 0, 0, "Wood_Birch_Trunk", null, false, false));
+        assertEquals(2, progress.get(StatKeys.WOOD_SPECIES));
+    }
+
+    @Test
+    void instancesVolumesAndWorldEvents() {
+        api.publish(new InstanceDiscovered(h(p), UUID.randomUUID(), "Forgotten_Temple"));
+        api.publish(new InstanceDiscovered(h(p), UUID.randomUUID(), "Forgotten_Temple"));
+        api.publish(new InstanceDiscovered(h(p), UUID.randomUUID(), null));
+        assertEquals(1, progress.get(StatKeys.INSTANCES_DISCOVERED));
+        assertKeys(List.of(StatKeys.INSTANCE_PREFIX + "Forgotten_Temple"), 1);
+
+        Actor me = Actor.player(p, "Bridge");
+        api.publish(new TriggerVolumeFired(h(p), "Dungeon_Checkpoint_3", "ENTER", me));
+        api.publish(new TriggerVolumeFired(h(p), "Dungeon_Checkpoint_4", "EXIT", me));
+        api.publish(new TriggerVolumeFired(h(null), "Dungeon_Checkpoint_5", "ENTER", Actor.creature(null, "Cow")));
+        assertKeys(List.of(StatKeys.VOLUME_PREFIX + "Dungeon_Checkpoint"), 1);
+
+        api.publish(new WorldEventEnded(h(null), "Hunt_Breach", "SUCCESS", List.of(p)));
+        api.publish(new WorldEventEnded(h(null), "Hunt_Breach", "FAILURE", List.of(p)));
+        api.publish(new WorldEventEnded(h(null), "Coffer_Goblin", "SUCCESS", List.of(UUID.randomUUID())));
+        assertEquals(1, progress.get(StatKeys.WORLD_EVENTS_WON));
+        assertKeys(List.of(StatKeys.WORLD_EVENT_PREFIX + "Hunt_Breach"), 1);
+    }
+
+    @Test
+    void nightsSleptMoonsAndWeathers() {
+        long t0 = 7_000_000L;
+        api.publish(new GameTimeSampled(t(null, "default", t0), 23, 0.95f, 2, 1));
+        assertEquals(1, progress.get(StatKeys.MOONS_SEEN));
+        api.publish(new PlayerSlept(t(p, "default", t0 + 1_000), true, 0, 64, 0));
+        api.publish(new PlayerSlept(t(p, "default", t0 + 5_000), false, 0, 64, 0));
+        api.publish(new GameTimeSampled(t(null, "default", t0 + 60_000), 7, 0.3f, 2, 2));
+        assertEquals(1, progress.get(StatKeys.NIGHTS_SLEPT));
+        api.publish(new GameTimeSampled(t(null, "default", t0 + 120_000), 8, 0.35f, 2, 2));
+        assertEquals(1, progress.get(StatKeys.NIGHTS_SLEPT), "one morning, one night");
+        assertEquals(1, progress.get(StatKeys.MOONS_SEEN), "no moon by day");
+        assertEquals(0, progress.get(StatKeys.GAME_DAYS), "game days stay with the world sample on both paths");
+
+        api.publish(new WeatherChanged(t(null, "default", t0 + 200_000), "Zone1_Rain", "Zone1_Sunny"));
+        api.publish(new GameTimeSampled(t(null, "default", t0 + 205_000), 9, 0.4f, 2, 2));
+        assertEquals(0, progress.get(StatKeys.WEATHERS_SEEN), "five seconds of rain is not enough");
+        api.publish(new GameTimeSampled(t(null, "default", t0 + 211_000), 9, 0.4f, 2, 2));
+        assertEquals(1, progress.get(StatKeys.WEATHERS_SEEN));
+        api.publish(new WeatherChanged(t(null, "default", t0 + 220_000), "Zone1_Storm", "Zone1_Rain"));
+        api.publish(new WeatherChanged(t(null, "default", t0 + 222_000), "Zone1_Sunny", "Zone1_Storm"));
+        assertEquals(1, progress.get(StatKeys.WEATHERS_SEEN), "a two second storm does not count");
+        api.publish(new WeatherChanged(t(null, "default", t0 + 240_000), "Zone1_Rain", "Zone1_Sunny"));
+        assertEquals(2, progress.get(StatKeys.WEATHERS_SEEN), "the sun that held counts when it ends");
+
+        host.worlds.put(p, "elsewhere");
+        api.publish(new GameTimeSampled(t(null, "default", t0 + 300_000), 1, 0.05f, 5, 3));
+        assertEquals(1, progress.get(StatKeys.MOONS_SEEN), "only players in that world see its moon");
+    }
+
+    @Test
+    void talkTamedFishBiomesAndPortalTime() {
+        api.publish(new EntityUsed(h(p), Actor.creature(UUID.randomUUID(), "Kweebec_Elder"), "Use"));
+        api.publish(new EntityUsed(h(p), Actor.player(UUID.randomUUID(), "Other"), "Use"));
+        assertEquals(1, progress.get(Classify.talkKey("Kweebec_Elder")));
+
+        api.publish(new ItemPickedUp(h(p), "Fish_Whale_Humpback_Item", 2, 1));
+        api.publish(new ItemPickedUp(h(p), "Fish_Bluegill_Item", 1, 1));
+        assertEquals(1, progress.get(StatKeys.FISH_RARE));
+
+        api.publish(new PlayerMoved(h(p), 0, 70, 0, 1, PlayerMoved.Mode.WALK, null, "Forest"));
+        api.publish(new PlayerMoved(h(p), 0, 70, 0, 1, PlayerMoved.Mode.WALK, null, "Forest"));
+        api.publish(new PlayerMoved(h(p), 0, 70, 0, 1, PlayerMoved.Mode.WALK, null, " "));
+        assertEquals(1, progress.get(StatKeys.BIOMES_VISITED));
+
+        long t0 = 9_000_000L;
+        api.publish(new PlayerWorldChanged(t(p, "instance-Goblin_Breach-9", t0), "default", "Goblin_Breach", true));
+        api.publish(new PlayerWorldChanged(t(p, "default", t0 + 90_500), "instance-Goblin_Breach-9", null, false));
+        assertEquals(90, progress.get(StatKeys.PORTAL_SECONDS));
+        api.publish(new PlayerWorldChanged(t(p, "instance-Goblin_Breach-9", t0 + 100_000), "default", "Goblin_Breach", true));
+        api.publish(new PlayerLeft(t(p, "instance-Goblin_Breach-9", t0 + 110_600), "Bridge", 1L));
+        assertEquals(101, progress.get(StatKeys.PORTAL_SECONDS), "a leave ends the stay, with the half second carried");
     }
 
     // ---- fakes ----------------------------------------------------------------------------------------------

@@ -20,19 +20,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class FactionFeatsTest {
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
 
-    /** Dominion's integration StatKeys.ALL in 0.5.1. A rename on either side shows up here. */
+    /**
+     * Dominion's integration StatKeys.ALL, the ten from 0.5.1 and the fifteen 0.7.1 adds for the Factions tab
+     * additions in docs/EXPANSION-PLAN.md section 8.3. A rename on either side shows up here.
+     */
     private static final Set<String> DOMINION_KEYS = Set.of("dominion:claims", "dominion:unclaims",
             "dominion:enemy_kills", "dominion:enemy_land_deaths", "dominion:sieges_won", "dominion:sieges_lost",
-            "dominion:missions", "dominion:bank_deposited", "dominion:factions_founded", "dominion:invites");
+            "dominion:missions", "dominion:bank_deposited", "dominion:factions_founded", "dominion:invites",
+            "dominion:joined", "dominion:kicked", "dominion:wars_declared", "dominion:alliances", "dominion:upgrades",
+            "dominion:upgrade_level_max", "dominion:market_trades", "dominion:foreign_entries", "dominion:sieges_defended",
+            "dominion:breaches", "dominion:hill_wins", "dominion:outposts_held", "dominion:power_max",
+            "dominion:rank_changes", "dominion:tutorial_done");
 
     @Test
     void theFactionsTabOnlyExistsWithDominion() {
         FeatRegistry without = new FeatRegistry(false);
         FeatRegistry with = new FeatRegistry(true);
         assertTrue(without.inCategory(Category.FACTIONS).isEmpty());
-        assertEquals(15, with.inCategory(Category.FACTIONS).size());
-        assertEquals(without.count() + 15, with.count());
-        assertEquals(without.totalPoints() + 460, with.totalPoints());
+        assertEquals(29, with.inCategory(Category.FACTIONS).size(), "15 from 1.6.0 and 14 from 1.7.2");
+        assertEquals(without.count() + 29, with.count());
+        assertEquals(without.totalPoints() + 460 + 430, with.totalPoints());
     }
 
     @Test
@@ -55,7 +62,7 @@ class FactionFeatsTest {
         PlayerProgress progress = tracker.load(uuid, "Warden");
         assertTrue(tracker.isPersisted(StatKeys.DOMINION_CLAIMS));
         assertTrue(tracker.isWatched(StatKeys.DOMINION_CLAIMS));
-        assertFalse(tracker.isWatched("dominion:unclaims"));
+        assertTrue(tracker.isWatched("dominion:unclaims"), "Downsizing reads it since 1.7.2");
         tracker.increment(uuid, StatKeys.DOMINION_CLAIMS, 1);
         assertTrue(progress.isUnlocked("staked_claim"));
         assertFalse(progress.isUnlocked("landholder"));

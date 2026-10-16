@@ -42,7 +42,7 @@ fun siblingJar(property: String, path: String): String {
 }
 val trackerApiJar = siblingJar("trackerApiJar", "trackerapi/build/libs/TrackerAPI-1.0.0.jar")
 val coinageJar = siblingJar("coinageJar", "coinage/build/libs/Coinage-api-1.2.0.jar")
-val atlasJar = siblingJar("atlasJar", "atlas/build/libs/Atlas-1.8.0.jar")
+val atlasJar = siblingJar("atlasJar", "atlas/build/libs/Atlas-1.9.0.jar")
 
 dependencies {
     // Provided by the Hytale server at runtime; never bundled into the mod jar.
@@ -51,7 +51,7 @@ dependencies {
     compileOnly("at.helpch:placeholderapi-hytale:1.0.8")
     // Optional at runtime. Only the bridge touches it, and only when TrackerAPI is installed.
     compileOnly(files(trackerApiJar))
-    // Optional at runtime. Only CoinageRewards touches it, and only when Coinage is installed.
+    // Optional at runtime. Only CoinageRewards and CoinageFeats touch it, and only when Coinage is installed.
     compileOnly(files(coinageJar))
     // Optional at runtime. Only AtlasFeats touches it, and only when Atlas is installed.
     compileOnly(files(atlasJar))

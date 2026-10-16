@@ -59,9 +59,10 @@ public final class FeatRegistry {
             byCategory.put(c, new ArrayList<>());
         }
         defineAll();
-        if (this.present.contains(Sibling.DOMINION)) {
-            defineFactions();
-        }
+        definePacks();
+        defineFactions();
+        defineCoinage();
+        defineChronicle();
         defineWorld();
         for (Map.Entry<String, List<Feat>> e : byAfter.entrySet()) {
             Feat source = byId.get(e.getKey());
@@ -147,9 +148,15 @@ public final class FeatRegistry {
 
     // ------------------------------------------------------------------
 
+    /** Siblings every feat of the section being defined needs, applied to feats that name none themselves. */
+    private Set<Sibling> sectionRequires = Set.of();
+
     private void add(Feat feat) {
         if (byId.containsKey(feat.id()) || skipped.containsKey(feat.id())) {
             throw new IllegalStateException("duplicate feat id " + feat.id());
+        }
+        if (!sectionRequires.isEmpty() && feat.requires().isEmpty()) {
+            feat = feat.requiring(sectionRequires.toArray(new Sibling[0]));
         }
         if (!present.containsAll(feat.requires())) {
             skipped.put(feat.id(), "needs " + feat.requires());
@@ -263,6 +270,9 @@ public final class FeatRegistry {
     }
 
     private static final long HOUR = 3600;
+    /** The Full House milestone. Its target is the FullHouse setting, the tracker reads it when it checks the total. */
+    public static final String FULL_HOUSE_ID = "world_full_house";
+    public static final int FULL_HOUSE_DEFAULT = 20;
 
     private void defineAll() {
         // ---------------- Exploration ----------------
@@ -291,6 +301,30 @@ public final class FeatRegistry {
         feat("vault_breaker", "Vault Breaker", "Open 2,500 chests.", EXPLORATION, PLATINUM, "Furniture_Ancient_Chest_Large", StatKeys.CHESTS_OPENED, 2_500);
         feat("gatekeeper", "Gatekeeper", "Build an Ancient Gateway.", EXPLORATION, GOLD, "Portal_Device", StatKeys.CRAFTED_PREFIX + "Portal_Device", 1);
         hidden("take_flight", "Take Flight", "Get your hands on a Scrap Glider.", EXPLORATION, GOLD, "Glider_Scrap", StatKeys.OBTAINED_PREFIX + "Glider_Scrap", 1);
+        // 1.7.2, biomes, weather, the moon, instances, respawn points and dungeon volumes
+        feat("biome_10", "Local Flora", "Stand in 10 different biomes.", EXPLORATION, BRONZE, "Plant_Sapling_Oak", StatKeys.BIOMES_VISITED, 10);
+        feat("biome_25", "Field Guide", "Stand in 25 different biomes.", EXPLORATION, SILVER, "Deco_Map", StatKeys.BIOMES_VISITED, 25);
+        feat("biome_50", "Naturalist", "Stand in 50 different biomes.", EXPLORATION, GOLD, "Deco_Map", StatKeys.BIOMES_VISITED, 50);
+        feat("biome_100", "Every Horizon", "Stand in 100 of the 144 biomes.", EXPLORATION, PLATINUM, "Glider_Scrap", StatKeys.BIOMES_VISITED, 100);
+        multi("storm_chaser", "Storm Chaser", "Weather a sandstorm, a thunderstorm, a snowstorm and a Devastated Lands storm.", EXPLORATION, GOLD, "Rock_Sandstone",
+                req(StatKeys.WEATHER_PREFIX + "Zone2_Sand_Storm", 1), req(StatKeys.WEATHER_PREFIX + "Zone2_Thunder_Storm", 1),
+                req(StatKeys.WEATHER_PREFIX + "Zone3_Snow_Storm", 1), req(StatKeys.WEATHER_PREFIX + "Zone4_Storm", 1));
+        hidden("aurora", "Northern Lights", "See the northern lights.", EXPLORATION, SILVER, "Ingredient_Ice_Essence", StatKeys.WEATHER_PREFIX + "Zone3_Northern_Lights", 1);
+        hidden("red_sky", "Red Sky", "Be outside during a Blood Moon.", EXPLORATION, SILVER, "Ingredient_Fire_Essence", StatKeys.WEATHER_PREFIX + "Blood_Moon", 1);
+        multi("lunar_calendar", "Lunar Calendar", "See every phase of the moon.", EXPLORATION, GOLD, "Deco_Scroll",
+                req(StatKeys.MOON_PREFIX + "0", 1), req(StatKeys.MOON_PREFIX + "1", 1), req(StatKeys.MOON_PREFIX + "2", 1), req(StatKeys.MOON_PREFIX + "3", 1),
+                req(StatKeys.MOON_PREFIX + "4", 1), req(StatKeys.MOON_PREFIX + "5", 1), req(StatKeys.MOON_PREFIX + "6", 1), req(StatKeys.MOON_PREFIX + "7", 1));
+        feat("temple_raider", "Temple Raider", "Discover the Forgotten Temple.", EXPLORATION, SILVER, "Furniture_Ancient_Chest_Small", StatKeys.INSTANCE_PREFIX + "Forgotten_Temple", 1);
+        feat("home_base", "Home Base", "Set a respawn point.", EXPLORATION, BRONZE, "Furniture_Crude_Bed", StatKeys.RESPAWN_POINTS, 1);
+        feat("waypoints", "Waypoints", "Hold three respawn points in one world.", EXPLORATION, SILVER, "Furniture_Tavern_Bed", StatKeys.RESPAWN_POINTS, 3);
+        feat("checkpoint", "Checkpoint", "Reach a dungeon checkpoint.", EXPLORATION, BRONZE, "Furniture_Flag_Small_Red", StatKeys.VOLUME_PREFIX + "Dungeon_Checkpoint", 1);
+        feat("patched_up", "Patched Up", "Pick up a health pack in a dungeon.", EXPLORATION, BRONZE, "Potion_Health_Small", StatKeys.VOLUME_PREFIX + "Health_Pack_Volume", 1);
+        // Atlas, only while the web map is installed
+        define(of("on_the_map", "On the Map", "Link your account to the web map.", EXPLORATION, BRONZE, "Tool_Map", true,
+                req(StatKeys.ATLAS_PREFIX + "linked", 1)).requiring(Sibling.ATLAS));
+        define(of("surveyors_mark", "Surveyor's Mark", "Place 10 shared map markers.", EXPLORATION, SILVER, "Deco_Map", false,
+                req(StatKeys.ATLAS_PREFIX + "markers", 10)).requiring(Sibling.ATLAS));
+        closer(EXPLORATION, "exploration_complete", "Exploration, Complete", "Unlock every Exploration feat.");
 
         // ---------------- Mining ----------------
         feat("rock_bottom", "Rock Bottom", "Break your first block.", MINING, BRONZE, "Tool_Pickaxe_Crude", StatKeys.BLOCKS_BROKEN, 1);
@@ -329,6 +363,14 @@ public final class FeatRegistry {
                 req(StatKeys.CRAFTED_PREFIX + "Tool_Pickaxe_Wood", 1), req(StatKeys.CRAFTED_PREFIX + "Tool_Pickaxe_Copper", 1),
                 req(StatKeys.CRAFTED_PREFIX + "Tool_Pickaxe_Iron", 1), req(StatKeys.CRAFTED_PREFIX + "Tool_Pickaxe_Cobalt", 1),
                 req(StatKeys.CRAFTED_PREFIX + "Tool_Pickaxe_Thorium", 1), req(StatKeys.CRAFTED_PREFIX + "Tool_Pickaxe_Adamantite", 1));
+        // 1.7.2, tools wearing out, repairs and tree species
+        feat("worn_out", "Worn Out", "Wear a tool out.", MINING, BRONZE, "Tool_Pickaxe_Crude", StatKeys.TOOLS_BROKEN, 1);
+        feat("scrap_pile", "Scrap Pile", "Wear out 25 tools.", MINING, SILVER, "Ingredient_Scraps", StatKeys.TOOLS_BROKEN, 25);
+        feat("hard_use", "Hard Use", "Wear out 100 tools.", MINING, GOLD, "Deco_Scrap_Pile_Shiny", StatKeys.TOOLS_BROKEN, 100);
+        feat("good_as_new", "Good as New", "Repair an item.", MINING, SILVER, "Tool_Repair_Kit_Goblin", StatKeys.REPAIRS, 1);
+        feat("timber_survey", "Timber Survey", "Chop 10 kinds of tree.", MINING, SILVER, "Wood_Birch_Trunk", StatKeys.WOOD_SPECIES, 10);
+        feat("every_grain", "Every Grain", "Chop 25 of the 34 kinds of tree.", MINING, PLATINUM, "Wood_Oak_Trunk", StatKeys.WOOD_SPECIES, 25);
+        closer(MINING, "mining_complete", "Mining, Complete", "Unlock every Mining feat.");
 
         // ---------------- Building ----------------
         feat("cornerstone", "Cornerstone", "Place your first block.", BUILDING, BRONZE, "Wood_Ash_Trunk", StatKeys.BLOCKS_PLACED, 1);
@@ -357,6 +399,10 @@ public final class FeatRegistry {
         feat("stonemason", "Stonemason", "Place 2,500 stone or brick blocks.", BUILDING, GOLD, "Rock_Stone_Brick", StatKeys.PLACED_PREFIX + "stone", 2_500);
         feat("timber_frame", "Timber Frame", "Place 2,500 wood blocks.", BUILDING, GOLD, "Wood_Hardwood_Planks", StatKeys.PLACED_PREFIX + "wood", 2_500);
         feat("arborist", "Arborist", "Plant 50 saplings.", BUILDING, SILVER, "Plant_Sapling_Oak", StatKeys.PLACED_PREFIX + "sapling", 50);
+        // 1.7.2, distinct block kinds placed
+        feat("palette", "Palette", "Place 50 different kinds of block.", BUILDING, SILVER, "Rock_Aqua_Brick", StatKeys.PLACED_KINDS, 50);
+        feat("mosaic", "Mosaic", "Place 200 different kinds of block.", BUILDING, GOLD, "Rock_Stone_Brick", StatKeys.PLACED_KINDS, 200);
+        closer(BUILDING, "building_complete", "Building, Complete", "Unlock every Building feat.");
 
         // ---------------- Crafting ----------------
         feat("handy", "Handy", "Craft your first item.", CRAFTING, BRONZE, "Bench_WorkBench", StatKeys.CRAFTED, 1);
@@ -407,6 +453,13 @@ public final class FeatRegistry {
         feat("master_carpenter", "Master Carpenter", "Craft 250 pieces of furniture.", CRAFTING, GOLD, "Furniture_Crude_Table", StatKeys.CRAFT_GROUP_PREFIX + "furniture", 250);
         feat("movie_night", "Movie Night", "Cook 10 popcorn.", CRAFTING, BRONZE, "Food_Popcorn", StatKeys.CRAFTED_PREFIX + "Food_Popcorn", 10);
         feat("bench_press", "Bench Press", "Craft 5 benches.", CRAFTING, SILVER, "Bench_Furnace", StatKeys.CRAFT_GROUP_PREFIX + "bench", 5);
+        // 1.7.2, knowledge recipes and full armour sets worn
+        feat("recipe_book", "Recipe Book", "Learn 5 recipes that need knowledge.", CRAFTING, SILVER, "Deco_Scroll", StatKeys.RECIPES_KNOWN, 5);
+        feat("cookbook", "Every Recipe", "Learn all 25 recipes that need knowledge.", CRAFTING, PLATINUM, "Deco_Book_Pile_Large", StatKeys.RECIPES_KNOWN, 25);
+        feat("suited_up", "Suited Up", "Wear a full set of armour.", CRAFTING, SILVER, "Armor_Copper_Chest", StatKeys.ARMOUR_SETS, 1);
+        feat("wardrobe", "Wardrobe", "Wear 5 different full sets of armour.", CRAFTING, GOLD, "Armor_Cobalt_Chest", StatKeys.ARMOUR_SETS, 5);
+        feat("armoury_complete", "Every Armour", "Wear 10 different full sets of armour.", CRAFTING, PLATINUM, "Armor_Adamantite_Chest", StatKeys.ARMOUR_SETS, 10);
+        closer(CRAFTING, "crafting_complete", "Crafting, Complete", "Unlock every Crafting feat.");
 
         // ---------------- Combat ----------------
         feat("first_blood", "First Blood", "Defeat your first creature.", COMBAT, BRONZE, "Weapon_Sword_Bronze", StatKeys.KILLS, 1);
@@ -454,6 +507,29 @@ public final class FeatRegistry {
         hidden("duelist", "Duelist", "Defeat another player.", COMBAT, GOLD, "Weapon_Daggers_Bronze", StatKeys.KILLS_PLAYER, 1);
         hidden("gladiator", "Gladiator", "Defeat 10 players.", COMBAT, GOLD, "Armor_Bronze_Ornate_Chest", StatKeys.KILLS_PLAYER, 10);
         hidden("warmonger", "Warmonger", "Defeat 100 players.", COMBAT, PLATINUM, "Weapon_Daggers_Claw_Bone", StatKeys.KILLS_PLAYER, 100);
+        // 1.7.2, damage kinds, blocking, projectiles, kill context, windows, close calls and co-op bosses
+        feat("hazard_course", "Hazard Course", "Take 10 different kinds of damage.", COMBAT, GOLD, "Armor_Iron_Chest", StatKeys.DAMAGE_TYPES, 10);
+        feat("shield_up", "Shield Up", "Block 10 hits.", COMBAT, BRONZE, "Weapon_Shield_Wood", StatKeys.BLOCKS, 10);
+        feat("bulwark", "Bulwark", "Block 500 hits.", COMBAT, GOLD, "Weapon_Shield_Cobalt", StatKeys.BLOCKS, 500);
+        feat("quiver", "Quiver", "Fire 1,000 projectiles.", COMBAT, SILVER, "Weapon_Arrow_Iron", StatKeys.SHOTS_FIRED, 1_000);
+        hidden("longshot", "Longshot", "Defeat a creature from 50 metres away.", COMBAT, GOLD, "Weapon_Shortbow_Iron", StatKeys.KILLS_FAR, 1);
+        hidden("deep_strike", "Deep Strike", "Defeat a creature while underwater.", COMBAT, SILVER, "Armor_Diving_Crude_Chest", StatKeys.KILLS_UNDERWATER, 1);
+        hidden("death_from_above", "From Above", "Defeat a creature while gliding.", COMBAT, GOLD, "Glider_Scrap", StatKeys.KILLS_GLIDING, 1);
+        feat("cavalry", "Cavalry", "Defeat 25 creatures while mounted.", COMBAT, SILVER, "Tool_Feedbag", StatKeys.KILLS_MOUNTED, 25);
+        hidden("last_stand", "Last Stand", "Defeat a creature with under 10 percent health.", COMBAT, GOLD, "Potion_Health_Small", StatKeys.KILLS_LOW_HEALTH, 1);
+        feat("night_watch", "Night Watch", "Defeat 100 creatures at night.", COMBAT, SILVER, "Furniture_Crude_Torch", StatKeys.KILLS_NIGHT, 100);
+        feat("blood_moon_hunter", "Blood Moon Hunter", "Defeat 25 creatures during a Blood Moon.", COMBAT, GOLD, "Weapon_Sword_Bone", StatKeys.KILLS_BLOOD_MOON, 25);
+        feat("double_kill", "Double", "Defeat 2 creatures within 3 seconds.", COMBAT, BRONZE, "Weapon_Daggers_Bronze", StatKeys.MULTIKILL_2, 1);
+        feat("triple_kill", "Triple", "Defeat 3 creatures within 5 seconds.", COMBAT, SILVER, "Weapon_Daggers_Iron", StatKeys.MULTIKILL_3, 1);
+        feat("massacre", "Ten in Fifteen", "Defeat 10 creatures within 15 seconds.", COMBAT, GOLD, "Weapon_Battleaxe_Iron", StatKeys.MULTIKILL_10, 1);
+        feat("close_call", "Close Call", "Drop under 10 percent health and recover.", COMBAT, SILVER, "Potion_Health", StatKeys.CLOSE_CALLS, 1);
+        feat("hard_to_kill", "Hard to Kill", "Recover from under 10 percent health 25 times.", COMBAT, GOLD, "Potion_Health_Greater", StatKeys.CLOSE_CALLS, 25);
+        hidden("hard_landing", "Hard Landing", "Survive a fall worth 30 damage.", COMBAT, SILVER, "Deco_Bone_Ribs_Feran", StatKeys.FALL_SURVIVED_MAX, 30);
+        hidden("water_landing", "Water Landing", "Fall 30 metres into water.", COMBAT, GOLD, "Vehicle_Wood_Boat", StatKeys.WATER_LANDINGS, 1);
+        hidden("second_wind", "Second Wind", "Take drowning damage and live.", COMBAT, BRONZE, "Fish_Minnow_Item", StatKeys.DROWNING_SURVIVED, 1);
+        feat("raid_party", "Raid Party", "Defeat a boss alongside two other players.", COMBAT, SILVER, "Weapon_Club_Doomed", StatKeys.BOSS_COOP_3, 1);
+        feat("war_band", "War Band", "Defeat a boss alongside four other players.", COMBAT, GOLD, "Weapon_Battleaxe_Doomed", StatKeys.BOSS_COOP_5, 1);
+        closer(COMBAT, "combat_complete", "Combat, Complete", "Unlock every Combat feat.");
 
         // ---------------- Survival ----------------
         feat("welcome", "Welcome to Orbis", "Join the world.", SURVIVAL, BRONZE, "Deco_Kweebec_Plush", StatKeys.JOINS, 1);
@@ -488,6 +564,25 @@ public final class FeatRegistry {
         feat("potion_addict", "Potion Addict", "Drink 50 potions.", SURVIVAL, SILVER, "Potion_Health", StatKeys.POTIONS_DRUNK, 50);
         feat("potion_problem", "Potion Problem", "Drink 500 potions.", SURVIVAL, GOLD, "Potion_Health_Large", StatKeys.POTIONS_DRUNK, 500);
         feat("potion_seller", "Potion Seller", "Pick up 25 potions.", SURVIVAL, SILVER, "Potion_Health_Small", StatKeys.PICKED_PREFIX + "Potion_Health", 25);
+        // 1.7.2, nights, lives, join streaks, join hours, vitals and hardcore
+        feat("deep_sleep", "Deep Sleep", "Sleep through a whole night.", SURVIVAL, BRONZE, "Furniture_Crude_Bed", StatKeys.NIGHTS_SLEPT, 1);
+        feat("sound_sleeper", "Sound Sleeper", "Sleep through 50 nights.", SURVIVAL, GOLD, "Furniture_Ancient_Bed", StatKeys.NIGHTS_SLEPT, 50);
+        feat("survivor", "Survivor", "Live 7 game days without dying.", SURVIVAL, SILVER, "Potion_Stamina", StatKeys.LONGEST_LIFE_DAYS, 7);
+        feat("hardened", "Hardened", "Live 30 game days without dying.", SURVIVAL, GOLD, "Potion_Stamina_Greater", StatKeys.LONGEST_LIFE_DAYS, 30);
+        hidden("ageless", "Ageless", "Live 100 game days without dying.", SURVIVAL, PLATINUM, "Furniture_Frozen_Castle_Bed", StatKeys.LONGEST_LIFE_DAYS, 100);
+        feat("habit", "Habit", "Join 3 days in a row.", SURVIVAL, BRONZE, "Deco_Kweebec_Plush", StatKeys.BEST_JOIN_STREAK, 3);
+        feat("routine", "Routine", "Join 7 days in a row.", SURVIVAL, SILVER, "Deco_Kweebec_Plush", StatKeys.BEST_JOIN_STREAK, 7);
+        feat("clockwork", "Clockwork", "Join 30 days in a row.", SURVIVAL, GOLD, "Deco_Trophy_Harvest", StatKeys.BEST_JOIN_STREAK, 30);
+        hidden("year_round", "Year Round", "Join 365 days in a row.", SURVIVAL, PLATINUM, "Deco_Treasure_Pile_Large", StatKeys.BEST_JOIN_STREAK, 365);
+        hidden("anniversary", "Anniversary", "Play one year after your first visit.", SURVIVAL, PLATINUM, "Deco_Treasure_Pile_Large", StatKeys.SERVER_YEAR, 1);
+        hidden("night_owl", "Night Owl", "Join between midnight and 4 in the morning, server time.", SURVIVAL, BRONZE, "Furniture_Crude_Torch", StatKeys.JOIN_NIGHT, 1);
+        hidden("early_bird", "Early Bird", "Join between 5 and 7 in the morning, server time.", SURVIVAL, BRONZE, "Food_Egg", StatKeys.JOIN_EARLY, 1);
+        hidden("out_of_breath", "Out of Breath", "Surface with under 10 percent oxygen.", SURVIVAL, SILVER, "Armor_Diving_Crude_Chest", StatKeys.OXYGEN_LOW, 1);
+        feat("drained", "Drained", "Empty your Mana 50 times.", SURVIVAL, BRONZE, "Potion_Mana", StatKeys.MANA_EMPTIED, 50);
+        // Hardcore. These two stay in Survival whatever the Hardcore pack says, see the plan's section 6.2.
+        hidden("last_life", "Last Life", "Reach your last life with hardcore on.", SURVIVAL, GOLD, "Deco_Bone_Skulls", StatKeys.LIVES_LEFT_MIN, 1);
+        hidden("ten_days_hardcore", "Ten Days", "Survive 10 game days with hardcore on.", SURVIVAL, PLATINUM, "Deco_Bone_Pile", StatKeys.HARDCORE_DAYS, 10);
+        closer(SURVIVAL, "survival_complete", "Survival, Complete", "Unlock every Survival feat.");
 
         // ---------------- Nature ----------------
         feat("lumberjack", "Lumberjack", "Chop 10 logs.", NATURE, BRONZE, "Tool_Hatchet_Crude", StatKeys.WOOD_CHOPPED, 10);
@@ -538,6 +633,63 @@ public final class FeatRegistry {
         // Tamed creatures counted by the engine, and mounted travel in metres.
         feat("tamer", "Tamer", "Tame an animal.", NATURE, SILVER, "Tool_Trap_Bait", "tamed", 1); // engine key tamed
         feat("saddle_up", "Saddle Up", "Ride a mount for 1 kilometre.", NATURE, SILVER, "Tool_Feedbag", "ride_distance", 1_000); // engine key ride_distance
+        // 1.7.2, farming, fishing, mounts, taming and creature kinds
+        // The 14 field crops plus the Health, Mana and Stamina herb crops. The seed key is the crop name
+        // after Plant_Seeds_, with the herb tier digit dropped, so Plant_Seeds_Health2 counts as Health.
+        multi("sower", "Sower", "Plant seeds of every crop.", NATURE, GOLD, "Plant_Seeds_Wheat",
+                req(StatKeys.SEED_PREFIX + "Wheat", 1), req(StatKeys.SEED_PREFIX + "Carrot", 1), req(StatKeys.SEED_PREFIX + "Potato", 1),
+                req(StatKeys.SEED_PREFIX + "Onion", 1), req(StatKeys.SEED_PREFIX + "Tomato", 1), req(StatKeys.SEED_PREFIX + "Corn", 1),
+                req(StatKeys.SEED_PREFIX + "Rice", 1), req(StatKeys.SEED_PREFIX + "Pumpkin", 1), req(StatKeys.SEED_PREFIX + "Lettuce", 1),
+                req(StatKeys.SEED_PREFIX + "Cauliflower", 1), req(StatKeys.SEED_PREFIX + "Turnip", 1), req(StatKeys.SEED_PREFIX + "Aubergine", 1),
+                req(StatKeys.SEED_PREFIX + "Chilli", 1), req(StatKeys.SEED_PREFIX + "Cotton", 1), req(StatKeys.SEED_PREFIX + "Health", 1),
+                req(StatKeys.SEED_PREFIX + "Mana", 1), req(StatKeys.SEED_PREFIX + "Stamina", 1));
+        feat("sprinkler", "Sprinkler", "Water 100 plots.", NATURE, SILVER, "Tool_Watering_Can", StatKeys.WATERINGS, 100);
+        feat("fertile", "Fertile", "Fertilise 50 plots.", NATURE, SILVER, "Tool_Fertilizer", StatKeys.FERTILIZINGS, 50);
+        feat("henhouse", "Henhouse", "House an animal in a coop.", NATURE, SILVER, "Coop_Chicken", StatKeys.COOP_USES, 1);
+        feat("egg_run", "Produce", "Collect produce from a coop 100 times.", NATURE, GOLD, "Food_Egg", StatKeys.PRODUCE_COLLECTED, 100);
+        feat("catch_and_carry", "Catch and Carry", "Catch an animal in a capture crate.", NATURE, SILVER, "Tool_Capture_Crate", StatKeys.CRATES_USED, 1);
+        feat("trapper", "Trapper", "Place a fishing trap.", NATURE, BRONZE, "Tool_Fishing_Trap", StatKeys.TRAPS_PLACED, 1);
+        feat("bait_shop", "Bait Shop", "Bait 50 traps.", NATURE, SILVER, "Tool_Trap_Bait", StatKeys.TRAPS_BAITED, 50);
+        hidden("leviathan", "Leviathan", "Land a humpback whale.", NATURE, PLATINUM, "Fish_Whale_Humpback_Item", StatKeys.PICKED_PREFIX + "Fish_Whale_Humpback_Item", 1);
+        hidden("deep_catch", "Deep Catch", "Land a fish from the rarest tier.", NATURE, GOLD, "Fish_Jellyfish_Man_Of_War_Item", StatKeys.FISH_RARE, 1);
+        // Every Fish_*_Item in the 0.7.1 assets, 30 of them.
+        multi("aquarium", "Aquarium", "Catch all 30 kinds of fish.", NATURE, PLATINUM, "Fish_Clownfish_Item",
+                req(StatKeys.PICKED_PREFIX + "Fish_Bluegill_Item", 1), req(StatKeys.PICKED_PREFIX + "Fish_Catfish_Item", 1),
+                req(StatKeys.PICKED_PREFIX + "Fish_Clownfish_Item", 1), req(StatKeys.PICKED_PREFIX + "Fish_Crab_Item", 1),
+                req(StatKeys.PICKED_PREFIX + "Fish_Eel_Moray_Item", 1), req(StatKeys.PICKED_PREFIX + "Fish_Frostgill_Item", 1),
+                req(StatKeys.PICKED_PREFIX + "Fish_Jellyfish_Blue_Item", 1), req(StatKeys.PICKED_PREFIX + "Fish_Jellyfish_Cyan_Item", 1),
+                req(StatKeys.PICKED_PREFIX + "Fish_Jellyfish_Green_Item", 1), req(StatKeys.PICKED_PREFIX + "Fish_Jellyfish_Man_Of_War_Item", 1),
+                req(StatKeys.PICKED_PREFIX + "Fish_Jellyfish_Red_Item", 1), req(StatKeys.PICKED_PREFIX + "Fish_Jellyfish_Yellow_Item", 1),
+                req(StatKeys.PICKED_PREFIX + "Fish_Lobster_Item", 1), req(StatKeys.PICKED_PREFIX + "Fish_Minnow_Item", 1),
+                req(StatKeys.PICKED_PREFIX + "Fish_Pike_Item", 1), req(StatKeys.PICKED_PREFIX + "Fish_Piranha_Black_Item", 1),
+                req(StatKeys.PICKED_PREFIX + "Fish_Piranha_Item", 1), req(StatKeys.PICKED_PREFIX + "Fish_Pufferfish_Item", 1),
+                req(StatKeys.PICKED_PREFIX + "Fish_Salmon_Item", 1), req(StatKeys.PICKED_PREFIX + "Fish_Shark_Hammerhead_Item", 1),
+                req(StatKeys.PICKED_PREFIX + "Fish_Shellfish_Lava_Item", 1), req(StatKeys.PICKED_PREFIX + "Fish_Snapjaw_Item", 1),
+                req(StatKeys.PICKED_PREFIX + "Fish_Tang_Blue_Item", 1), req(StatKeys.PICKED_PREFIX + "Fish_Tang_Chevron_Item", 1),
+                req(StatKeys.PICKED_PREFIX + "Fish_Tang_Lemon_Peel_Item", 1), req(StatKeys.PICKED_PREFIX + "Fish_Tang_Sailfin_Item", 1),
+                req(StatKeys.PICKED_PREFIX + "Fish_Trilobite_Black_Item", 1), req(StatKeys.PICKED_PREFIX + "Fish_Trilobite_Item", 1),
+                req(StatKeys.PICKED_PREFIX + "Fish_Trout_Rainbow_Item", 1), req(StatKeys.PICKED_PREFIX + "Fish_Whale_Humpback_Item", 1));
+        feat("first_ride", "First Ride", "Ride a tamed mount.", NATURE, BRONZE, "Tool_Feedbag", StatKeys.MOUNTS, 1);
+        multi("stable", "Stable", "Ride a horse, a camel and a ram.", NATURE, GOLD, "Tool_Feedbag",
+                req(StatKeys.MOUNT_PREFIX + "Tamed_Horse", 1), req(StatKeys.MOUNT_PREFIX + "Tamed_Camel", 1), req(StatKeys.MOUNT_PREFIX + "Tamed_Ram", 1));
+        feat("rail_rider", "Rail Rider", "Ride a minecart.", NATURE, SILVER, "Rail_Kart", StatKeys.MINECART_RIDES, 1);
+        feat("long_haul", "Long Haul", "Ride a mount for 10 kilometres.", NATURE, GOLD, "Tool_Map", StatKeys.RIDE_DISTANCE, 10_000);
+        feat("rancher", "Rancher", "Tame 10 animals.", NATURE, GOLD, "Tool_Trap_Bait", StatKeys.TAMED, 10);
+        // Every adult Tamed_ role in the 0.7.1 assets, 20 of them. Calves, chicks, lambs and piglets grow into these.
+        multi("menagerie", "Menagerie", "Tame every kind of animal that can be tamed.", NATURE, PLATINUM, "Deco_Kweebec_Plush",
+                req(StatKeys.TAMED_PREFIX + "Tamed_Bison", 1), req(StatKeys.TAMED_PREFIX + "Tamed_Boar", 1),
+                req(StatKeys.TAMED_PREFIX + "Tamed_Bunny", 1), req(StatKeys.TAMED_PREFIX + "Tamed_Camel", 1),
+                req(StatKeys.TAMED_PREFIX + "Tamed_Chicken", 1), req(StatKeys.TAMED_PREFIX + "Tamed_Chicken_Desert", 1),
+                req(StatKeys.TAMED_PREFIX + "Tamed_Cow", 1), req(StatKeys.TAMED_PREFIX + "Tamed_Goat", 1),
+                req(StatKeys.TAMED_PREFIX + "Tamed_Horse", 1), req(StatKeys.TAMED_PREFIX + "Tamed_Mosshorn", 1),
+                req(StatKeys.TAMED_PREFIX + "Tamed_Mosshorn_Plain", 1), req(StatKeys.TAMED_PREFIX + "Tamed_Mouflon", 1),
+                req(StatKeys.TAMED_PREFIX + "Tamed_Pig", 1), req(StatKeys.TAMED_PREFIX + "Tamed_Pig_Wild", 1),
+                req(StatKeys.TAMED_PREFIX + "Tamed_Rabbit", 1), req(StatKeys.TAMED_PREFIX + "Tamed_Ram", 1),
+                req(StatKeys.TAMED_PREFIX + "Tamed_Sheep", 1), req(StatKeys.TAMED_PREFIX + "Tamed_Skrill", 1),
+                req(StatKeys.TAMED_PREFIX + "Tamed_Turkey", 1), req(StatKeys.TAMED_PREFIX + "Tamed_Warthog", 1));
+        feat("zoologist", "Zoologist", "Defeat 50 different kinds of creature.", NATURE, GOLD, "Food_Wildmeat_Raw", StatKeys.KILL_KINDS, 50);
+        feat("bestiary", "Bestiary", "Defeat 100 different kinds of creature.", NATURE, PLATINUM, "Deco_Bone_Skulls", StatKeys.KILL_KINDS, 100);
+        closer(NATURE, "nature_complete", "Nature, Complete", "Unlock every Nature feat.");
 
         // ---------------- Chapter I ----------------
         // Goblins, the Void and the new bosses
@@ -702,6 +854,21 @@ public final class FeatRegistry {
         feat("ironworks", "Ironworks", "Place 1,000 metal blocks.", CHAPTER, GOLD, "Metal_Orbis_Copper", StatKeys.PLACED_PREFIX + "metal", 1_000);
         feat("steelworks", "Steelworks", "Place 10,000 metal blocks.", CHAPTER, PLATINUM, "Metal_Goblin_Iron", StatKeys.PLACED_PREFIX + "metal", 10_000);
 
+        // 1.7.2, world events, portal worlds, memories, merchants, NPCs and the hard mode Gobliterator
+        feat("breach_closed", "Breach Closed", "Help end a Goblin Breach event.", CHAPTER, GOLD, "PortalKey_Goblin_Breach", StatKeys.WORLD_EVENT_PREFIX + "Goblin_Breach_First_Event", 1);
+        feat("hunt_master", "Hunt Master", "Help end 10 Hunt events.", CHAPTER, GOLD, "Weapon_Shortbow_Iron", StatKeys.WORLD_EVENT_PREFIX + "Hunt_Breach", 10);
+        feat("coffer_cracker", "Coffer Cracker", "Help end a Coffer Goblin event.", CHAPTER, SILVER, "Coffer_Key", StatKeys.WORLD_EVENT_PREFIX + "Coffer_Goblin", 1);
+        hidden("eviction", "Eviction", "Survive the third stage of a Void event in a portal world.", CHAPTER, GOLD, "Ingredient_Crystal_Void", StatKeys.VOID_STAGE_MAX, 3);
+        hidden("last_second", "Last Second", "Leave a timed portal world with under a minute left.", CHAPTER, SILVER, "Dungeon_Portal_Early_Exit", StatKeys.PORTAL_CLOSE_EXITS, 1);
+        feat("portal_hour", "Portal Hour", "Spend an hour inside portal worlds.", CHAPTER, SILVER, "PortalKey_Henges", StatKeys.PORTAL_SECONDS, HOUR);
+        feat("hard_won", "Hard Won", "Record a Memory that only a kill unlocks.", CHAPTER, SILVER, "Deco_Goblin_Plush", StatKeys.MEMORY_BY_KILL, 1);
+        feat("haggler", "Haggler", "Trade with a merchant.", CHAPTER, SILVER, "Deco_Treasure_Pile_Small", StatKeys.MERCHANTS, 1);
+        feat("trade_route", "Trade Route", "Trade with all three merchants.", CHAPTER, GOLD, "Deco_Treasure", StatKeys.MERCHANTS, 3);
+        feat("elders_counsel", "Elder's Counsel", "Talk to a Kweebec Elder.", CHAPTER, BRONZE, "Armor_Kweebec_Head", StatKeys.TALK_PREFIX + "Kweebec_Elder", 1);
+        hidden("overclocked_clean", "Overclocked, Clean", "Defeat the Gobliterator on hard mode without dying in The Deepworks.", CHAPTER, PLATINUM, "Goblin_Gobliterator_Difficulty_Button", StatKeys.GOBLITERATOR_HARD_DEATHLESS, 1);
+        hidden("overclocked_fast", "Overclocked, Fast", "Defeat the Gobliterator on hard mode within 20 minutes.", CHAPTER, PLATINUM, "Rocket_Boots", StatKeys.GOBLITERATOR_HARD_FAST, 1);
+        closer(CHAPTER, "chapter_complete", "Chapter I, Complete", "Unlock every Chapter I feat.");
+
 
         // ---------------- Misc ----------------
         feat("chatterbox", "Chatterbox", "Send 100 chat messages.", MISC, BRONZE, "Deco_Scroll", StatKeys.CHAT, 100);
@@ -713,17 +880,35 @@ public final class FeatRegistry {
         feat("legend_of_orbis", "Legend of Orbis", "Unlock 100 feats.", MISC, PLATINUM, "Deco_Treasure_Pile_Large", StatKeys.FEATS_UNLOCKED, 100);
         feat("icon", "Icon", "Unlock 150 feats.", MISC, PLATINUM, "Deco_Treasure", StatKeys.FEATS_UNLOCKED, 150);
         hidden("completionist", "Completionist", "Unlock 250 feats.", MISC, PLATINUM, "Deco_Treasure_Pile_Large", StatKeys.FEATS_UNLOCKED, 250);
+        // 1.7.2, seats, movement, referrals and permission groups
+        feat("take_a_seat", "Take a Seat", "Sit on 20 different seats.", MISC, BRONZE, "Furniture_Crude_Stool", StatKeys.SEATS, 20);
+        feat("hop", "Hop", "Jump 1,000 times.", MISC, BRONZE, "Rocket_Boots", StatKeys.JUMPS, 1_000);
+        feat("bounce", "Bounce", "Jump 10,000 times.", MISC, SILVER, "Rocket_Boots", StatKeys.JUMPS, 10_000);
+        hidden("double_jump", "Double Jump", "Use a double jump.", MISC, BRONZE, "Rocket_Boots", StatKeys.DOUBLE_JUMPS, 1);
+        feat("tumbler", "Tumbler", "Roll 100 times.", MISC, BRONZE, "Ingredient_Feathers_Light", StatKeys.ROLLS, 100);
+        feat("scaler", "Scaler", "Spend 10 minutes climbing.", MISC, SILVER, "Deco_Rope", StatKeys.CLIMB_SECONDS, 600);
+        feat("mantle", "Over the Top", "Mantle a ledge 100 times.", MISC, BRONZE, "Tool_Hookshot", StatKeys.MANTLES, 100);
+        feat("sprinter", "Sprinter", "Sprint for an hour.", MISC, SILVER, "Potion_Stamina", StatKeys.SPRINT_SECONDS, HOUR);
+        hidden("low_profile", "Low Profile", "Spend an hour crouched.", MISC, SILVER, "Armor_Leather_Raven_Head", StatKeys.CROUCH_SECONDS, HOUR);
+        hidden("through_the_hub", "Through the Hub", "Arrive through a hub referral.", MISC, BRONZE, "Portal_Device", StatKeys.REFERRAL_JOINS, 1);
+        hidden("promoted", "Promoted", "Be added to a permission group.", MISC, SILVER, "Furniture_Flag_Orange", StatKeys.GROUPS_ADDED, 1);
+        // Endgame. Points and unlock ladders kept by the tracker, see FeatsTracker afterUnlocks.
+        feat("ten_thousand", "Ten Thousand", "Reach 10,000 points.", MISC, GOLD, "Deco_Treasure", StatKeys.FEAT_POINTS, 10_000);
+        hidden("twenty_thousand", "Twenty Thousand", "Reach 20,000 points.", MISC, PLATINUM, "Deco_Treasure_Pile_Large", StatKeys.FEAT_POINTS, 20_000);
+        define(of("grandmaster", "Grandmaster", "Unlock 350 feats.", MISC, PLATINUM, "Deco_Treasure_Pile_Large", true,
+                req(StatKeys.FEATS_UNLOCKED, 350)).withBanner());
+        define(of("all_of_it", "All of It", "Unlock 425 feats.", MISC, PLATINUM, "Deco_Treasure_Pile_Large", true,
+                req(StatKeys.FEATS_UNLOCKED, 425)).withBanner());
+        define(of("grand_slam", "Grand Slam", "Unlock every Platinum feat.", MISC, PLATINUM, "Deco_Treasure_Pile_Large", true,
+                req(StatKeys.PLATINUMS_DONE, 1)).withBanner());
     }
 
-    /**
-     * World milestones and server firsts. The Goblin Lab flags are raised for the whole server by the
-     * Generator and the three repairable devices, see {@code AugmentBlock.ProgressionKey} in the assets.
-     */
     /**
      * The Factions tab. Dominion Factions counts these and hands them to Feats with FeatsApi.addStat, so
      * they only move while Dominion is installed. Credits for offline members are written into their file.
      */
     private void defineFactions() {
+        sectionRequires = Set.of(Sibling.DOMINION);
         feat("faction_founder", "Founding Charter", "Found a faction.", FACTIONS, BRONZE, "Furniture_Human_Ruins_Banner", StatKeys.DOMINION_FACTIONS_FOUNDED, 1);
         feat("staked_claim", "Staked Claim", "Claim a chunk for your faction.", FACTIONS, BRONZE, "Furniture_Flag_Small_Red", StatKeys.DOMINION_CLAIMS, 1);
         feat("landholder", "Landholder", "Claim 50 chunks for your faction.", FACTIONS, SILVER, "Furniture_Flag_Orange", StatKeys.DOMINION_CLAIMS, 50);
@@ -739,8 +924,146 @@ public final class FeatRegistry {
         feat("mission_veteran", "Old Hand", "Complete 25 faction missions.", FACTIONS, GOLD, "Furniture_Ancient_Table", StatKeys.DOMINION_MISSIONS, 25);
         feat("dues_paid", "Dues Paid", "Put 1,000 coins into your faction bank.", FACTIONS, SILVER, "Deco_Treasure_Pile_Small", StatKeys.DOMINION_BANK_DEPOSITED, 1_000);
         feat("patron", "Patron", "Put 25,000 coins into your faction bank.", FACTIONS, GOLD, "Deco_Treasure_Pile_Large", StatKeys.DOMINION_BANK_DEPOSITED, 25_000);
+        // 1.7.2, the keys Dominion 0.6.3 sends on top of the first ten
+        feat("enlisted", "Enlisted", "Join a faction.", FACTIONS, BRONZE, "Furniture_Human_Ruins_Banner", StatKeys.DOMINION_JOINED, 1);
+        hidden("exiled", "Exiled", "Be kicked from a faction.", FACTIONS, BRONZE, "Deco_Bone_Pile", StatKeys.DOMINION_KICKED, 1);
+        feat("declaration", "Declaration", "Declare war on another faction.", FACTIONS, SILVER, "Weapon_Sword_Iron", StatKeys.DOMINION_WARS_DECLARED, 1);
+        feat("pact", "Pact", "Form an alliance.", FACTIONS, SILVER, "Deco_Scroll", StatKeys.DOMINION_ALLIANCES, 1);
+        feat("upgraded", "Upgraded", "Buy a faction upgrade.", FACTIONS, SILVER, "Bench_WorkBench", StatKeys.DOMINION_UPGRADES, 1);
+        feat("fortified", "Fortified", "Hold a faction upgrade at level 5.", FACTIONS, GOLD, "Rock_Stone_Brick", StatKeys.DOMINION_UPGRADE_LEVEL_MAX, 5);
+        feat("faction_market", "Faction Market", "Trade on the faction market.", FACTIONS, SILVER, "Deco_Treasure_Pile_Small", StatKeys.DOMINION_MARKET_TRADES, 1);
+        hidden("trespasser", "Trespasser", "Enter the land of 25 other factions.", FACTIONS, SILVER, "Tool_Map", StatKeys.DOMINION_FOREIGN_ENTRIES, 25);
+        feat("held_the_line", "Held the Line", "Defend your land through a siege.", FACTIONS, GOLD, "Weapon_Shield_Iron", StatKeys.DOMINION_SIEGES_DEFENDED, 1);
+        feat("breacher", "Breacher", "Breach another faction's wall.", FACTIONS, GOLD, "Weapon_Bomb_Large_Fire", StatKeys.DOMINION_BREACHES, 1);
+        feat("king_of_the_hill", "King of the Hill", "Win a hill event for your faction.", FACTIONS, GOLD, "Furniture_Flag_Small_Red", StatKeys.DOMINION_HILL_WINS, 1);
+        feat("outpost", "Outpost", "Hold an outpost for your faction.", FACTIONS, SILVER, "Furniture_Flag_Orange", StatKeys.DOMINION_OUTPOSTS_HELD, 1);
+        feat("powerhouse", "Powerhouse", "Reach full power.", FACTIONS, GOLD, "Potion_Stamina_Greater", StatKeys.DOMINION_POWER_MAX, 1);
+        hidden("downsizing", "Downsizing", "Release a claim.", FACTIONS, BRONZE, "Deco_Map", StatKeys.DOMINION_UNCLAIMS, 1);
+        // Cross mod, Dominion and Coinage together. Keys written by the Coinage binding and Dominion's bridge.
+        define(of("war_chest", "War Chest", "Hold a net worth of 50,000 coins while your faction is at war.", FACTIONS, GOLD, "Deco_Treasure_Pile_Large", true,
+                req(StatKeys.COINAGE_PREFIX + "war_chest", 1)).requiring(Sibling.DOMINION, Sibling.COINAGE));
+        define(of("treasurer", "Treasurer", "Put 100,000 coins into your faction bank.", FACTIONS, PLATINUM, "Deco_Treasure_Pile_Large", false,
+                req(StatKeys.DOMINION_BANK_DEPOSITED, 100_000)).requiring(Sibling.DOMINION, Sibling.COINAGE));
+        sectionRequires = Set.of();
     }
 
+    /**
+     * A category closer, the hidden Platinum last row of a tab that unlocks once every other personal feat of
+     * the tab is unlocked. The tracker raises category_done:<name> after each unlock, counting the tab without
+     * the closers themselves, so a closer never waits on itself.
+     */
+    private void closer(Category cat, String id, String name, String desc) {
+        define(of(id, name, desc, cat, PLATINUM, cat.icon(), true, req(StatKeys.CATEGORY_DONE_PREFIX + cat.name(), 1)).withBanner());
+    }
+
+    /**
+     * The admin packs, each a tab of its own that exists only while its switch in Feats.json is on. Last Life
+     * and Ten Days stay in Survival, the Hardcore pack adds the two feats past them.
+     */
+    private void definePacks() {
+        // ---------------- Social ----------------
+        define(of("company", "Company", "Spend an hour online with at least one other player.", SOCIAL, BRONZE, "Deco_Kweebec_Plush", false,
+                req(StatKeys.COOP_HOURS, 1)).inPack(Pack.SOCIAL));
+        define(of("regular_company", "Good Company", "Spend 50 hours online with other players.", SOCIAL, GOLD, "Deco_Goblin_Plush", false,
+                req(StatKeys.COOP_HOURS, 50)).inPack(Pack.SOCIAL));
+        define(of("crowd", "Crowd", "Be online with 9 other players at once.", SOCIAL, SILVER, "Furniture_Tavern_Chair", false,
+                req(StatKeys.PEAK_WITH_ME, 10)).inPack(Pack.SOCIAL));
+        define(of("familiar_faces", "Familiar Faces", "Play alongside 25 different players.", SOCIAL, SILVER, "Deco_Kweebec_Plush", false,
+                req(StatKeys.PLAYERS_MET, 25)).inPack(Pack.SOCIAL));
+        define(of("hundred_faces", "A Hundred Faces", "Play alongside 100 different players.", SOCIAL, PLATINUM, "Deco_Treasure_Pile_Large", false,
+                req(StatKeys.PLAYERS_MET, 100)).inPack(Pack.SOCIAL));
+        define(of("shared_first", "Shared First", "Share in a server milestone within a minute of it being reached.", SOCIAL, SILVER, "Deco_Trophy_Harvest", true,
+                req(StatKeys.MILESTONE_WITNESSED, 1)).inPack(Pack.SOCIAL));
+
+        // ---------------- Hardcore ----------------
+        define(of("thirty_days_hardcore", "Thirty Days", "Survive 30 game days with hardcore on.", HARDCORE, PLATINUM, "Deco_Bone_Skulls", true,
+                req(StatKeys.HARDCORE_DAYS, 30)).inPack(Pack.HARDCORE));
+        define(of("full_pool", "Full Pool", "Reach 10 game days without losing a life.", HARDCORE, GOLD, "Potion_Health_Greater", false,
+                req(StatKeys.HARDCORE_CLEAN_DAYS, 10)).inPack(Pack.HARDCORE));
+
+        // ---------------- PvP ----------------
+        define(of("vendetta", "Vendetta", "Defeat the player who last defeated you.", PVP, GOLD, "Weapon_Daggers_Claw_Bone", true,
+                req(StatKeys.VENDETTAS, 1)).inPack(Pack.PVP));
+        define(of("spree", "Spree", "Defeat 5 players without dying.", PVP, GOLD, "Weapon_Sword_Iron", false,
+                req(StatKeys.PLAYER_KILL_STREAK, 5)).inPack(Pack.PVP));
+        define(of("long_duel", "Long Duel", "Defeat a player from 30 metres away.", PVP, SILVER, "Weapon_Crossbow_Iron", false,
+                req(StatKeys.PLAYER_KILLS_FAR, 1)).inPack(Pack.PVP));
+
+        // ---------------- Calendar ----------------
+        // Real dates in the server's zone or CalendarZone, as date:MMDD, checked at join and at midnight.
+        define(of("new_year", "New Year", "Be online on the first of January.", CALENDAR, BRONZE, "Ingredient_Ice_Essence", true,
+                req(StatKeys.DATE_PREFIX + "0101", 1)).inPack(Pack.CALENDAR));
+        define(of("midsummer", "Midsummer", "Be online on the 21st of June.", CALENDAR, BRONZE, "Plant_Crop_Wheat_Item", true,
+                req(StatKeys.DATE_PREFIX + "0621", 1)).inPack(Pack.CALENDAR));
+        define(of("midwinter", "Midwinter", "Be online on the 21st of December.", CALENDAR, BRONZE, "Rock_Ice", true,
+                req(StatKeys.DATE_PREFIX + "1221", 1)).inPack(Pack.CALENDAR));
+        define(of("server_birthday", "Server Birthday", "Be online on the anniversary of the day Feats was installed.", CALENDAR, SILVER, "Deco_Treasure", true,
+                req(StatKeys.SERVER_BIRTHDAY, 1)).inPack(Pack.CALENDAR));
+
+        // ---------------- Grind ----------------
+        define(of("world_eater", "World Eater", "Break 10,000,000 blocks.", GRIND, PLATINUM, "Tool_Drill_Scrap", true,
+                req(StatKeys.BLOCKS_BROKEN, 10_000_000)).inPack(Pack.GRIND));
+        define(of("extinction", "Extinction", "Defeat 100,000 creatures.", GRIND, PLATINUM, "Weapon_Battleaxe_Adamantite", true,
+                req(StatKeys.KILLS, 100_000)).inPack(Pack.GRIND));
+        define(of("thousand_hours", "Thousand Hours", "Play for 1,000 hours.", GRIND, PLATINUM, "Deco_Treasure_Pile_Large", true,
+                req(StatKeys.PLAYTIME, 1_000 * HOUR)).inPack(Pack.GRIND));
+    }
+
+    /**
+     * The Coinage tab. The Coinage binding writes these counters from Coinage's economy listener, so they only
+     * move while Coinage is installed. Balance and net worth are records of the highest value seen.
+     */
+    private void defineCoinage() {
+        sectionRequires = Set.of(Sibling.COINAGE);
+        feat("first_coin", "First Coin", "Receive a payment.", COINAGE, BRONZE, "Deco_Treasure_Pile_Small", StatKeys.COINAGE_PREFIX + "received", 1);
+        feat("payday", "Payday", "Earn 1,000 coins.", COINAGE, SILVER, "Ingredient_Bar_Copper", StatKeys.COINAGE_PREFIX + "received", 1_000);
+        feat("well_off", "Well Off", "Hold 10,000 coins at once.", COINAGE, GOLD, "Ingredient_Bar_Silver", StatKeys.COINAGE_PREFIX + "balance_max", 10_000);
+        feat("tycoon", "Tycoon", "Reach a net worth of 100,000 coins.", COINAGE, PLATINUM, "Deco_Treasure_Pile_Large", StatKeys.COINAGE_PREFIX + "net_worth_max", 100_000);
+        feat("generous", "Generous", "Send 10 payments.", COINAGE, BRONZE, "Deco_Scroll", StatKeys.COINAGE_PREFIX + "payments_sent", 10);
+        feat("benefactor", "Benefactor", "Send 10,000 coins to other players.", COINAGE, GOLD, "Ingredient_Bar_Gold", StatKeys.COINAGE_PREFIX + "paid", 10_000);
+        feat("customer", "Customer", "Buy 100 items from shops.", COINAGE, SILVER, "Furniture_Ancient_Chest_Small", StatKeys.COINAGE_PREFIX + "shop_bought", 100);
+        feat("shopkeeper", "Shopkeeper", "Sell 100 items through shops.", COINAGE, SILVER, "Furniture_Ancient_Chest_Large", StatKeys.COINAGE_PREFIX + "shop_sold", 100);
+        feat("market_maker", "Market Maker", "Sell 25 market listings.", COINAGE, GOLD, "Deco_Treasure", StatKeys.COINAGE_PREFIX + "listings_sold", 25);
+        hidden("winning_bid", "Winning Bid", "Win an auction.", COINAGE, SILVER, "Deco_Scroll", StatKeys.COINAGE_PREFIX + "auctions_won", 1);
+        feat("trader", "Trader", "Settle 10 trades with other players.", COINAGE, SILVER, "Deco_Kweebec_Plush", StatKeys.COINAGE_PREFIX + "trades", 10);
+        feat("saver", "Saver", "Put coins into savings.", COINAGE, BRONZE, "Furniture_Crude_Chest_Small", StatKeys.COINAGE_PREFIX + "savings_deposits", 1);
+        feat("compound", "Compound", "Earn 100 coins of interest.", COINAGE, SILVER, "Ingredient_Bar_Copper", StatKeys.COINAGE_PREFIX + "interest", 100);
+        hidden("borrower", "Borrower", "Take a loan.", COINAGE, BRONZE, "Deco_Scroll", StatKeys.COINAGE_PREFIX + "loans", 1);
+        feat("clean_slate", "Clean Slate", "Repay a loan in full.", COINAGE, SILVER, "Deco_Scroll", StatKeys.COINAGE_PREFIX + "loans_repaid", 1);
+        hidden("defaulted", "Defaulted", "Default on a loan.", COINAGE, BRONZE, "Deco_Bone_Pile", StatKeys.COINAGE_PREFIX + "loans_defaulted", 1);
+        feat("gambler", "Gambler", "Place 10 bets.", COINAGE, BRONZE, "Deco_Goblin_Plush", StatKeys.COINAGE_PREFIX + "bets", 10);
+        feat("lucky", "Lucky", "Win 50 bets.", COINAGE, SILVER, "Deco_Trophy_Harvest", StatKeys.COINAGE_PREFIX + "bets_won", 50);
+        feat("high_roller", "High Roller", "Stake 10,000 coins in total.", COINAGE, GOLD, "Ingredient_Bar_Gold", StatKeys.COINAGE_PREFIX + "staked", 10_000);
+        hidden("heavy_losses", "Heavy Losses", "Lose 10,000 coins at the tables.", COINAGE, SILVER, "Deco_Bone_Skulls", StatKeys.COINAGE_PREFIX + "lost", 10_000);
+        hidden("jackpot", "Jackpot", "Win the lottery.", COINAGE, GOLD, "Deco_Treasure_Pile_Large", StatKeys.COINAGE_PREFIX + "lottery_wins", 1);
+        feat("daily_week", "Daily, a Week", "Claim your daily reward 7 days in a row.", COINAGE, SILVER, "Deco_Treasure_Pile_Small", StatKeys.COINAGE_PREFIX + "daily_best_streak", 7);
+        feat("daily_month", "Daily, a Month", "Claim your daily reward 30 days in a row.", COINAGE, GOLD, "Deco_Treasure", StatKeys.COINAGE_PREFIX + "daily_best_streak", 30);
+        feat("paper_trail", "Paper Trail", "Turn coins into a note.", COINAGE, BRONZE, "Deco_Scroll", StatKeys.COINAGE_PREFIX + "notes_issued", 1);
+        // Cross mod, Coinage and Dominion together. Written by the Coinage binding when both parties have allied factions.
+        define(of("allied_trade", "Allied Trade", "Settle a trade with a member of an allied faction.", COINAGE, SILVER, "Deco_Scroll", false,
+                req(StatKeys.COINAGE_PREFIX + "allied_trades", 1)).requiring(Sibling.COINAGE, Sibling.DOMINION));
+        sectionRequires = Set.of();
+    }
+
+    /**
+     * The Chronicle tab. The Chronicle binding reads Chronicle Stats' time windows and the RPG Leveling bridge
+     * and raises these as records. The three level feats only move while Chronicle reports an rpg_level stat.
+     */
+    private void defineChronicle() {
+        sectionRequires = Set.of(Sibling.CHRONICLE);
+        feat("busy_day", "Busy Day", "Break 2,500 blocks in one day.", CHRONICLE, SILVER, "Tool_Pickaxe_Iron", StatKeys.CHRONICLE_PREFIX + "day_blocks_max", 2_500);
+        feat("big_week", "Big Week", "Defeat 1,000 creatures in one week.", CHRONICLE, GOLD, "Weapon_Battleaxe_Iron", StatKeys.CHRONICLE_PREFIX + "week_kills_max", 1_000);
+        feat("full_month", "Full Month", "Be active every day of a month.", CHRONICLE, GOLD, "Deco_Scroll", StatKeys.CHRONICLE_PREFIX + "month_days_max", 28);
+        feat("level_10", "Level 10", "Reach level 10 in RPG Leveling.", CHRONICLE, SILVER, "Rune_Empty", StatKeys.CHRONICLE_PREFIX + "rpg_level_max", 10);
+        feat("level_25", "Level 25", "Reach level 25 in RPG Leveling.", CHRONICLE, GOLD, "Rune_Fireball", StatKeys.CHRONICLE_PREFIX + "rpg_level_max", 25);
+        feat("level_50", "Level 50", "Reach level 50 in RPG Leveling.", CHRONICLE, PLATINUM, "Bench_Abilities", StatKeys.CHRONICLE_PREFIX + "rpg_level_max", 50);
+        sectionRequires = Set.of();
+    }
+
+    /**
+     * World milestones and server firsts. The Goblin Lab flags are raised for the whole server by the
+     * Generator and the three repairable devices, see {@code AugmentBlock.ProgressionKey} in the assets.
+     */
     private void defineWorld() {
         // ---------------- World milestones ----------------
         world("world_power", "Lights On", "Restore power to the Goblin Lab.", SILVER, "GoblinLab_Generator", flag("goblin_lab_power", 1));
@@ -763,6 +1086,23 @@ public final class FeatRegistry {
         first("first_legend_of_orbis", "Founder", "Be the first on this server to unlock 100 feats.", PLATINUM, "Deco_Treasure_Pile_Large", after("legend_of_orbis"));
         first("first_legend", "Warpath", "Be the first on this server to defeat 5,000 creatures.", PLATINUM, "Weapon_Battleaxe_Mithril", after("legend"));
         first("first_master_explorer", "Surveyor", "Be the first on this server to discover all 5 zones.", PLATINUM, "Deco_Map", after("master_explorer"));
+
+        // ---------------- 1.7.2 server totals and firsts ----------------
+        // Totals live in server.json, raised by the tracker and the hooks, see WorldStore. The Full House
+        // target here is the default, the tracker reads the real FullHouse setting when it checks.
+        world("world_million_blocks", "A Million Blocks", "Break a million blocks between everyone.", SILVER, "Tool_Pickaxe_Iron", total(StatKeys.TOTAL_BLOCKS_BROKEN, 1_000_000));
+        world("world_ten_million_blocks", "Ten Million Blocks", "Break ten million blocks between everyone.", GOLD, "Tool_Drill_Scrap", total(StatKeys.TOTAL_BLOCKS_BROKEN, 10_000_000));
+        world("world_hundred_thousand_kills", "A Hundred Thousand", "Defeat a hundred thousand creatures between everyone.", GOLD, "Weapon_Battleaxe_Iron", total(StatKeys.TOTAL_KILLS, 100_000));
+        world("world_thousand_bosses", "A Thousand Bosses", "Defeat a thousand bosses between everyone.", GOLD, "Weapon_Club_Doomed", total(StatKeys.TOTAL_KILLS_BOSS, 1_000));
+        world("world_hundred_players", "A Hundred Players", "Have a hundred players join the server.", SILVER, "Deco_Kweebec_Plush", total(StatKeys.TOTAL_PLAYERS_KNOWN, 100));
+        world("world_thousand_players", "A Thousand Players", "Have a thousand players join the server.", GOLD, "Deco_Goblin_Plush", total(StatKeys.TOTAL_PLAYERS_KNOWN, 1_000));
+        world(FULL_HOUSE_ID, "Full House", "Have 20 players online at once.", SILVER, "Furniture_Tavern_Chair", total(StatKeys.TOTAL_PEAK_ONLINE, FULL_HOUSE_DEFAULT));
+        world("world_first_year", "First Year", "Run with Feats for a year.", GOLD, "Deco_Trophy_Harvest", total(StatKeys.TOTAL_SERVER_DAYS, 365));
+        world("world_chunk_factory", "Chunk Factory", "Generate 100,000 chunks.", SILVER, "Tool_Map", total(StatKeys.TOTAL_CHUNKS_GENERATED, 100_000));
+        first("first_leviathan", "Whaler", "Be the first on this server to land a humpback whale.", PLATINUM, "Fish_Whale_Humpback_Item", after("leviathan"));
+        first("first_bestiary", "Taxonomist", "Be the first on this server to defeat 100 kinds of creature.", PLATINUM, "Deco_Bone_Skulls", after("bestiary"));
+        add(new Feat("first_grand_slam", "Peerless", "Be the first on this server to unlock every Platinum feat.", WORLD, PLATINUM,
+                "Deco_Treasure_Pile_Large", List.of(), false, Scope.FIRST, after("grand_slam")).withBanner());
     }
 
     /**

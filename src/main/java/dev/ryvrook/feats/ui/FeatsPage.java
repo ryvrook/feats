@@ -241,7 +241,7 @@ public final class FeatsPage extends InteractiveCustomUIPage<FeatsPage.Event> {
             commands.set(selector + " #Icon.ItemId", feat.icon());
             commands.set(selector + " #Name.Text", feat.name());
             commands.set(selector + " #Desc.Text", feat.description());
-            commands.set(selector + " #Tier.Text", feat.scope() == Scope.FIRST ? "First" : "Milestone");
+            commands.set(selector + " #Tier.Text", tierLabel(feat, feat.scope() == Scope.FIRST ? "First" : "Milestone"));
             commands.set(selector + " #Check.Visible", entry != null);
             commands.set(selector + " #Bar.Value", entry == null ? 0f : 1f);
             commands.set(selector + " #Progress.Text", worldStatus(feat, entry));
@@ -320,7 +320,7 @@ public final class FeatsPage extends InteractiveCustomUIPage<FeatsPage.Event> {
         commands.set(selector + " #Icon.ItemId", secret ? HIDDEN_ICON : feat.icon());
         commands.set(selector + " #Name.Text", secret ? "???" : feat.name());
         commands.set(selector + " #Desc.Text", secret ? "Hidden feat. Its name shows once you unlock it." : feat.description());
-        commands.set(selector + " #Tier.Text", feat.tier().displayName());
+        commands.set(selector + " #Tier.Text", tierLabel(feat, feat.tier().displayName()));
         commands.set(selector + " #Check.Visible", unlocked);
 
         if (unlocked) {
@@ -342,6 +342,11 @@ public final class FeatsPage extends InteractiveCustomUIPage<FeatsPage.Event> {
             commands.set(selector + " #Progress.Text",
                     withRarity(label + "  ·  +" + feat.tier().points() + " pts", feat, rarity));
         }
+    }
+
+    /** The tier label of a row. A feat whose unlock shows the banner carries a trailing dot as its marker. */
+    static String tierLabel(Feat feat, String tier) {
+        return feat.banner() ? tier + "." : tier;
     }
 
     private int countMet(Feat feat) {

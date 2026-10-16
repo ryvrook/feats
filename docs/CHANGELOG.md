@@ -3,6 +3,104 @@
 Every notable change to Feats is recorded here. The format follows Keep a Changelog and the project uses
 semantic versioning.
 
+## 1.7.2 - 2026-10-16
+
+Needs the Hytale 0.7.0 release server or newer. There was no 1.7.1, the version went from 1.7.0 straight to 1.7.2.
+A plain server goes from 327 feats worth 15,075 points to 445 worth 20,445, and to 455 worth 20,735 with the
+default packs. With every pack and every sibling mod installed there are 527 feats worth 23,430 points.
+
+### For players
+
+- 118 new feats on every server, 105 in the nine tabs and 13 for the endgame. Exploration gains 13 for biomes,
+  weather, the moon, the Forgotten Temple, respawn points and dungeon checkpoints and health packs. Mining gains 6
+  for tools worn out, repairs and tree species, Building 2 for kinds of block placed, Crafting 5 for knowledge
+  recipes and full armour sets. Combat gains 21 for damage kinds, blocking, projectiles fired, kills underwater,
+  gliding, mounted, at night, under a Blood Moon, on low health and from 50 metres, multi kills, close calls, hard
+  landings and co-op bosses. Survival gains 16 for nights slept through, game days alive, join streaks, join
+  hours, oxygen, Mana and hardcore lives. Nature gains 19 for seeds, watering, fertiliser, coops, capture crates,
+  fishing traps, every fish, mounts, minecarts, every tameable animal and creature kinds. Chapter I gains 12 for
+  world events, portal worlds, merchants, the Kweebec Elder and the Gobliterator on hard mode without dying or
+  within 20 minutes. Misc gains 11 for seats, jumps, rolls, climbing, sprinting, crouching, hub referrals and
+  permission groups.
+- The endgame. Each of the first eight tabs ends with a hidden Platinum closer that unlocks once every other feat
+  of the tab is yours. Misc ends with Grand Slam for every Platinum, and gains Ten Thousand and Twenty Thousand
+  points and Grandmaster and All of It at 350 and 425 feats.
+- Five packs, each a tab of its own. Social, 6 feats for time with other players, and Calendar, 4 feats on real
+  dates, are on by default. Hardcore, 2 feats, turns on with hardcore lives. PvP, 3 feats, and Grind, 3 very long
+  ladders, are off. Last Life and Ten Days stay in Survival whatever the Hardcore switch says.
+- Sibling tabs. A Coinage tab of 24 feats worth 720 points with Coinage, a Chronicle tab of 6 feats worth 300
+  points with Chronicle Stats, 2 Exploration feats with Atlas, 14 more Factions feats with Dominion, 29 worth 890
+  points in all, and 3 cross mod feats with both Coinage and Dominion.
+- 12 new World records. Nine milestones read the new server totals, such as A Million Blocks, Full House and First
+  Year, and three firsts follow Leviathan, Bestiary and Grand Slam. The World tab has 30 records.
+- A banner at the top of the screen for six seconds on a Platinum, a feat owned by under 1 percent of players, a
+  tab closer, a server first or a milestone, with the feat, its description and why it is there. Other players
+  online see a milestone or first with the holder's name. At most three a minute, the rest stay in chat.
+  `/feats notify off` mutes it with the toast. Feats that always get the banner show a dot after their tier.
+- The Statistics tab has 44 rows, up from 35, with the join streak, nights slept through, the longest life in
+  game days, biomes, creature kinds, jumps, tools worn out, players met and points.
+
+### For admins
+
+- New `Feats.json` keys, `PackSocial` (true), `PackHardcore` ("auto"), `PackPvp` (false), `PackCalendar` (true),
+  `PackGrind` (false), `Banner` ("RARE"), `BannerSeconds` (6), `BannerRareBelowPercent` (1), `BannerBroadcast`
+  (true), `BannerSound` (`SFX_Event_Chapter_1_Complete_Sting`), `BannerParticles` (false), `FullHouse` (20),
+  `CalendarZone` ("") and `ServerTotals` (true). The five pack keys need a restart or `/plugin reload`, the rest
+  apply on `/feats admin reload`.
+- `/feats admin totals` lists every server total and each total milestone with its value, target and whether it
+  is reached.
+- `/feats admin reload` adds a line with the packs that are on, so a pack change that has not taken effect yet is
+  easy to spot.
+- `/feats admin grant` of a feat whose pack is off or whose sibling is missing says why, such as
+  `pack GRIND is off`, instead of saying the feat does not exist.
+- `server.json` keeps the server totals, written with the autosave and at shutdown.
+- The start log adds `Packs on`, one line per sibling with the feats it brings, and one line per sibling binding
+  that links. Biome names and instance discovery keys are logged the first time each is seen.
+- Placeholders `%feats_streak%`, `%feats_best_streak%`, `%feats_server_<key>%`, `%feats_pack_<name>%` and
+  `%feats_siblings%`.
+- `export/feats.json` gains `packs`, `siblings`, `totals` and `feats`, and `banner`, `pack` and `requires` on the
+  feat rows, recent unlocks and world records, see the README.
+- The optional dependency on Atlas is now 1.9.0 or newer.
+
+### Upgrading
+
+- Swap the jar. `Feats.json` gains the new keys with their defaults and every setting already in it
+  stays.
+- Player files gain `FirstSeen`, `LastJoinDay` and `Met`. Old files load unchanged, get the first two at the
+  player's next join and `Met` once they share the server with someone. `FirstSeen` for a player who joined
+  before is that join, so Anniversary counts a year from then.
+- `server.json` gains `totals`. The install date behind First Year and Server Birthday is the first 1.7.2 start,
+  and the players who have joined total counts first joins from then on.
+- The join streak starts at one at each player's first join after the upgrade.
+- Players who already meet a new target, such as a tab they have finished or a points total, get those feats at
+  their next join. The first five get the full toast and the rest unlock quietly with one summary line.
+- Sibling mods are read at start. After adding Coinage, Chronicle Stats, Atlas or Dominion, restart or run
+  `/plugin reload Ryvrook:Feats`. The 13 new Factions feats need Dominion 0.7.1 to move.
+
+### For plugin authors
+
+- `FeatsApi.API_VERSION` is 3.
+- `FeatsApi.packs()`, the packs that are on, `siblings()`, the sibling plugins found at start, and
+  `serverStat(key)`, a server total.
+- `FeatInfo` gains `banner`, `pack`, the pack name or null, and `requires`, the plugin names the feat needs. The
+  older constructors still work.
+- `FeatUnlockedEvent` gains `banner()`. The 1.7.0 constructor still works and fills it with false.
+- Category names gain Coinage, Chronicle, Social, Hardcore, PvP, Calendar and Grind, in `FeatInfo`, the event and
+  the export.
+
+### Other changes
+
+- The TrackerAPI bridge takes 34 event kinds, up from 19. Every new kind ships in TrackerAPI 1.0.0, so that stays
+  the minimum. Vitals, game days, respawn points, hardcore lives, known recipes, permission groups, referrals, the
+  calendar, players met and the server totals are read by Feats on both paths. Rolls, mantles, double jumps,
+  seats, shield blocks, repairs, capture crates, trap bait, Memories only a kill unlocks, void stages, late portal
+  exits and merchants have no TrackerAPI record, so their feats only move with `Tracker` on `never`.
+- The tracking hooks are split into three hook sets, combat, world and items, so the plugin class does not change
+  when a hook is added. A set that fails is logged and the others carry on.
+- The points total, the tab closer flags and the Grand Slam flag are counters in the player file, raised after
+  each unlock and brought in line once per load, so a revoke lowers them and an old file gets them at its first
+  join.
+
 ## 1.7.0 - 2026-10-16
 
 Needs the Hytale 0.7.0 release server or newer. The feats are the same as in 1.6.0.

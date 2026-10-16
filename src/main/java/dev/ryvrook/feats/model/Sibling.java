@@ -10,7 +10,7 @@ public enum Sibling {
     COINAGE("Coinage", "1.2.0"),
     DOMINION("Dominion", "0.5.1"),
     CHRONICLE("ChronicleStats", "1.5.0"),
-    ATLAS("Atlas", "1.8.0");
+    ATLAS("Atlas", "1.9.0");
 
     public static final String GROUP = "Ryvrook";
 

@@ -101,13 +101,19 @@ public final class Classify {
     private static final Memo INTERACTION = new Memo(Classify::computeInteraction);
     private static final Memo KILL_MELEE = new Memo(id -> computeKill(id, false));
     private static final Memo KILL_RANGED = new Memo(id -> computeKill(id, true));
+    private static final Memo TOOL_BROKEN = new Memo(Classify::computeToolBroken);
+    private static final Memo TAMED = new Memo(Classify::computeTamed);
+    private static final Memo SEED = new Memo(Classify::computeSeed);
     private static final KeyMemo OBTAINED_KEY = new KeyMemo(StatKeys.OBTAINED_PREFIX);
     private static final KeyMemo STASH_KEY = new KeyMemo(StatKeys.STASH_PREFIX);
+    private static final KeyMemo TALK_KEY = new KeyMemo(StatKeys.TALK_PREFIX);
+    private static final KeyMemo MOUNT_KEY = new KeyMemo(StatKeys.MOUNT_PREFIX);
 
     /** Ids remembered across every memo, for tests and diagnostics. */
     static int memoised() {
         return BROKEN.size() + PLACED.size() + CRAFTED.size() + OBTAINED.size() + PICKED.size() + USED.size()
-                + INTERACTION.size() + KILL_MELEE.size() + KILL_RANGED.size();
+                + INTERACTION.size() + KILL_MELEE.size() + KILL_RANGED.size() + TOOL_BROKEN.size() + TAMED.size()
+                + SEED.size();
     }
 
     private static final Set<String> LIVESTOCK = Set.of(
@@ -163,6 +169,37 @@ public final class Classify {
 
     private static final String ABILITY_ROOT = "Root_Ability_";
     private static final String SPYGLASS_ROOT = "Root_Spyglass_Zoom";
+    /** The Secondary root of a filled watering can, see Template_Tool_Watering_Can's Filled_Water state. */
+    public static final String WATERING_ROOT = "Watering_Can_Filled_Use";
+    /** The Secondary roots of the fertilizer bags. */
+    private static final String FERTILIZER_ROOT = "Fertilizer_Use";
+    private static final String FERTILIZER_CRYSTAL_ROOT = "Fertilizer_Crystal_Use";
+    /** The Secondary root of Tool_Trap_Bait, shared by other stage setting tools, so the held item decides. */
+    public static final String FARMING_STAGE_ROOT = "Root_ChangeFarmingStage_Set";
+    public static final String TRAP_BAIT = "Tool_Trap_Bait";
+    public static final String FISHING_TRAP = "Tool_Fishing_Trap";
+    public static final String CAPTURE_CRATE = "Tool_Capture_Crate";
+    private static final List<String> WATERING = List.of(StatKeys.WATERINGS);
+    private static final List<String> FERTILIZING = List.of(StatKeys.FERTILIZINGS);
+
+    /**
+     * Fish item ids of the rarest drop tier, the 0.1 weight entries of the fishing drop lists, without the
+     * Fish_ prefix and the _Item suffix.
+     */
+    private static final Set<String> RARE_FISH = Set.of(
+            "Shark_Hammerhead", "Snapjaw", "Frostgill", "Piranha", "Piranha_Black", "Trilobite", "Trilobite_Black",
+            "Crab", "Lobster", "Eel_Moray", "Pike", "Shellfish_Lava", "Jellyfish_Man_Of_War", "Whale_Humpback");
+
+    /**
+     * Tools whose durability is a charge that runs out by design, such as a watering can emptying or a
+     * fertilizer bag being used up. Running those down is not wearing a tool out.
+     */
+    private static final List<String> CHARGE_TOOLS = List.of(
+            "Tool_Watering_Can", "Tool_Fertilizer", "Tool_Feedbag", "Tool_Capture_Crate", "Tool_Trap_Bait",
+            "Tool_Fishing_Trap", "Tool_Repair_Kit");
+
+    /** Suffixes of the young of a tamed kind, so Tamed_Cow_Calf counts as Tamed_Cow. */
+    private static final List<String> YOUNG_SUFFIXES = List.of("_Calf", "_Chick", "_Foal", "_Kid", "_Lamb", "_Piglet");
 
     /** Keys to bump when a player breaks a block with the given block type id. */
     public static List<String> blockBroken(String blockId) {
@@ -376,6 +413,11 @@ public final class Classify {
                 || blockId.startsWith("Goblin_Gobliterator_")) {
             keys.add(StatKeys.USE_PREFIX + trackedUseBlock(blockId));
         }
+        if (blockId.startsWith("Coop_")) {
+            // The coop block swaps to its Produce_Ready state while produce waits, so a use in that state
+            // collects produce and a use in the default state houses an animal [inferred].
+            keys.add(blockId.contains("_Produce_Ready") ? StatKeys.PRODUCE_COLLECTED : StatKeys.COOP_USES);
+        }
         if (blockId.contains("Chest")) {
             keys.add(StatKeys.CHESTS_OPENED);
         } else if (blockId.endsWith("_Bed")) {
@@ -488,13 +530,20 @@ public final class Classify {
      * Meals and potions are not counted here because the chain starts before the item is used up.
      */
     public static List<String> interaction(String rootId) {
-        if (rootId == null || !rootId.startsWith("Root_")) {
+        if (rootId == null || !(rootId.startsWith("Root_") || rootId.startsWith("Watering_Can_")
+                || rootId.startsWith("Fertilizer_"))) {
             return List.of();
         }
         return INTERACTION.get(rootId);
     }
 
     private static List<String> computeInteraction(String rootId) {
+        if (rootId.equals(WATERING_ROOT)) {
+            return WATERING;
+        }
+        if (rootId.equals(FERTILIZER_ROOT) || rootId.equals(FERTILIZER_CRYSTAL_ROOT)) {
+            return FERTILIZING;
+        }
         if (rootId.startsWith(ABILITY_ROOT)) {
             String ability = rootId.substring(ABILITY_ROOT.length());
             if (ability.isEmpty()) {
@@ -543,6 +592,107 @@ public final class Classify {
 
     /** Prefix of the status effect lava applies, Lava_Burn in 0.7.1, see {@link #death(String, String)}. */
     private static final String LAVA_EFFECT = "Lava_";
+
+    // ---- 1.7.2 helpers ----------------------------------------------------------
+
+    /**
+     * The tree species of a trunk block id, {@code Oak} for Wood_Oak_Trunk and its Full, Half and Stairs
+     * variants, or null for anything that is not a trunk.
+     */
+    public static String woodSpecies(String blockId) {
+        if (blockId == null || !blockId.startsWith("Wood_") || !blockId.contains("_Trunk")) {
+            return null;
+        }
+        String species = segment(blockId, 1);
+        return species.isEmpty() || species.equals("Trunk") ? null : species;
+    }
+
+    /** Keys to bump when a player places seeds, or an empty list for any other item. */
+    public static List<String> seedPlanted(String itemId) {
+        return itemId == null || !itemId.startsWith("Plant_Seeds_") ? List.of() : SEED.get(itemId);
+    }
+
+    private static List<String> computeSeed(String itemId) {
+        String crop = itemId.substring("Plant_Seeds_".length());
+        // The _Eternal seeds are creative mode plants and Test_ ones are developer blocks.
+        if (crop.isEmpty() || crop.endsWith("_Eternal") || crop.startsWith("Test")) {
+            return List.of();
+        }
+        // The herb seeds ship in tiers, Plant_Seeds_Health1 to Health3, and the Sower feat counts the herb once.
+        int end = crop.length();
+        while (end > 0 && Character.isDigit(crop.charAt(end - 1))) {
+            end--;
+        }
+        if (end == 0) {
+            return List.of(StatKeys.SEEDS_PLANTED);
+        }
+        return List.of(StatKeys.SEEDS_PLANTED, StatKeys.SEED_PREFIX + crop.substring(0, end));
+    }
+
+    /** Keys to bump when a player tames an animal that arrives under the given Tamed_ role. */
+    public static List<String> tamed(String tamedRole) {
+        return tamedRole == null || tamedRole.isEmpty() ? List.of(StatKeys.TAMED) : TAMED.get(tamedRole);
+    }
+
+    private static List<String> computeTamed(String tamedRole) {
+        return List.of(StatKeys.TAMED, StatKeys.TAMED_PREFIX + tamedAdult(tamedRole));
+    }
+
+    /** The adult role of a tamed animal, so a calf, chick, foal, kid, lamb or piglet counts as its kind. */
+    public static String tamedAdult(String role) {
+        if (role == null) {
+            return null;
+        }
+        for (String suffix : YOUNG_SUFFIXES) {
+            if (role.endsWith(suffix) && role.length() > suffix.length()) {
+                return role.substring(0, role.length() - suffix.length());
+            }
+        }
+        return role;
+    }
+
+    /** True for a fish item from the rarest drop tier, such as Fish_Whale_Humpback_Item. */
+    public static boolean isRareFish(String itemId) {
+        if (itemId == null || !itemId.startsWith("Fish_") || !itemId.endsWith("_Item")) {
+            return false;
+        }
+        return RARE_FISH.contains(itemId.substring("Fish_".length(), itemId.length() - "_Item".length()));
+    }
+
+    /**
+     * True for an item whose durability wears with use, a tool, weapon or armour piece, and not one of the
+     * charge tools listed in {@link #CHARGE_TOOLS}.
+     */
+    public static boolean isWearable(String itemId) {
+        if (itemId == null || !(itemId.startsWith("Tool_") || itemId.startsWith("Weapon_") || itemId.startsWith("Armor_"))) {
+            return false;
+        }
+        for (String charge : CHARGE_TOOLS) {
+            if (itemId.startsWith(charge)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Keys to bump when the given item reaches zero durability, or an empty list when it is not wearable. */
+    public static List<String> toolBroken(String itemId) {
+        return isWearable(itemId) ? TOOL_BROKEN.get(itemId) : List.of();
+    }
+
+    private static List<String> computeToolBroken(String itemId) {
+        return List.of(StatKeys.TOOLS_BROKEN, StatKeys.TOOL_BROKEN_PREFIX + itemId);
+    }
+
+    /** The per NPC talk key, {@code talk:<npc type id>}. */
+    public static String talkKey(String npcTypeId) {
+        return TALK_KEY.get(npcTypeId);
+    }
+
+    /** The per mount key, {@code mount:<role>}. */
+    public static String mountKey(String role) {
+        return MOUNT_KEY.get(role);
+    }
 
     private static boolean isUndead(String id) {
         return id.contains("Skeleton") || id.contains("Zombie") || id.contains("Ghoul")

@@ -8,7 +8,10 @@ import dev.ryvrook.feats.export.LeaderboardExporter;
 import dev.ryvrook.feats.export.Rarity;
 import dev.ryvrook.feats.model.Feat;
 import dev.ryvrook.feats.model.FeatRegistry;
+import dev.ryvrook.feats.model.Pack;
+import dev.ryvrook.feats.model.Sibling;
 import dev.ryvrook.feats.stats.PlayerProgress;
+import dev.ryvrook.feats.stats.StatKeys;
 import dev.ryvrook.feats.stats.WorldStore;
 
 import java.util.List;
@@ -27,6 +30,9 @@ import java.util.logging.Level;
  * {@code feats_total_points}, {@code feats_rank}, {@code feats_title}, {@code feats_last},
  * {@code feats_rarity_<featId>}, {@code feats_stat_<key>}, {@code feats_has_<featId>},
  * {@code feats_first_<featId>}, the holder's name or empty, and {@code feats_milestone_<featId>}, true or false.
+ * Since 1.7.2 also {@code feats_streak} and {@code feats_best_streak}, the join streak in days,
+ * {@code feats_server_<key>}, a server total, {@code feats_pack_<name>}, true while that pack is on, and
+ * {@code feats_siblings}, the sibling plugins found at setup, comma separated.
  */
 public final class FeatsExpansion {
     static final String BASE_CLASS = "at.helpch.placeholderapi.expansion.PlaceholderExpansion";
@@ -77,12 +83,50 @@ public final class FeatsExpansion {
         }
     }
 
+    /** {@code true} when the pack is on, whatever the case of {@code name}, else {@code false}. */
+    static String packOn(FeatRegistry registry, String name) {
+        if (registry == null || name == null || name.isBlank()) {
+            return "false";
+        }
+        for (Pack p : registry.packs()) {
+            if (p.name().equalsIgnoreCase(name.trim())) {
+                return "true";
+            }
+        }
+        return "false";
+    }
+
+    /** The plugin names of the siblings found at setup, comma separated in enum order, empty for none. */
+    static String siblingsOf(FeatRegistry registry) {
+        if (registry == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (Sibling s : Sibling.values()) {
+            if (registry.present().contains(s)) {
+                sb.append(sb.isEmpty() ? "" : ", ").append(s.pluginName());
+            }
+        }
+        return sb.toString();
+    }
+
+    /** A server total by key as given, else by its lower case form, so keys ignore case. 0 when unknown. */
+    static long serverTotal(WorldStore world, String key) {
+        if (world == null || key == null || key.isEmpty()) {
+            return 0L;
+        }
+        long value = world.total(key);
+        return value != 0 ? value : world.total(key.toLowerCase(Locale.ROOT));
+    }
+
     /** The PlaceholderAPI expansion. Only loaded after the base class was found. */
     static final class Hook extends PlaceholderExpansion {
         private static final List<String> PLACEHOLDERS = List.of(
                 "%feats_points%", "%feats_unlocked%", "%feats_total%", "%feats_total_points%", "%feats_rank%",
                 "%feats_title%", "%feats_last%", "%feats_rarity_<featId>%", "%feats_stat_<key>%",
-                "%feats_has_<featId>%", "%feats_first_<featId>%", "%feats_milestone_<featId>%");
+                "%feats_has_<featId>%", "%feats_first_<featId>%", "%feats_milestone_<featId>%",
+                "%feats_streak%", "%feats_best_streak%", "%feats_server_<key>%", "%feats_pack_<name>%",
+                "%feats_siblings%");
 
         private final FeatsPlugin plugin;
 
@@ -166,8 +210,16 @@ public final class FeatsExpansion {
                     return String.valueOf(registry.count());
                 case "total_points":
                     return String.valueOf(registry.totalPoints());
+                case "siblings":
+                    return siblingsOf(registry);
                 default:
                     break;
+            }
+            if (lower.startsWith("pack_")) {
+                return packOn(registry, params.substring("pack_".length()));
+            }
+            if (lower.startsWith("server_")) {
+                return String.valueOf(serverTotal(plugin.tracker().world(), params.substring("server_".length())));
             }
             if (lower.startsWith("rarity_")) {
                 double rarity = exporter == null ? -1 : exporter.rarity(featIdOf(registry, params.substring("rarity_".length())));
@@ -186,7 +238,7 @@ public final class FeatsExpansion {
             }
 
             boolean known = switch (lower) {
-                case "points", "unlocked", "rank", "title", "last" -> true;
+                case "points", "unlocked", "rank", "title", "last", "streak", "best_streak" -> true;
                 default -> lower.startsWith("stat_") || lower.startsWith("has_");
             };
             if (!known) {
@@ -216,6 +268,10 @@ public final class FeatsExpansion {
                 }
                 case "last":
                     return lastUnlocked(progress, registry);
+                case "streak":
+                    return String.valueOf(progress.get(StatKeys.JOIN_STREAK));
+                case "best_streak":
+                    return String.valueOf(progress.get(StatKeys.BEST_JOIN_STREAK));
                 default:
                     break;
             }

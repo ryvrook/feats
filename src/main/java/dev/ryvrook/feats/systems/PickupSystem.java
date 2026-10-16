@@ -5,6 +5,7 @@ import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.event.events.ecs.InteractivelyPickupItemEvent;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import dev.ryvrook.feats.stats.StatKeys;
 import dev.ryvrook.feats.track.Classify;
 import dev.ryvrook.feats.track.FeatsTracker;
 import dev.ryvrook.feats.track.RecentDrops;
@@ -33,6 +34,9 @@ public final class PickupSystem extends PlayerEventSystem<InteractivelyPickupIte
         long fresh = amount - drops.take(uuid, stack.getItemId(), amount);
         if (fresh > 0) {
             tracker.incrementAll(uuid, Classify.pickedUp(stack.getItemId()), fresh);
+            if (Classify.isRareFish(stack.getItemId())) {
+                tracker.increment(uuid, StatKeys.FISH_RARE, fresh);
+            }
         }
     }
 }

@@ -1,0 +1,51 @@
+// The top of screen banner for rare unlocks. Shaped after the engine's Hud/TimeLeft.ui, a full width
+// row at the top with one box inside it. The outer row uses LayoutMode Center so the box sits in the
+// middle of the screen, which no sibling HUD does and needs a client check. If the box lands at the
+// left edge, give #FeatsBanner an Anchor of (Left: 720, Top: 24, ...) instead and drop the outer row.
+// Every slot is fixed so the server only ever sends cmd.set calls after the first build.
+
+@NameStyle = LabelStyle(FontSize: 18, TextColor: #d3d6db, RenderBold: true, VerticalAlignment: Center);
+@DescStyle = LabelStyle(FontSize: 13, TextColor: #d3d6db, VerticalAlignment: Center);
+@WhyStyle = LabelStyle(FontSize: 11, TextColor: #96a9be, RenderUppercase: true, LetterSpacing: 1, VerticalAlignment: Center);
+
+Group {
+  LayoutMode: Center;
+  Anchor: (Top: 24, Height: 72);
+
+  Group #FeatsBanner {
+    Anchor: (Width: 520, Height: 72);
+    Padding: (Horizontal: 12, Vertical: 8);
+    Background: #000000(0.45);
+    LayoutMode: Left;
+
+    Group #IconBox {
+      Anchor: (Width: 56, Height: 56, Right: 12);
+      LayoutMode: MiddleCenter;
+      Background: #000000(0.3);
+
+      ItemIcon #Icon {
+        Anchor: (Width: 44, Height: 44);
+      }
+    }
+
+    Group {
+      FlexWeight: 1;
+      LayoutMode: Top;
+
+      Label #Name {
+        Style: @NameStyle;
+        Anchor: (Height: 22);
+      }
+
+      Label #Desc {
+        Style: @DescStyle;
+        Anchor: (Height: 18);
+      }
+
+      Label #Why {
+        Style: @WhyStyle;
+        Anchor: (Height: 14);
+      }
+    }
+  }
+}

@@ -1,9 +1,13 @@
 package dev.ryvrook.feats.track;
 
 import com.hypixel.hytale.logger.HytaleLogger;
+import dev.ryvrook.feats.model.Category;
 import dev.ryvrook.feats.model.Feat;
 import dev.ryvrook.feats.model.FeatRegistry;
+import dev.ryvrook.feats.model.Requirement;
 import dev.ryvrook.feats.model.Scope;
+import dev.ryvrook.feats.model.Tier;
+import dev.ryvrook.feats.model.Trigger;
 import dev.ryvrook.feats.stats.PlayerProgress;
 import dev.ryvrook.feats.stats.ProgressStore;
 import dev.ryvrook.feats.stats.StatKeys;
@@ -11,6 +15,8 @@ import dev.ryvrook.feats.stats.WorldStore;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -18,7 +24,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.IntSupplier;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
@@ -82,11 +90,25 @@ public final class FeatsTracker {
     /** Keys whose info is remembered. Past this a key is looked up each time instead. */
     static final int KEY_INFO_LIMIT = 16_384;
 
+    // ---- 1.7.2 meta feats and server totals, worked out once from the registry ----
+    /** Personal feats of each tab that count towards its closer, so every feat of the tab but the closers. */
+    private final Map<Category, List<Feat>> categoryPool = new EnumMap<>(Category.class);
+    /** Platinum personal feats that count towards Grand Slam, so none that read the meta counters. */
+    private final List<Feat> platinumPool = new ArrayList<>();
+    /** Every personal feat that reads a meta counter, re-checked when a revoke lowers one. */
+    private final List<Feat> metaFeats = new ArrayList<>();
+    /** World milestones raised by a server total, by the total's key. */
+    private final Map<String, List<Feat>> totalsByKey = new HashMap<>();
+    /** Whether the server totals are kept at all, the ServerTotals setting. Read on every mirrored increment. */
+    private volatile BooleanSupplier serverTotals = () -> true;
+    /** The online count for the Full House milestone, the FullHouse setting. */
+    private volatile IntSupplier fullHouse = () -> FeatRegistry.FULL_HOUSE_DEFAULT;
+
     /**
-     * Whether a counter is kept at all and which feats read it. Totals are always kept, per id keys only
-     * when a feat watches them or a stats row shows them.
+     * Whether a counter is kept at all, which feats read it and whether it is mirrored into the server totals.
+     * Totals are always kept, per id keys only when a feat watches them or a stats row shows them.
      */
-    private record KeyInfo(boolean persisted, List<Feat> watchers) {}
+    private record KeyInfo(boolean persisted, List<Feat> watchers, boolean mirrored) {}
 
     /** One unload waiting for its save. A new instance per unload so a late finish never removes a newer one. */
     private record Pending(PlayerProgress progress) {}
@@ -150,6 +172,64 @@ public final class FeatsTracker {
         this.logger = logger;
         this.io = io;
         this.world = world;
+        indexMeta();
+        // The banner asks before showing, so a player who ran /feats notify off sees none.
+        notifier.setNotifications(uuid -> {
+            PlayerProgress p = loaded.get(uuid);
+            return p == null || p.notifications();
+        });
+    }
+
+    /** Builds the meta feat pools and the totals index once. The registry never changes after start. */
+    private void indexMeta() {
+        for (Category c : Category.values()) {
+            categoryPool.put(c, new ArrayList<>());
+        }
+        for (Feat feat : registry.personal()) {
+            boolean closer = false;
+            boolean meta = false;
+            for (Requirement r : feat.requirements()) {
+                String key = r.key();
+                if (key.startsWith(StatKeys.CATEGORY_DONE_PREFIX)) {
+                    closer = true;
+                    meta = true;
+                } else if (StatKeys.FEATS_UNLOCKED.equals(key) || StatKeys.FEAT_POINTS.equals(key)
+                        || StatKeys.PLATINUMS_DONE.equals(key)) {
+                    meta = true;
+                }
+            }
+            if (!closer) {
+                categoryPool.get(feat.category()).add(feat);
+            }
+            if (meta) {
+                metaFeats.add(feat);
+            }
+            boolean ladder = feat.requirements().stream().anyMatch(r -> StatKeys.FEATS_UNLOCKED.equals(r.key())
+                    || StatKeys.PLATINUMS_DONE.equals(r.key()) || r.key().startsWith(StatKeys.CATEGORY_DONE_PREFIX));
+            if (feat.tier() == Tier.PLATINUM && !ladder) {
+                platinumPool.add(feat);
+            }
+        }
+        for (Feat feat : registry.totalTriggered()) {
+            totalsByKey.computeIfAbsent(feat.trigger().key(), k -> new ArrayList<>()).add(feat);
+        }
+    }
+
+    /**
+     * Where the ServerTotals and FullHouse settings come from. Read each time, so a reload applies at once.
+     * Without this the totals are kept and Full House waits for 20 players.
+     */
+    public void setServerTotals(BooleanSupplier on, IntSupplier fullHouse) {
+        this.serverTotals = on == null ? () -> true : on;
+        this.fullHouse = fullHouse == null ? () -> FeatRegistry.FULL_HOUSE_DEFAULT : fullHouse;
+    }
+
+    /**
+     * Why a feat id the registry knows is not in it, such as "pack GRIND is off" or "needs [COINAGE]", for the
+     * admin grant command. Null for a feat that is in, and for an id nothing defines.
+     */
+    public String whySkipped(String featId) {
+        return registry.whySkipped(featId);
     }
 
     public FeatRegistry registry() {
@@ -221,7 +301,7 @@ public final class FeatsTracker {
         }
         List<Feat> watchers = registry.dependingOn(key);
         KeyInfo fresh = new KeyInfo(!StatKeys.isPerId(key) || !watchers.isEmpty() || StatKeys.isDisplayed(key),
-                watchers);
+                watchers, StatKeys.MIRRORED_TOTALS.contains(key));
         if (keyInfo.size() < KEY_INFO_LIMIT) {
             KeyInfo raced = keyInfo.putIfAbsent(key, fresh);
             if (raced != null) {
@@ -312,6 +392,7 @@ public final class FeatsTracker {
         if (progress == null) {
             return;
         }
+        syncMeta(progress); // points, closers and Grand Slam for a file written before 1.7.2, or after a feat moved
         Announcements budget = new Announcements(CATCH_UP_ANNOUNCED);
         evaluate(uuid, progress, registry.all(), budget, Source.CATCH_UP);
         if (budget.silenced > 0) {
@@ -409,6 +490,11 @@ public final class FeatsTracker {
         Pending pending = out[0];
         if (pending == null) {
             return;
+        }
+        try {
+            notifier.banners().clear(uuid); // a banner queued for a player who left
+        } catch (Exception e) {
+            logger.at(Level.WARNING).withCause(e).log("Banner clear failed for %s", uuid);
         }
         runInBackground(() -> {
             if (store.save(pending.progress())) {
@@ -567,12 +653,105 @@ public final class FeatsTracker {
         Announcements budget = isLive(progress) ? null : new Announcements(0);
         announce(uuid, progress, List.of(feat), now, budget, source);
         if (!feat.isPersonal()) {
-            return true; // world and first feats stay out of the feats unlocked counter
+            // World and first feats stay out of the feats unlocked counter but score points like /feats top shows.
+            progress.add(StatKeys.FEAT_POINTS, feat.tier().points());
+            evaluate(uuid, progress, registry.dependingOn(StatKeys.FEAT_POINTS), budget, source);
+            return true;
         }
-        progress.add(StatKeys.FEATS_UNLOCKED, 1);
-        evaluate(uuid, progress, registry.dependingOn(StatKeys.FEATS_UNLOCKED), budget, source);
-        raiseServerFeats(uuid, progress, List.of(feat), source);
+        afterUnlocks(uuid, progress, List.of(feat), budget, source);
         return true;
+    }
+
+    /**
+     * Follows fresh personal unlocks with the meta counters they move. The feats unlocked and points counters
+     * rise and the ladders that read them are checked. Then, only for the tabs the unlocks sit in, the tab is
+     * counted and category_done:<name> set when every feat of it but the closers is unlocked, and the Platinum
+     * pool is counted after a Platinum unlock for Grand Slam. Last, the world and first feats that follow.
+     * Never runs on a plain increment, so the counting costs nothing on the hot path.
+     */
+    private void afterUnlocks(UUID uuid, PlayerProgress progress, List<Feat> unlockedNow, Announcements budget,
+                              Source source) {
+        int points = 0;
+        EnumSet<Category> tabs = EnumSet.noneOf(Category.class);
+        boolean platinum = false;
+        for (Feat feat : unlockedNow) {
+            points += feat.tier().points();
+            tabs.add(feat.category());
+            platinum |= feat.tier() == Tier.PLATINUM;
+        }
+        progress.add(StatKeys.FEATS_UNLOCKED, unlockedNow.size());
+        progress.add(StatKeys.FEAT_POINTS, points);
+        evaluate(uuid, progress, registry.dependingOn(StatKeys.FEATS_UNLOCKED), budget, source);
+        evaluate(uuid, progress, registry.dependingOn(StatKeys.FEAT_POINTS), budget, source);
+        for (Category tab : tabs) {
+            List<Feat> pool = categoryPool.get(tab);
+            if (pool.isEmpty() || !allUnlocked(progress, pool)) {
+                continue;
+            }
+            String key = StatKeys.CATEGORY_DONE_PREFIX + tab.name();
+            if (progress.raiseTo(key, 1)) {
+                evaluate(uuid, progress, registry.dependingOn(key), budget, source);
+            }
+        }
+        if (platinum && !platinumPool.isEmpty() && allUnlocked(progress, platinumPool)
+                && progress.raiseTo(StatKeys.PLATINUMS_DONE, 1)) {
+            evaluate(uuid, progress, registry.dependingOn(StatKeys.PLATINUMS_DONE), budget, source);
+        }
+        raiseServerFeats(uuid, progress, unlockedNow, source);
+    }
+
+    private static boolean allUnlocked(PlayerProgress progress, List<Feat> feats) {
+        for (int i = 0, n = feats.size(); i < n; i++) {
+            if (!progress.isUnlocked(feats.get(i).id())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Brings the meta counters in line with the unlocks in the file, once per load from disk. A file written
+     * before the points counter existed gets its points, and a tab completed before its closer existed gets
+     * its category_done flag, so the catch up that follows unlocks the closer. Lowers flags that no longer hold.
+     */
+    private void syncMeta(PlayerProgress progress) {
+        synchronized (progress) {
+            long points = points(progress);
+            if (progress.get(StatKeys.FEAT_POINTS) != points) {
+                progress.set(StatKeys.FEAT_POINTS, points);
+            }
+            for (Map.Entry<Category, List<Feat>> e : categoryPool.entrySet()) {
+                if (!e.getValue().isEmpty()) {
+                    setFlag(progress, StatKeys.CATEGORY_DONE_PREFIX + e.getKey().name(), allUnlocked(progress, e.getValue()));
+                }
+            }
+            setFlag(progress, StatKeys.PLATINUMS_DONE, !platinumPool.isEmpty() && allUnlocked(progress, platinumPool));
+        }
+    }
+
+    private static void setFlag(PlayerProgress progress, String key, boolean on) {
+        if (on) {
+            progress.raiseTo(key, 1);
+        } else if (progress.get(key) != 0) {
+            progress.set(key, 0);
+        }
+    }
+
+    /** Lowers the category_done and platinums_done flags that a revoke broke. Never raises one. */
+    private void lowerMeta(PlayerProgress progress) {
+        for (Map.Entry<Category, List<Feat>> e : categoryPool.entrySet()) {
+            String key = StatKeys.CATEGORY_DONE_PREFIX + e.getKey().name();
+            if (progress.get(key) != 0 && !allUnlocked(progress, e.getValue())) {
+                progress.set(key, 0);
+            }
+        }
+        if (progress.get(StatKeys.PLATINUMS_DONE) != 0 && !allUnlocked(progress, platinumPool)) {
+            progress.set(StatKeys.PLATINUMS_DONE, 0);
+        }
+    }
+
+    private static void lowerPoints(PlayerProgress progress, Feat feat) {
+        progress.set(StatKeys.FEAT_POINTS, Math.max(0L, progress.get(StatKeys.FEAT_POINTS) - feat.tier().points()));
     }
 
     /**
@@ -588,15 +767,20 @@ public final class FeatsTracker {
         }
         removed.add(featId);
         Feat revoked = registry.get(featId);
+        if (revoked != null) {
+            lowerPoints(progress, revoked);
+        }
         if (revoked != null && !revoked.isPersonal()) {
             releaseServer(progress, revoked);
         }
         boolean changed = true;
         while (changed) {
             changed = false;
-            for (Feat meta : registry.dependingOn(StatKeys.FEATS_UNLOCKED)) {
+            lowerMeta(progress);
+            for (Feat meta : metaFeats) {
                 if (progress.isUnlocked(meta.id()) && !meta.isSatisfied(progress) && progress.revoke(meta.id())) {
                     removed.add(meta.id());
+                    lowerPoints(progress, meta);
                     changed = true;
                 }
             }
@@ -823,6 +1007,9 @@ public final class FeatsTracker {
             now = info.watchers().isEmpty() ? 0L : System.currentTimeMillis();
             unlockedNow = collectUnlocks(progress, info.watchers(), now, null);
         }
+        if (info.mirrored()) {
+            mirror(key, amount, uuid);
+        }
         finish(uuid, progress, unlockedNow, now, null, Source.PLAY);
     }
 
@@ -870,6 +1057,7 @@ public final class FeatsTracker {
         }
         boolean anyPaused = !paused.isEmpty() && paused.contains(uuid);
         List<Feat> unlockedNow = null;
+        List<String> mirrored = null;
         long now = 0L;
         synchronized (progress) {
             int n = keys.size();
@@ -881,6 +1069,12 @@ public final class FeatsTracker {
                 KeyInfo info = info(key);
                 if (info.persisted()) {
                     progress.add(key, amount);
+                    if (info.mirrored()) {
+                        if (mirrored == null) {
+                            mirrored = new ArrayList<>(2);
+                        }
+                        mirrored.add(key);
+                    }
                 }
             }
             for (int i = 0; i < n; i++) {
@@ -897,7 +1091,61 @@ public final class FeatsTracker {
                 }
             }
         }
+        if (mirrored != null) {
+            for (String key : mirrored) {
+                mirror(key, amount, uuid); // outside the monitor, a milestone touches other players' progress
+            }
+        }
         finish(uuid, progress, unlockedNow, now, null, Source.PLAY);
+    }
+
+    // ---- server totals ----------------------------------------------------
+
+    /** Adds a mirrored counter to the server total and records any milestone the total just reached. */
+    private void mirror(String key, long amount, UUID by) {
+        if (world == null || !serverTotals.getAsBoolean()) {
+            return;
+        }
+        long total = world.addTotal(key, amount);
+        List<Feat> feats = totalsByKey.get(key);
+        if (feats != null) {
+            checkTotal(feats, total, by);
+        }
+    }
+
+    /**
+     * Checks every world milestone raised by a server total against the totals in server.json and records
+     * the ones reached, with {@code by} named as the player whose action crossed the line, or nobody when
+     * null. For the hooks that raise a total straight on the WorldStore, such as the peak online count.
+     */
+    public void checkTotals(UUID by) {
+        if (world == null || !serverTotals.getAsBoolean()) {
+            return;
+        }
+        for (Map.Entry<String, List<Feat>> e : totalsByKey.entrySet()) {
+            checkTotal(e.getValue(), world.total(e.getKey()), by);
+        }
+    }
+
+    /** The target of a total milestone, the FullHouse setting for Full House and the trigger's target otherwise. */
+    private long targetOf(Feat feat) {
+        Trigger t = feat.trigger();
+        if (FeatRegistry.FULL_HOUSE_ID.equals(feat.id())) {
+            return Math.max(1, fullHouse.getAsInt());
+        }
+        return t.target();
+    }
+
+    private void checkTotal(List<Feat> feats, long total, UUID by) {
+        for (Feat feat : feats) {
+            if (total >= targetOf(feat) && !world.hasMilestone(feat.id())) {
+                try {
+                    recordMilestone(feat.id(), by);
+                } catch (Exception e) {
+                    logger.at(Level.WARNING).withCause(e).log("Feats could not record %s", feat.id());
+                }
+            }
+        }
     }
 
     /** True when at least one feat is defined against the given counter key. */
@@ -1018,10 +1266,7 @@ public final class FeatsTracker {
             return;
         }
         announce(uuid, progress, unlockedNow, now, budget, source);
-        // Meta feats ("unlock N feats") chain off this counter.
-        progress.add(StatKeys.FEATS_UNLOCKED, unlockedNow.size());
-        evaluate(uuid, progress, registry.dependingOn(StatKeys.FEATS_UNLOCKED), budget, source);
-        raiseServerFeats(uuid, progress, unlockedNow, source);
+        afterUnlocks(uuid, progress, unlockedNow, budget, source);
     }
 
     /**
@@ -1159,14 +1404,27 @@ public final class FeatsTracker {
         } else {
             logger.at(Level.INFO).log("Feats server first %s goes to %s", feat.id(), name);
         }
+        try {
+            notifier.recordBanner(feat, by, name); // the top of screen banner for everyone online
+        } catch (Exception e) {
+            logger.at(Level.WARNING).withCause(e).log("Banner failed for %s", feat.id());
+        }
         if (holder != null) {
             holder.retainShared(id -> !id.equals(feat.id()));
             force(holder, feat, source, now);
         }
         if (feat.scope() == Scope.WORLD) {
             shareWithOnline(feat, now, by, name);
+            witness();
         }
         return true;
+    }
+
+    /** Everyone online when a milestone is reached shares in it, see the Social pack's Shared First. */
+    private void witness() {
+        for (PlayerProgress p : loaded.values()) {
+            raiseTo(p.uuid(), StatKeys.MILESTONE_WITNESSED, 1);
+        }
     }
 
     /** Hands a fresh milestone to every online player who did not raise it, with a quiet chat line. */

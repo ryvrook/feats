@@ -10,13 +10,13 @@ public enum Category {
     SURVIVAL("Survival", "Furniture_Crude_Bed"),
     NATURE("Nature", "Plant_Crop_Carrot_Item"),
     CHAPTER("Chapter I", "Rune_Fireball"),
+    MISC("Misc", "Deco_Treasure"),
     /** Only filled when Dominion Factions is installed, an empty tab is never shown. */
     FACTIONS("Factions", "Furniture_Human_Ruins_Banner"),
     /** Only filled when Coinage is installed. */
     COINAGE("Coinage", "Deco_Treasure_Pile_Small"),
     /** Only filled when Chronicle Stats is installed. */
     CHRONICLE("Chronicle", "Deco_Scroll"),
-    MISC("Misc", "Deco_Treasure"),
     /** The Social pack. */
     SOCIAL("Social", "Deco_Kweebec_Plush"),
     /** The Hardcore pack. */

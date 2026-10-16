@@ -7,31 +7,90 @@ how the plugin is put together, which thread does what, and how I test it.
 
 `FeatsPlugin` owns the lifecycle. Setup builds the registry, the stores, the tracker, the exporter and the
 reward service, installs `FeatsApi`, then picks the tracking path. Start loads players already online after a
-reload, registers the placeholders, starts the flag watcher, links TrackerAPI and Coinage, and starts the
-timers. Shutdown undoes it in reverse and drains the file thread for up to 10 seconds.
+reload, registers the placeholders, starts the flag watcher, links TrackerAPI and Coinage, starts the sibling
+bindings and the hook sets, and starts the timers. Shutdown undoes it in reverse and drains the file thread for up to 10 seconds.
 
-`model` holds the feat definitions. `FeatRegistry` builds all of them in code, 327 personal feats in nine tabs,
-15 more in the Factions tab when Dominion is installed, and 18 world milestones and server firsts. `track`
-holds `FeatsTracker`, the one entry point every count goes through, plus `Classify`, which turns a block, item,
-creature or cause id into the counter keys it feeds, and the small anti farm memories. `systems` holds the
-engine systems Feats registers when it tracks on its own. `integration` holds the only classes that touch
-TrackerAPI and Coinage types. `stats` holds the player and server files. `export` holds the leaderboard file
+`model` holds the feat definitions. `FeatRegistry` builds all of them in code from the siblings found at setup
+and the packs that are on. A plain server has 445 personal feats in nine tabs, the default packs make it 455,
+and every pack and sibling 527, with 30 world milestones and server firsts on top. A feat carries `requires`, the
+`Sibling` set it needs, `pack`, the `Pack` it sits in, and `banner`. `add` leaves out a feat whose sibling is
+missing or whose pack is off and remembers why, which `whySkipped` hands to the admin grant. `track` holds
+`FeatsTracker`, the one entry point every count goes through, plus `Classify`, which turns a block, item,
+creature or cause id into the counter keys it feeds, the small anti farm memories and the 1.7.2 helpers
+(`Presence`, `Windows`, `GameDays`, `JoinCalendar`, `Vitals`, `MovementEdges`, `ArmourSets`, `LastKillers`,
+`BannerQueue`). `systems` holds the engine systems Feats registers when it tracks on its own. `integration`
+holds the only classes that touch TrackerAPI, Coinage and Atlas types and the reflective Chronicle and Dominion
+bindings. `stats` holds the player and server files. `export` holds the leaderboard file
 and the Discord webhook. `rewards` reads `Rewards.json`. `scan` is the admin scan of existing worlds.
+
+Files added in 1.7.2.
+
+| File | What it does |
+|---|---|
+| `model/Pack.java`, `model/Sibling.java` | The five packs with their setting keys, the five siblings with plugin name and minimum version |
+| `track/Hooks.java`, `track/HookSet.java` | The hook seam, see Hook sets |
+| `systems/CombatHooks.java`, `CombatContext`, `CombatKinds`, `CombatMemory`, `ProjectileLaunchSystem` | Kill context, creature kinds, settled falls and drowning, range notes, shots fired |
+| `systems/WorldHooks.java`, `InstanceDiscoverySystem`, `WorldEventEndSystem`, `SleepWatch`, `WorldPortals`, `WorldKeys` | Biomes, weather, moon, instances, trigger volumes, world events, nights slept, portal time, the calendar, presence and the totals raised by hooks |
+| `systems/ItemHooks.java`, `MountSystem`, `MovementSystem`, `UseEntitySystem`, `MerchantPage`, `RecipePoll` | Seats, mounts, movement edges, NPC talk, the merchant read, known recipes |
+| `track/BannerQueue.java`, `ui/FeatsBannerHud.java`, `Common/UI/Custom/Hud/Feats_Banner.ui` | The banner rules, the keyed HUD and its document |
+| `integration/SiblingLinks.java`, `CoinageFeats`, `ChronicleFeats`, `AtlasFeats`, `CrossModFeats` | The sibling bindings, see Integrations |
 
 ## Tracking paths
 
 `TrackerSwitch` decides in setup, from the `Tracker` setting and the engine's plugin list, whether Feats
 registers its own systems or listens to TrackerAPI. ECS systems can only be registered in setup and TrackerAPI
 publishes its API in its own start, so the decision cannot wait for the API. With TrackerAPI the 13 engine hooks
-in `registerOwnTracking` (twelve systems and the portal listener) are never registered, and `TrackerBridge`
-subscribes 19 listeners that call the tracker exactly as the systems did. The player ready, disconnect, world
-and chat listeners stay either way, since they load players, keep the Creative and disabled world pause and put
-titles in chat. Time played, session length and the Goblin Lab flag poll stay with Feats on both paths.
+in `registerOwnTracking` (twelve systems and the portal listener) and every `registerOwn` of the hook sets are
+never registered, and `TrackerBridge` subscribes 34 listeners that call the tracker exactly as the systems did.
+The player ready, disconnect, world and chat listeners stay either way, since they load players, keep the
+Creative and disabled world pause and put titles in chat. Time played, session length and the Goblin Lab flag poll stay with Feats on both paths.
+
+The 15 kinds added in 1.7.2 are MovementEdge, MountChanged, VitalsSampled, ItemEquipped, ItemBroke,
+ProjectileLaunched, ProjectileLanded, InstanceDiscovered, TriggerVolumeFired, WorldEventEnded, PlayerSlept,
+WeatherChanged, GameTimeSampled, EntityUsed and PlayerLeft, all in TrackerAPI 1.0.0, so `TrackerSwitch.MINIMUM`
+stays 1.0.0. The bridge keeps per player `Body` and per world `Sky` notes on its dispatch thread for what the own
+path reads off the engine at the moment of a kill, a landing or a sunrise. Three rules are approximations of
+the own path. An armour set counts once each of its slots changed in the session, since no record lists what is
+already worn. A world event credits every player in its world. A night slept counts for anyone seen asleep when
+the world's clock reached morning. RecipeLearned, PermissionChanged,
+PortalEntered and MoonPhaseChanged are left out on purpose, since a Feats hook or another record already covers
+them. Two kinds of counter do not follow the path. Those the hook sets register in `registerAlways` or read in
+`sampleWorld` whatever `ownPath` says (vitals, game days, respawn points, hardcore lives, recipes, permission
+groups, referrals, the calendar, presence and the totals raised by hooks) run on both paths. Those no TrackerAPI
+record carries (rolls, mantles, double jumps, seats, shield blocks, repairs, capture crates, trap bait,
+`memory_by_kill`, void stages, late portal exits and merchants) only move on the own path, and the README says
+which feats that leaves out.
 
 `TrackerBridgeTest` feeds synthetic TrackerAPI records through the bridge and checks the counters come out as
 the Feats systems made them. A reload of TrackerAPI leaves Feats with hooks on the old classes. TrackerAPI 1.0.3
 and newer reload their dependents themselves, so the 5 second watch in `TrackerSwitch` stays quiet for those and
 only logs a reminder for an older TrackerAPI or an unload.
+
+## Hook sets
+
+`Hooks` fans the plugin's life out to a list of `HookSet`s, so a new hook never touches `FeatsPlugin`. Each set
+gets `registerOwn` (setup, own path only), `registerAlways` (setup, both paths), `start`, `stop`, `tick` (the 1 s
+engine scheduler with everyone online, memory only), `sampleWorld` (once a second on each world's thread with
+the players in it, with `ownPath` false on the TrackerAPI path), `joined` and `left`. Every call is wrapped, so a
+set that throws or meets a missing engine class is logged and the others still run. `Hooks.Context` carries the
+plugin, tracker, registry, config supplier, logger, world store, siblings, `ownPath` and the session clock.
+
+- `CombatHooks` registers `ProjectileLaunchSystem` and settles the falls and drowning episodes in `CombatMemory`
+  once a second. `DamageSystem` and `DeathSystem` stay in `registerOwnTracking` and feed the kill context, the
+  multikill `Windows`, creature kinds, damage kinds, blocks, co-op bosses, vendettas and the player streak.
+- `WorldHooks` registers the instance discovery and world event end systems and the trigger volume listener on
+  the own path, and on both paths the referral, permission group and chunk generation listeners and an unlock
+  hook for Shared First. Its tick runs `Presence` and `JoinCalendar` and raises the peak online and server days
+  totals. Its world sample reads the clock, weather, sleep and portal state once per world, then each player's
+  biome, weather, moon, vitals, respawn points and lives, with the biome, weather, moon, portal and sleep reads
+  only on the own path. Start reads the hardcore mode and `installed_at`.
+- `ItemHooks` registers `UseEntitySystem`, `MountSystem` and `MovementSystem` on the own path, each on its own so a
+  missing class costs one group, and polls known recipes every fifth world sample on both paths. The item
+  counters that ride on systems Feats already had (inventory, placing, breaking, pickups, interactions, taming)
+  live in those systems.
+
+Every engine read in a set is guarded. A read whose class is missing switches off with one warning, a read that
+fails once is skipped for that sample.
 
 ## Threads
 
@@ -44,6 +103,13 @@ only logs a reminder for an older TrackerAPI or an unload.
 - `Feats-IO` is a single daemon thread. Every save, the export, the rarity scan and the Discord posts run
   there. Shutdown is the only place that saves inline, after the timers are cancelled.
 - The TrackerAPI dispatch thread runs the bridge listeners. The tracker is safe from any thread.
+- Coinage and Atlas call the Coinage and Atlas bindings on their own threads. The Coinage net worth read runs
+  every 5 minutes and the Chronicle poll every 5 seconds on the engine scheduler.
+- The banner hops twice. `UnlockNotifier.showBanner` asks `BannerQueue` for a slot on the unlocking thread, then
+  posts to the player's world with `world.execute`, where it adds the keyed `FeatsBannerHud`, plays the sound,
+  spawns the particles and schedules the removal with `world.scheduleAfter`. The removal checks the generation it
+  was given against the queue and, when the banner is still the one on screen, posts again to whichever world the
+  player is in now and removes the HUD there. A player between worlds is skipped and the banner is not retried.
 - Chat runs on the engine's async chat future, at LATE priority so moderation plugins cancel first.
 
 Nothing in Feats touches a store, ref or component off its world thread, and nothing does file work on a world
@@ -57,8 +123,8 @@ Everything lives in `mods/Ryvrook_Feats/`.
 |---|---|---|
 | `Feats.json` | the engine config | written once at setup with defaults filled in |
 | `Rewards.json` | `RewardService` | template written only when `RewardsEnabled` is on and the file is missing |
-| `players/<uuid>.json` | `ProgressStore` | temp file then atomic move. A file that fails to parse moves to `<uuid>.corrupt-<time>.json`, only the newest kept |
-| `server.json` | `WorldStore` | milestones and firsts, same atomic write, corrupt copy kept the same way |
+| `players/<uuid>.json` | `ProgressStore` | temp file then atomic move. A file that fails to parse moves to `<uuid>.corrupt-<time>.json`, only the newest kept. Since 1.7.2 also `FirstSeen`, `LastJoinDay` and `Met`, each optional |
+| `server.json` | `WorldStore` | milestones, firsts and since 1.7.2 `totals`, same atomic write, corrupt copy kept the same way |
 | `export/feats.json` | `LeaderboardExporter` | rewritten only when the body changed, read by Atlas and Chronicle Stats |
 | `CoinsWaiting.json` | `RewardService` | only when a shutdown found Coins rewards waiting for Coinage, read and deleted at the next start |
 
@@ -88,8 +154,9 @@ without a file is skipped. An admin edit holding the player puts the adds back a
 `FeatsApi` objects from before a Feats reload refuse `addStat`, since the old file thread is gone and the
 write would run on the caller's thread. `OfflineAddsTest` covers each case.
 `Siblings.installed("Dominion")` looks at the engine's available plugins in setup, since Dominion sets up after
-Feats, and adds the Factions tab when the jar is there. `FactionFeatsTest` holds the list of keys Dominion 0.5.1
-sends, so a rename on either side fails the build.
+Feats, and adds the Factions tab when the jar is there. `FactionFeatsTest` holds the 25 keys Dominion 0.7.1
+lists, the ten from 0.5.1 and fifteen more, so a rename on either side fails the build. Dominion lists
+`dominion:rank_changes` but never sends it, and no feat reads it or `dominion:tutorial_done`.
 
 SocialBridge and RestAPI read Feats through `FeatsApi` and list it as an optional dependency, Dominion does too.
 They bind through `FeatsApi.onEnable`, which runs at the end of start, and let go in `onDisable`, which runs first
@@ -107,8 +174,51 @@ A stop path must never load a sibling class for the first time. The plugin manag
 shutdown and the bridge class loader needs the read lock, which showed up as a 5 second hang. Everything
 `shutdown` touches of TrackerAPI, Coinage and PlaceholderAPI was loaded in setup or start.
 
+The 1.7.2 sibling bindings start from `SiblingLinks`, in start, and close in reverse order at shutdown. Each is
+loaded by name only when `Siblings.present()` listed its sibling in setup, so no class of a missing sibling is
+touched. `CoinageFeats` and `AtlasFeats` link directly, since both mods publish an API Feats can list as an
+optional dependency and compile against. They follow the sibling with its enable and disable hooks, subscribe an
+`EconomyListener` under owner `Feats` and an Atlas marker and session listener, and survive a reload of either
+side. The Coinage binding reads the currency units on each bind, so amounts land in whole coins of the live
+setup, and the Atlas binding retries the session API every 2 seconds for 30 seconds after Atlas starts, since
+Atlas publishes it a moment after the marker API. `ChronicleFeats` and `CrossModFeats` are reflective. Chronicle Stats and Dominion list Feats as an optional
+dependency, so Feats cannot list them back without a cycle and their classes are not on its class path. Both find
+the plugin in the plugin manager and build method handles through its own class loader, the way Chronicle binds
+Feats. `ChronicleFeats` polls every 5 seconds, binds again when a reload gives a new plugin object, and limits
+window reads to one per player and key per 10 seconds. `CrossModFeats` answers the two Dominion facts the Coinage
+binding asks for, allied and at war, and switches off with one warning when the API lacks a method. Every
+sibling counter goes through the tracker, offline players through `addOffline`.
+
+`Sibling.minimum` names the oldest version each binding is written against. Setup only checks that the plugin is
+there. The bindings check what they need themselves, such as `AtlasApi.version()` 3 for marker events.
+
 PlaceholderAPI is found by class name and registered in start. `FeatsExpansion` never names a PlaceholderAPI
 type outside its nested `Hook`.
+
+## Server totals
+
+`WorldStore` keeps the totals in a map of `AtomicLong` by key, safe from any thread, and marks itself dirty on a
+change. `blocks_broken`, `kills`, `kills_boss` and `deaths` are mirrored by the tracker from the player counters
+of the same name (`StatKeys.MIRRORED_TOTALS`), `chunks_generated`, `players_known`, `peak_online` and
+`server_days` are raised by `WorldHooks`, and `installed_at` is written once at the first start. Nothing writes the
+file on the hot path. The autosave task saves `server.json` on Feats-IO when it is dirty, and shutdown saves it
+after the players. `ServerTotals` off stops every add, and `FullHouse` is read when Full House is checked, so both
+apply on reload. A mirrored add checks the milestones on that key straight away and names the player whose add
+crossed the line. `FeatsTracker.checkTotals(by)` is the same check for the totals the hooks raise. `WorldHooks` calls it after a
+peak or day count rose, once per thousand generated chunks and at a first join, so Full House, First Year,
+Chunk Factory and the two player count milestones are recorded as well.
+
+## Meta counters
+
+`feat_points`, `category_done:<TAB>` and `platinums_done` are plain counters in the player file, so the ladders,
+the closers and Grand Slam are ordinary feats on them. `afterUnlocks` runs after fresh personal unlocks, never on
+a plain increment. It adds to `feats_unlocked` and `feat_points`, counts only the tabs the unlocks sit in and
+raises `category_done` when every feat of the tab but the closers is unlocked, and after a Platinum counts the
+Platinum pool for Grand Slam. The pool leaves out the closers and the feat count ladders. World and first feats
+add to `feat_points` only. A revoke lowers the points and calls `lowerMeta`, which drops any flag that no longer
+holds. `syncMeta` runs once per load from disk before the catch up and sets all three from the unlocks in the
+file, which is how a file from before 1.7.2 gets its points and a tab finished earlier gets its closer at the
+next join.
 
 ## The asset pack rule
 
@@ -126,12 +236,16 @@ export JAVA_HOME=/opt/homebrew/opt/openjdk@25/libexec/openjdk.jdk/Contents/Home
 ./gradlew test -Pbench   # prints the tracking and export benchmarks
 ```
 
-The tests run without a server. The server jar is only on the test classpath for bson and the logger, and the
-TrackerAPI and Coinage jars come from the sibling checkouts, see `build.gradle.kts`.
+The tests run without a server. The server jar is only on the test classpath for bson and the logger. Feats
+compiles and tests against `TrackerAPI-1.0.0.jar`, `Coinage-api-1.2.0.jar` and `Atlas-1.9.0.jar` from the sibling
+checkouts, the oldest version of each it supports so nothing newer is used by accident, see `siblingJar` in
+`build.gradle.kts`. Chronicle Stats and Dominion need no jar, and their bindings are tested over fakes.
 
 For a headless boot I copy the jars into a fresh folder under `mods/`, write an empty `permissions.json` and run
 the server with `--auth-mode offline --disable-sentry --bind 127.0.0.1:<port>`, feeding console commands through
 a fifo. TrackerAPI's `docs/DEVELOPMENT.md` has the full recipe. The lines to look for are the tracking path line,
-`Feats loaded 327 feats worth 15075 points, plus 18 world feats`, the Factions line with Dominion and the
-Coinage line with Coinage. The boot also logs `Skipping pack at Ryvrook_Feats: missing or invalid
+`Feats loaded 455 feats worth 20735 points, plus 30 world feats` with the default packs, `Packs on: [SOCIAL,
+CALENDAR]`, the Factions line with Dominion, one `<plugin> is installed, so its <n> feats are in` line per other
+sibling and one line per sibling binding that linked. With TrackerAPI the bridge logs `Feats is linked to
+TrackerAPI <version> with 34 listeners`. The boot also logs `Skipping pack at Ryvrook_Feats: missing or invalid
 manifest.json`, which is the asset scan looking into the data folder and is harmless.

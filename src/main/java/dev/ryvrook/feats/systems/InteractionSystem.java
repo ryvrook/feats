@@ -4,6 +4,8 @@ import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.server.core.entity.InteractionContext;
+import com.hypixel.hytale.server.core.entity.movement.MovementStatesComponent;
+import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.modules.entitystats.EntityStatMap;
 import com.hypixel.hytale.server.core.modules.entitystats.EntityStatValue;
 import com.hypixel.hytale.server.core.modules.interaction.event.InteractionChainStartEvent;
@@ -19,9 +21,15 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Counts ability casts and spyglass use from the interaction chains a player starts. This fires for
- * every chain (attacks, block use and so on), so it only looks at the root id and returns early for
- * anything it does not know.
+ * Counts ability casts, spyglass use and the farming tools from the interaction chains a player starts.
+ * This fires for every chain (attacks, block use and so on), so it only looks at the root id and returns
+ * early for anything it does not know.
+ *
+ * <p>Farming. A filled watering can's Secondary root is Watering_Can_Filled_Use, which places the can as
+ * a block when crouching and otherwise tries a refill and then waters, so it counts as a watering when the
+ * player is not crouching [inferred]. Fertilizer_Use and Fertilizer_Crystal_Use are the fertilizer bags.
+ * Trap bait shares the Root_ChangeFarmingStage_Set root with other stage tools, so it only counts with
+ * Tool_Trap_Bait in hand [inferred, the root ids come from the item json in the game assets].
  *
  * <p>The engine posts this event before the chain runs, after its own cooldown check. An ability
  * chain then checks the mana cost and plays a fail effect if the player cannot pay, so a cast only
@@ -38,14 +46,36 @@ public final class InteractionSystem extends PlayerEventSystem<InteractionChainS
         if (event.isCancelled() || !isPlayerAction(event.getType())) {
             return;
         }
-        List<String> keys = Classify.interaction(event.getRootInteractionId());
+        String root = event.getRootInteractionId();
+        if (Classify.FARMING_STAGE_ROOT.equals(root)) {
+            if (holding(event.getContext(), Classify.TRAP_BAIT)) {
+                tracker.increment(uuid, StatKeys.TRAPS_BAITED, 1);
+            }
+            return;
+        }
+        List<String> keys = Classify.interaction(root);
         if (keys.isEmpty()) {
             return;
         }
         if (keys.contains(StatKeys.ABILITY_CASTS) && !canAfford(event.getContext(), ref, store)) {
             return;
         }
+        if (keys.contains(StatKeys.WATERINGS) && crouching(ref, store)) {
+            return; // crouching with the can places it as a block instead
+        }
         tracker.incrementAll(uuid, keys, 1);
+    }
+
+    /** True when the chain started with the given item in hand. */
+    private static boolean holding(InteractionContext context, String itemId) {
+        ItemStack held = context != null ? context.getHeldItem() : null;
+        return held != null && !held.isEmpty() && itemId.equals(held.getItemId());
+    }
+
+    /** True when the client reports the player crouching. A missing component counts as standing. */
+    private static boolean crouching(Ref<EntityStore> ref, Store<EntityStore> store) {
+        MovementStatesComponent states = store.getComponent(ref, MovementStatesComponent.getComponentType());
+        return states != null && states.getMovementStates() != null && states.getMovementStates().crouching;
     }
 
     /**

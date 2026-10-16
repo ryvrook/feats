@@ -29,6 +29,7 @@ public final class FeatUnlockedEvent implements IEvent<Void> {
     private final double rarity;
     private final String category;
     private final String description;
+    private final boolean banner;
 
     /** The form from before Feats 1.7.0. The fields added since read as false, -1 and empty. */
     public FeatUnlockedEvent(UUID uuid, String playerName, String featId, String featName, String tier, int points,
@@ -36,10 +37,18 @@ public final class FeatUnlockedEvent implements IEvent<Void> {
         this(uuid, playerName, featId, featName, tier, points, totalPoints, catchUp, false, false, -1, "", "");
     }
 
-    /** Every field. Since Feats 1.7.0, API version 2. */
+    /** The form from Feats 1.7.0 and 1.7.1, API version 2. The banner flag reads as false. */
     public FeatUnlockedEvent(UUID uuid, String playerName, String featId, String featName, String tier, int points,
                              int totalPoints, boolean catchUp, boolean admin, boolean hidden, double rarity,
                              String category, String description) {
+        this(uuid, playerName, featId, featName, tier, points, totalPoints, catchUp, admin, hidden, rarity, category,
+                description, false);
+    }
+
+    /** Every field. Since Feats 1.7.2, API version 3. */
+    public FeatUnlockedEvent(UUID uuid, String playerName, String featId, String featName, String tier, int points,
+                             int totalPoints, boolean catchUp, boolean admin, boolean hidden, double rarity,
+                             String category, String description, boolean banner) {
         this.uuid = uuid;
         this.playerName = playerName;
         this.featId = featId;
@@ -53,6 +62,7 @@ public final class FeatUnlockedEvent implements IEvent<Void> {
         this.rarity = rarity;
         this.category = category == null ? "" : category;
         this.description = description == null ? "" : description;
+        this.banner = banner;
     }
 
     /** The player who unlocked the feat. */
@@ -129,6 +139,14 @@ public final class FeatUnlockedEvent implements IEvent<Void> {
     /** What the player had to do, as the browser shows it. Empty from the old constructor. Since API version 2. */
     public String description() {
         return description;
+    }
+
+    /**
+     * True when the feat shows the top of screen banner whatever its rarity, which marks the rarest unlocks on the
+     * server. False from the older constructors. Since API version 3.
+     */
+    public boolean banner() {
+        return banner;
     }
 
     @Override

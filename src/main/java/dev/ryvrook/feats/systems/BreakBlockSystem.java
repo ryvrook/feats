@@ -4,6 +4,7 @@ import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.event.events.ecs.BreakBlockEvent;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import dev.ryvrook.feats.stats.StatKeys;
 import dev.ryvrook.feats.track.Classify;
 import dev.ryvrook.feats.track.FeatsTracker;
 import dev.ryvrook.feats.track.PlacedBlocks;
@@ -30,5 +31,9 @@ public final class BreakBlockSystem extends PlayerEventSystem<BreakBlockEvent> {
         }
         String blockId = event.getBlockType() != null ? event.getBlockType().getId() : null;
         tracker.incrementAll(uuid, Classify.blockBroken(blockId), 1);
+        String species = Classify.woodSpecies(blockId);
+        if (species != null) {
+            tracker.discover(uuid, StatKeys.WOOD_PREFIX, species, StatKeys.WOOD_SPECIES);
+        }
     }
 }

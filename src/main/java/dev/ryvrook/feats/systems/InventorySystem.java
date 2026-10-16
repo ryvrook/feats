@@ -21,11 +21,15 @@ import com.hypixel.hytale.server.core.inventory.transaction.SlotTransaction;
 import com.hypixel.hytale.server.core.inventory.transaction.TagTransaction;
 import com.hypixel.hytale.server.core.inventory.transaction.Transaction;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import dev.ryvrook.feats.stats.StatKeys;
+import dev.ryvrook.feats.track.ArmourSets;
 import dev.ryvrook.feats.track.Classify;
 import dev.ryvrook.feats.track.FeatsTracker;
 import dev.ryvrook.feats.track.RecentDrops;
 import dev.ryvrook.feats.track.RecentPlacements;
+import org.bson.BsonDocument;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +49,16 @@ import java.util.UUID;
  * held slot through a removal that names the held stack. Dropping with the drop key removes without
  * naming a stack, death drops and crafting use other transaction kinds, and placing a potion as a
  * block is told apart by the placement that comes just before it.
+ *
+ * <p>Wear and repair. A slot whose stack keeps its item id but goes from whole to {@code isBroken()} is a
+ * tool worn out, and one whose durability rose is a repair [inferred, the repair kit opens the ItemRepair
+ * page and the page edits the slot in place]. Both only look at tools, weapons and armour, not at the
+ * charge tools such as the watering can, see {@link Classify#isWearable}. A capture crate that gains its
+ * CapturedEntity metadata on the same slot caught an animal [inferred from UseCaptureCrateInteraction].
+ *
+ * <p>Armour. A change to the armour section reads the four slots and credits a full set, see
+ * {@link ArmourSets}. Merchants. Items gained while a barter page is open are a trade with that merchant,
+ * see {@link MerchantPage}.
  *
  * <p>Creative mode is ignored, its items are free.
  */
@@ -73,6 +87,10 @@ public final class InventorySystem extends PlayerEventSystem<InventoryChangeEven
         Map<String, Long> gained;
         Map<String, Long> putAway;
         Map<String, Long> dropped;
+        /** Item ids that reached zero durability on their slot. */
+        List<String> broken;
+        int repairs;
+        int captures;
 
         void gain(Counted counted) {
             gained = note(gained, counted);
@@ -98,7 +116,8 @@ public final class InventorySystem extends PlayerEventSystem<InventoryChangeEven
         boolean carried = hand
                 || section == InventoryComponent.Storage.getComponentType()
                 || section == InventoryComponent.Backpack.getComponentType();
-        if (!carried) {
+        boolean armour = section == InventoryComponent.Armor.getComponentType();
+        if (!carried && !armour) {
             return;
         }
         Transaction transaction = event.getTransaction();
@@ -109,6 +128,13 @@ public final class InventorySystem extends PlayerEventSystem<InventoryChangeEven
         if (player == null || player.getGameMode() == GameMode.Creative) {
             return;
         }
+        if (armour) {
+            wornSet(uuid, event);
+            Totals wear = new Totals();
+            scanWear(transaction, wear, false); // armour wearing through is not a tool worn out, repairs still count
+            countWear(uuid, wear);
+            return;
+        }
 
         if (hand && transaction instanceof ItemStackSlotTransaction slot) {
             countConsumed(uuid, slot);
@@ -116,6 +142,10 @@ public final class InventorySystem extends PlayerEventSystem<InventoryChangeEven
 
         Totals totals = new Totals();
         walk(transaction, true, ref, store, totals);
+        if (hand) {
+            scanWear(transaction, totals, true);
+            countWear(uuid, totals);
+        }
         if (totals.putAway != null) {
             totals.putAway.forEach((itemId, amount) -> stash(uuid, itemId, amount));
         }
@@ -124,6 +154,104 @@ public final class InventorySystem extends PlayerEventSystem<InventoryChangeEven
         }
         if (totals.gained != null) {
             totals.gained.forEach((itemId, amount) -> obtain(uuid, itemId, amount));
+            String merchant = MerchantPage.merchantOf(player);
+            if (merchant != null) {
+                tracker.discover(uuid, StatKeys.MERCHANT_PREFIX, merchant, StatKeys.MERCHANTS);
+            }
+        }
+    }
+
+    // ---- wear, repairs and captures --------------------------------------------
+
+    /**
+     * Visits every slot change in the transaction and notes the stacks that broke, were repaired or caught
+     * an animal. Only slots whose item id stayed the same are looked at, a swap is never wear.
+     */
+    private static void scanWear(Transaction transaction, Totals totals, boolean breaks) {
+        if (transaction == null || !transaction.succeeded()) {
+            return;
+        }
+        if (transaction instanceof ListTransaction<?> list) {
+            for (Transaction part : list.getList()) {
+                scanWear(part, totals, breaks);
+            }
+            return;
+        }
+        if (transaction instanceof ItemStackTransaction stack) {
+            for (ItemStackSlotTransaction part : stack.getSlotTransactions()) {
+                scanWear(part, totals, breaks);
+            }
+            return;
+        }
+        if (transaction instanceof SlotTransaction slot) {
+            ItemStack before = slot.getSlotBefore();
+            ItemStack after = slot.getSlotAfter();
+            if (isEmpty(before) || isEmpty(after) || !before.getItemId().equals(after.getItemId())) {
+                return;
+            }
+            String itemId = after.getItemId();
+            if (Classify.isWearable(itemId)) {
+                if (after.isBroken() && !before.isBroken()) {
+                    if (!breaks) {
+                        return;
+                    }
+                    if (totals.broken == null) {
+                        totals.broken = new ArrayList<>(2);
+                    }
+                    totals.broken.add(itemId);
+                } else if (after.getDurability() > before.getDurability() && !after.isBroken()) {
+                    totals.repairs++;
+                }
+            } else if (Classify.CAPTURE_CRATE.equals(itemId) && hasCapture(after) && !hasCapture(before)) {
+                totals.captures++;
+            }
+        }
+    }
+
+    private void countWear(UUID uuid, Totals totals) {
+        if (totals.broken != null) {
+            for (String itemId : totals.broken) {
+                tracker.incrementAll(uuid, Classify.toolBroken(itemId), 1);
+            }
+        }
+        if (totals.repairs > 0) {
+            tracker.increment(uuid, StatKeys.REPAIRS, totals.repairs);
+        }
+        if (totals.captures > 0) {
+            tracker.increment(uuid, StatKeys.CRATES_USED, totals.captures);
+        }
+    }
+
+    /** The metadata key the capture crate interaction writes when an animal is inside. */
+    private static final String CAPTURED_ENTITY = "CapturedEntity";
+
+    private static boolean hasCapture(ItemStack stack) {
+        BsonDocument metadata = stack.getMetadata();
+        return metadata != null && metadata.containsKey(CAPTURED_ENTITY);
+    }
+
+    // ---- armour sets --------------------------------------------------------------
+
+    /** Reads every armour slot after the change and credits a full set once per material. */
+    private void wornSet(UUID uuid, InventoryChangeEvent event) {
+        ItemContainer container = event.getItemContainer();
+        if (container == null && event.getInventory() != null) {
+            container = event.getInventory().getInventory();
+        }
+        if (container == null) {
+            return;
+        }
+        short capacity = container.getCapacity();
+        List<String> worn = new ArrayList<>(capacity);
+        for (short i = 0; i < capacity; i++) {
+            ItemStack stack = container.getItemStack(i);
+            if (!isEmpty(stack)) {
+                worn.add(stack.getItemId());
+            }
+        }
+        String material = ArmourSets.completeSet(worn);
+        if (material != null) {
+            tracker.discover(uuid, StatKeys.ARMOUR_SET_PREFIX, material, StatKeys.ARMOUR_SETS);
         }
     }
 

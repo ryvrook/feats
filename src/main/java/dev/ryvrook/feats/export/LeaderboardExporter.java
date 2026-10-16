@@ -10,6 +10,8 @@ import dev.ryvrook.feats.FeatsPlugin;
 import dev.ryvrook.feats.integration.Siblings;
 import dev.ryvrook.feats.model.Feat;
 import dev.ryvrook.feats.model.FeatRegistry;
+import dev.ryvrook.feats.model.Pack;
+import dev.ryvrook.feats.model.Sibling;
 import dev.ryvrook.feats.stats.PlayerProgress;
 import dev.ryvrook.feats.stats.ProgressStore;
 import dev.ryvrook.feats.stats.StatKeys;
@@ -50,6 +52,9 @@ import java.util.logging.Level;
  *
  * <p>{@link #tick} and {@link #flush} do file work and run on the Feats IO thread, or inline at shutdown.
  * The online count is read by the caller and passed in, so this class never touches the universe itself.
+ *
+ * <p>Since 1.7.2 the file also carries the active packs, the sibling plugins found at setup, the server totals and
+ * the feat list, each with its banner, pack and sibling requirements. Fields are only ever added, never moved.
  *
  * <p>The same disk read counts how many players own each feat, which is where {@link #rarity} comes from.
  * A light scan task on the IO thread keeps that read going at most once a minute even when the export
@@ -585,19 +590,83 @@ public final class LeaderboardExporter {
                     .append(", \"tier\": ").append(quote(feat.tier().displayName()))
                     .append(", \"points\": ").append(feat.tier().points())
                     .append(", \"category\": ").append(quote(feat.category().displayName()))
-                    .append(", \"hidden\": ").append(feat.hidden())
-                    .append('}');
+                    .append(", \"hidden\": ").append(feat.hidden());
+            appendFlags(sb, feat);
+            sb.append('}');
         }
         sb.append(']');
         appendWorld(sb);
+        appendServer(sb);
         sb.append("}\n");
         return sb.toString();
     }
 
+    /** Adds {@code banner}, {@code pack} and {@code requires} to a row that already describes the feat. */
+    static void appendFlags(StringBuilder sb, Feat feat) {
+        sb.append(", \"banner\": ").append(feat.banner())
+                .append(", \"pack\": ").append(feat.pack() == null ? "null" : quote(feat.pack().name()))
+                .append(", \"requires\": [");
+        int i = 0;
+        for (Sibling s : siblingOrder(feat.requires())) {
+            sb.append(i++ == 0 ? "" : ", ").append(quote(s.pluginName()));
+        }
+        sb.append(']');
+    }
+
+    /** Siblings in enum order, so the file reads the same from one write to the next. */
+    private static List<Sibling> siblingOrder(Set<Sibling> siblings) {
+        List<Sibling> out = new ArrayList<>(siblings);
+        out.sort(Comparator.naturalOrder());
+        return out;
+    }
+
+    /**
+     * Adds {@code "packs"}, the active pack names, {@code "siblings"}, the plugin names of the siblings found at
+     * setup, {@code "totals"}, the server totals from server.json, and {@code "feats"}, every feat in the registry
+     * with its id, name, tier, points, category, scope, hidden, banner, pack and requires. Since Feats 1.7.2.
+     */
+    private void appendServer(StringBuilder sb) {
+        sb.append(",\n \"packs\": [");
+        int i = 0;
+        for (Pack p : Pack.values()) {
+            if (registry.packs().contains(p)) {
+                sb.append(i++ == 0 ? "" : ", ").append(quote(p.name()));
+            }
+        }
+        sb.append("],\n \"siblings\": [");
+        i = 0;
+        for (Sibling s : siblingOrder(registry.present())) {
+            sb.append(i++ == 0 ? "" : ", ").append(quote(s.pluginName()));
+        }
+        sb.append("],\n \"totals\": {");
+        WorldStore world = tracker.world();
+        if (world != null) {
+            i = 0;
+            for (Map.Entry<String, Long> e : world.totals().entrySet()) {
+                sb.append(i++ == 0 ? "" : ", ").append(quote(e.getKey())).append(": ").append(e.getValue());
+            }
+        }
+        sb.append("},\n \"feats\": [");
+        i = 0;
+        for (Feat feat : registry.all()) {
+            sb.append(i++ == 0 ? "\n  " : ",\n  ");
+            sb.append("{\"id\": ").append(quote(feat.id()))
+                    .append(", \"name\": ").append(quote(feat.name()))
+                    .append(", \"tier\": ").append(quote(feat.tier().displayName()))
+                    .append(", \"points\": ").append(feat.tier().points())
+                    .append(", \"category\": ").append(quote(feat.category().displayName()))
+                    .append(", \"scope\": ").append(quote(feat.scope().name()))
+                    .append(", \"hidden\": ").append(feat.hidden());
+            appendFlags(sb, feat);
+            sb.append('}');
+        }
+        sb.append(']');
+    }
+
     /**
      * Adds {@code "milestones"} and {@code "firsts"}, the records of server.json keyed by feat id, each
-     * with {@code at}, {@code by}, {@code byName}, {@code featName}, {@code tier} and {@code hidden}. {@code by} and
-     * {@code byName} are null for a milestone reached with nobody named.
+     * with {@code at}, {@code by}, {@code byName}, {@code featName}, {@code tier}, {@code hidden} and {@code banner}.
+     * {@code by} and {@code byName} are null for a milestone reached with nobody named.
      */
     private void appendWorld(StringBuilder sb) {
         WorldStore world = tracker.world();
@@ -627,6 +696,7 @@ public final class LeaderboardExporter {
                     .append(", \"featName\": ").append(quote(feat.name()))
                     .append(", \"tier\": ").append(quote(feat.tier().displayName()))
                     .append(", \"hidden\": ").append(feat.hidden())
+                    .append(", \"banner\": ").append(feat.banner())
                     .append('}');
         }
     }

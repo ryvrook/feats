@@ -13,7 +13,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.server.npc.entities.NPCEntity;
 import com.hypixel.hytale.server.npc.role.Role;
 import com.hypixel.hytale.server.npc.role.support.MarkedEntitySupport;
-import dev.ryvrook.feats.stats.StatKeys;
+import dev.ryvrook.feats.track.Classify;
 import dev.ryvrook.feats.track.FeatsTracker;
 import dev.ryvrook.feats.track.TameWatch;
 
@@ -88,9 +88,11 @@ public final class TameSystem extends RefSystem<EntityStore> {
             if (npc == null || id == null) {
                 return;
             }
-            UUID tamer = watch.arrived(id.getUuid(), npc.getNPCTypeId(), System.currentTimeMillis());
+            String role = npc.getNPCTypeId();
+            UUID tamer = watch.arrived(id.getUuid(), role, System.currentTimeMillis());
             if (tamer != null) {
-                tracker.increment(tamer, StatKeys.TAMED, 1);
+                // The tamed total and the kind, with the young counted as their adult role.
+                tracker.incrementAll(tamer, Classify.tamed(role), 1);
             }
         } catch (RuntimeException | LinkageError e) {
             PlayerEventSystem.failed(e);

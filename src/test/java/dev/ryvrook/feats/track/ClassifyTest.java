@@ -7,6 +7,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -134,6 +135,61 @@ class ClassifyTest {
         assertSame(Classify.obtainedKey("Food_Apple"), Classify.obtainedKey("Food_Apple"));
         assertThrows(UnsupportedOperationException.class, () -> first.add("x"));
         assertTrue(Classify.memoised() > 0 && Classify.memoised() < Classify.MEMO_LIMIT * 9);
+    }
+
+    @Test
+    void woodSpeciesAndSeeds() {
+        assertEquals("Oak", Classify.woodSpecies("Wood_Oak_Trunk"));
+        assertEquals("Oak", Classify.woodSpecies("Wood_Oak_Trunk_Stairs"));
+        assertEquals("Bamboo", Classify.woodSpecies("Wood_Bamboo_Trunk_Full_Deco"));
+        assertNull(Classify.woodSpecies("Wood_Hardwood_Planks"));
+        assertNull(Classify.woodSpecies("Rock_Stone"));
+        assertNull(Classify.woodSpecies(null));
+        assertEquals(List.of("seeds_planted", "seed:Wheat"), Classify.seedPlanted("Plant_Seeds_Wheat"));
+        assertEquals(List.of("seeds_planted", "seed:Chilli"), Classify.seedPlanted("Plant_Seeds_Chilli"));
+        assertEquals(List.of(), Classify.seedPlanted("Plant_Seeds_Wheat_Eternal"));
+        assertEquals(List.of(), Classify.seedPlanted("Plant_Seeds_Test_Tree"));
+        assertEquals(List.of(), Classify.seedPlanted("Plant_Crop_Wheat"));
+        assertEquals(List.of(), Classify.seedPlanted(null));
+    }
+
+    @Test
+    void tamedKindsFishAndWear() {
+        assertEquals(List.of("tamed", "tamed:Tamed_Cow"), Classify.tamed("Tamed_Cow"));
+        assertEquals(List.of("tamed", "tamed:Tamed_Cow"), Classify.tamed("Tamed_Cow_Calf"));
+        assertEquals(List.of("tamed", "tamed:Tamed_Chicken_Desert"), Classify.tamed("Tamed_Chicken_Desert_Chick"));
+        assertEquals(List.of("tamed", "tamed:Tamed_Pig_Wild"), Classify.tamed("Tamed_Pig_Wild_Piglet"));
+        assertEquals(List.of("tamed", "tamed:Tamed_Mosshorn_Plain"), Classify.tamed("Tamed_Mosshorn_Plain"));
+        assertEquals(List.of("tamed"), Classify.tamed(null));
+        assertTrue(Classify.isRareFish("Fish_Whale_Humpback_Item"));
+        assertTrue(Classify.isRareFish("Fish_Jellyfish_Man_Of_War_Item"));
+        assertFalse(Classify.isRareFish("Fish_Trout_Rainbow_Item"));
+        assertFalse(Classify.isRareFish("Fish_Crab"));
+        assertFalse(Classify.isRareFish(null));
+        assertEquals(List.of("tools_broken", "tool_broken:Tool_Pickaxe_Iron"), Classify.toolBroken("Tool_Pickaxe_Iron"));
+        assertEquals(List.of("tools_broken", "tool_broken:Weapon_Sword_Iron"), Classify.toolBroken("Weapon_Sword_Iron"));
+        assertEquals(List.of("tools_broken", "tool_broken:Armor_Iron_Chest"), Classify.toolBroken("Armor_Iron_Chest"));
+        assertEquals(List.of(), Classify.toolBroken("Tool_Watering_Can"));
+        assertEquals(List.of(), Classify.toolBroken("Tool_Fertilizer_Crystal"));
+        assertEquals(List.of(), Classify.toolBroken("Tool_Repair_Kit_Iron"));
+        assertEquals(List.of(), Classify.toolBroken("Ingredient_Stick"));
+        assertEquals(List.of(), Classify.toolBroken(null));
+        assertSame(Classify.talkKey("Kweebec_Elder"), Classify.talkKey("Kweebec_Elder"));
+        assertEquals("talk:Kweebec_Elder", Classify.talkKey("Kweebec_Elder"));
+        assertEquals("mount:Tamed_Horse", Classify.mountKey("Tamed_Horse"));
+    }
+
+    @Test
+    void farmingRootsAndCoops() {
+        assertEquals(List.of("waterings"), Classify.interaction("Watering_Can_Filled_Use"));
+        assertEquals(List.of(), Classify.interaction("Watering_Can_Empty_Use"));
+        assertEquals(List.of(), Classify.interaction("Watering_Can_Fill"));
+        assertEquals(List.of("fertilizings"), Classify.interaction("Fertilizer_Use"));
+        assertEquals(List.of("fertilizings"), Classify.interaction("Fertilizer_Crystal_Use"));
+        assertEquals(List.of(), Classify.interaction("Root_ChangeFarmingStage_Set"), "trap bait needs the held item");
+        assertEquals(List.of(), Classify.interaction("Block_Secondary"));
+        assertEquals(List.of("coop_uses"), Classify.blockUsed("Coop_Chicken"));
+        assertEquals(List.of("produce_collected"), Classify.blockUsed("*Coop_Chicken_Produce_Ready"));
     }
 
     @Test

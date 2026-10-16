@@ -24,8 +24,10 @@ import dev.ryvrook.feats.stats.StatKeys;
 import dev.ryvrook.feats.track.BossLedger;
 import dev.ryvrook.feats.track.Classify;
 import dev.ryvrook.feats.track.FeatsTracker;
+import dev.ryvrook.feats.track.Windows;
 
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -34,16 +36,33 @@ import java.util.UUID;
  * every player the {@link BossLedger} saw hit it in the last minute, as well as the killer, and an
  * untouched boss kill to each of them the ledger never saw take damage during the fight. Every credited
  * kill extends the player's kill streak and a death ends it.
+ *
+ * <p>A creature kill also carries the killer's context, underwater, gliding, mounted, on low health, at
+ * night, under a blood moon or from far away, feeds the multikill {@link Windows} and discovers the
+ * creature kind. A player kill extends the player kill streak, checks the {@code LastKillers} record for
+ * a vendetta and counts a long range player kill. A boss kill with three or five credited players counts
+ * the cooperative keys for each of them.
  */
 public final class DeathSystem extends DeathSystems.OnDeathSystem {
+    /** A creature kill with a projectile from at least this far is a long range kill. */
+    static final double FAR_METRES = 50;
+    /** A player kill with a projectile from at least this far is a long range player kill. */
+    static final double PLAYER_FAR_METRES = 30;
+    private static final List<String> COOP_NONE = List.of();
+    private static final List<String> COOP_3 = List.of(StatKeys.BOSS_COOP_3);
+    private static final List<String> COOP_5 = List.of(StatKeys.BOSS_COOP_3, StatKeys.BOSS_COOP_5);
+
     private final FeatsTracker tracker;
     private final BossLedger ledger;
     private final DeepworksRuns runs;
+    private final CombatMemory memory;
+    private final CombatContext context = new CombatContext();
 
     public DeathSystem(FeatsTracker tracker) {
         this.tracker = tracker;
         this.ledger = BossLedger.of(tracker);
         this.runs = DeepworksRuns.of(tracker);
+        this.memory = CombatMemory.of(tracker);
     }
 
     @Override
@@ -70,17 +89,20 @@ public final class DeathSystem extends DeathSystems.OnDeathSystem {
             String cause = damageCause != null ? damageCause.getId() : null;
             tracker.incrementAll(victimPlayer.getUuid(), Classify.death(cause, effectId(info)), 1);
             tracker.countDeath(victimPlayer.getUuid());
+            memory.died(victimPlayer.getUuid());
             if (isDeepworks(store)) {
                 runs.died(victimPlayer.getUuid(), PlayerEventSystem.worldName(store));
             }
         }
 
         PlayerRef killerPlayer = null;
+        Ref<EntityStore> killer = null;
         boolean ranged = false;
         if (info != null && info.getSource() instanceof Damage.EntitySource source) {
-            Ref<EntityStore> killer = source.getRef();
-            if (killer != null && killer.isValid() && killer.getStore() == store && !killer.equals(ref)) {
-                killerPlayer = store.getComponent(killer, PlayerRef.getComponentType());
+            Ref<EntityStore> from = source.getRef();
+            if (from != null && from.isValid() && from.getStore() == store && !from.equals(ref)) {
+                killerPlayer = store.getComponent(from, PlayerRef.getComponentType());
+                killer = from;
                 ranged = source instanceof Damage.ProjectileSource;
             }
         }
@@ -94,13 +116,66 @@ public final class DeathSystem extends DeathSystems.OnDeathSystem {
         }
 
         if (victimPlayer == null && Classify.isBoss(victimType)) {
-            creditBoss(ref, store, victimType, killerPlayer != null ? killerPlayer.getUuid() : null, ranged);
+            creditBoss(ref, store, victimType, killerPlayer, killer, ranged, info);
             return;
         }
         if (killerPlayer != null) {
-            tracker.incrementAll(killerPlayer.getUuid(), Classify.kill(victimType, ranged), 1);
-            tracker.countKill(killerPlayer.getUuid());
+            UUID uuid = killerPlayer.getUuid();
+            tracker.incrementAll(uuid, Classify.kill(victimType, ranged), 1);
+            tracker.countKill(uuid);
+            if (victimPlayer != null) {
+                playerKill(uuid, victimPlayer.getUuid(), ranged ? rangedDistance(info, killer, store, uuid) : -1);
+            } else {
+                creatureKill(uuid, killer, store, victimType, ranged ? rangedDistance(info, killer, store, uuid) : -1);
+            }
         }
+    }
+
+    /** The context, multikill and kind counters of one creature kill, the killing blow only. */
+    private void creatureKill(UUID uuid, Ref<EntityStore> killer, Store<EntityStore> store, String victimType, double metres) {
+        int flags = context.flags(killer, store);
+        if (metres >= FAR_METRES) {
+            flags |= CombatContext.FAR;
+        }
+        if (flags != 0) {
+            tracker.incrementAll(uuid, CombatContext.keys(flags), 1);
+        }
+        int filled = memory.windows().kill(uuid, System.currentTimeMillis());
+        if (filled != 0) {
+            tracker.incrementAll(uuid, Windows.keys(filled), 1);
+        }
+        tracker.discover(uuid, StatKeys.KILL_KIND_PREFIX, CombatKinds.kind(victimType), StatKeys.KILL_KINDS);
+    }
+
+    /** The player kill streak, the vendetta and the long range counters of one player kill. */
+    private void playerKill(UUID uuid, UUID victim, double metres) {
+        if (!tracker.isPaused(uuid)) {
+            tracker.raiseTo(uuid, StatKeys.PLAYER_KILL_STREAK, tracker.killStreaks().playerKill(uuid));
+        }
+        if (memory.lastKillers().killed(uuid, victim)) {
+            tracker.increment(uuid, StatKeys.VENDETTAS, 1);
+        }
+        if (metres >= PLAYER_FAR_METRES) {
+            tracker.increment(uuid, StatKeys.PLAYER_KILLS_FAR, 1);
+        }
+    }
+
+    /**
+     * Shooter to impact distance of a projectile kill, or -1 when it cannot be told. Read from the
+     * projectile while it is still in the store, otherwise from the distance the damage system noted at
+     * the hit, which is the same blow when it is under two seconds old.
+     */
+    private double rangedDistance(Damage info, Ref<EntityStore> killer, Store<EntityStore> store, UUID uuid) {
+        if (info != null && info.getSource() instanceof Damage.ProjectileSource shot) {
+            Ref<EntityStore> projectile = shot.getProjectile();
+            if (projectile != null && projectile.isValid() && projectile.getStore() == store) {
+                double metres = context.distance(projectile, killer, store);
+                if (metres >= 0) {
+                    return metres;
+                }
+            }
+        }
+        return memory.rangedDistance(uuid, System.nanoTime());
     }
 
     /**
@@ -128,10 +203,13 @@ public final class DeathSystem extends DeathSystems.OnDeathSystem {
 
     /**
      * Credits a boss kill to the killer and to everyone who hit the boss within the ledger window, then
-     * clears the boss from the ledger. Only the killer gets the ranged kill, since that is about the
-     * killing blow.
+     * clears the boss from the ledger. Only the killer gets the ranged kill and the kill context, since
+     * those are about the killing blow. Every credited player discovers the kind and, with three or five
+     * of them, the cooperative keys.
      */
-    private void creditBoss(Ref<EntityStore> ref, Store<EntityStore> store, String bossType, UUID killer, boolean ranged) {
+    private void creditBoss(Ref<EntityStore> ref, Store<EntityStore> store, String bossType, PlayerRef killerPlayer,
+                            Ref<EntityStore> killerRef, boolean ranged, Damage info) {
+        UUID killer = killerPlayer != null ? killerPlayer.getUuid() : null;
         Set<UUID> credited = new LinkedHashSet<>();
         if (killer != null) {
             credited.add(killer);
@@ -145,12 +223,29 @@ public final class DeathSystem extends DeathSystems.OnDeathSystem {
         if (credited.isEmpty()) {
             return;
         }
+        List<String> coop = credited.size() >= 5 ? COOP_5 : credited.size() >= 3 ? COOP_3 : COOP_NONE;
+        String kind = CombatKinds.kind(bossType);
         for (UUID player : credited) {
             boolean blow = player.equals(killer);
             tracker.incrementAll(player, Classify.kill(bossType, blow && ranged), 1);
             tracker.countKill(player);
             if (fight.untouched(player)) {
                 tracker.increment(player, StatKeys.BOSS_FLAWLESS, 1);
+            }
+            tracker.incrementAll(player, coop, 1);
+            tracker.discover(player, StatKeys.KILL_KIND_PREFIX, kind, StatKeys.KILL_KINDS);
+        }
+        if (killer != null && killerRef != null) {
+            int flags = context.flags(killerRef, store);
+            if (ranged && rangedDistance(info, killerRef, store, killer) >= FAR_METRES) {
+                flags |= CombatContext.FAR;
+            }
+            if (flags != 0) {
+                tracker.incrementAll(killer, CombatContext.keys(flags), 1);
+            }
+            int filled = memory.windows().kill(killer, System.currentTimeMillis());
+            if (filled != 0) {
+                tracker.incrementAll(killer, Windows.keys(filled), 1);
             }
         }
         if (Classify.isGobliteratorFinal(bossType)) {
@@ -173,11 +268,19 @@ public final class DeathSystem extends DeathSystems.OnDeathSystem {
             if (player == null || !credited.contains(player)) {
                 continue;
             }
-            if (deepworks && runs.isClean(player, worldName)) {
+            boolean clean = deepworks && runs.isClean(player, worldName);
+            boolean fast = deepworks && runs.isFast(player, worldName, now);
+            if (clean) {
                 tracker.increment(player, StatKeys.GOBLITERATOR_DEATHLESS, 1);
             }
-            if (deepworks && runs.isFast(player, worldName, now)) {
+            if (fast) {
                 tracker.increment(player, StatKeys.GOBLITERATOR_FAST, 1);
+            }
+            if (hard && clean) {
+                tracker.increment(player, StatKeys.GOBLITERATOR_HARD_DEATHLESS, 1);
+            }
+            if (hard && fast) {
+                tracker.increment(player, StatKeys.GOBLITERATOR_HARD_FAST, 1);
             }
             if (hard && wearsNoArmour(store, playerRef.getReference())) {
                 tracker.increment(player, StatKeys.GOBLITERATOR_HM_UNARMOURED, 1);

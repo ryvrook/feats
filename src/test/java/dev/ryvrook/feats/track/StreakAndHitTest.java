@@ -66,6 +66,39 @@ class StreakAndHitTest {
     }
 
     @Test
+    void playerKillsHaveTheirOwnStreak() {
+        KillStreaks streaks = new KillStreaks();
+        UUID p = UUID.randomUUID();
+        assertEquals(1, streaks.kill(p));
+        assertEquals(1, streaks.playerKill(p));
+        assertEquals(2, streaks.kill(p));
+        assertEquals(2, streaks.playerKill(p));
+        assertEquals(2, streaks.current(p));
+        assertEquals(2, streaks.currentPlayerKills(p));
+        streaks.died(p);
+        assertEquals(0, streaks.currentPlayerKills(p));
+        assertEquals(1, streaks.playerKill(p));
+        assertEquals(0, streaks.playerKill(null));
+    }
+
+    @Test
+    void bestPlayerStreakIsKeptAcrossDeaths() {
+        FeatsTracker tracker = TestTrackers.tracker();
+        UUID p = UUID.randomUUID();
+        PlayerProgress progress = tracker.load(p, "Duelist");
+        for (int i = 0; i < 4; i++) {
+            tracker.countKill(p);
+            tracker.raiseTo(p, StatKeys.PLAYER_KILL_STREAK, tracker.killStreaks().playerKill(p));
+        }
+        assertEquals(4, progress.get(StatKeys.PLAYER_KILL_STREAK));
+        assertEquals(4, progress.get(StatKeys.KILL_STREAK));
+        tracker.countDeath(p);
+        assertEquals(0, tracker.killStreaks().currentPlayerKills(p), "a death ends both streaks");
+        tracker.raiseTo(p, StatKeys.PLAYER_KILL_STREAK, tracker.killStreaks().playerKill(p));
+        assertEquals(4, progress.get(StatKeys.PLAYER_KILL_STREAK), "a shorter run never lowers the best");
+    }
+
+    @Test
     void biggestHitKeepsTheLargest() {
         FeatsTracker tracker = TestTrackers.tracker();
         UUID p = UUID.randomUUID();

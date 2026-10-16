@@ -10,7 +10,11 @@ import com.hypixel.hytale.server.core.command.system.basecommands.CommandBase;
 import dev.ryvrook.feats.FeatsPlugin;
 import dev.ryvrook.feats.export.LeaderboardExporter;
 import dev.ryvrook.feats.model.Feat;
+import dev.ryvrook.feats.model.FeatRegistry;
+import dev.ryvrook.feats.model.Pack;
 import dev.ryvrook.feats.model.Scope;
+import dev.ryvrook.feats.model.Trigger;
+import dev.ryvrook.feats.stats.WorldStore;
 import dev.ryvrook.feats.scan.ScanJob;
 import dev.ryvrook.feats.track.FeatsTracker;
 import dev.ryvrook.feats.track.FeatsTracker.Lease;
@@ -44,6 +48,7 @@ final class AdminCommand extends AbstractCommandCollection {
         addSubCommand(new Reload(plugin));
         addSubCommand(new Rates(plugin));
         addSubCommand(new Scan(plugin));
+        addSubCommand(new Totals(plugin));
     }
 
     private static Message ok(String text) {
@@ -79,11 +84,36 @@ final class AdminCommand extends AbstractCommandCollection {
     }
 
     private static Feat feat(FeatsPlugin plugin, CommandContext context, String id) {
-        Feat feat = plugin.tracker().registry().get(id);
+        FeatRegistry registry = plugin.tracker().registry();
+        Feat feat = registry.get(id);
         if (feat == null) {
-            context.sendMessage(error("There is no feat with the id " + id + "."));
+            context.sendMessage(error(unknownFeat(registry, id)));
         }
         return feat;
+    }
+
+    /**
+     * Why a feat id cannot be used. A feat the registry left out because its pack is off or a sibling is missing
+     * says so, such as "pack GRIND is off", anything else is unknown.
+     */
+    static String unknownFeat(FeatRegistry registry, String id) {
+        String why = registry.whySkipped(id);
+        if (why == null) {
+            return "There is no feat with the id " + id + ".";
+        }
+        return "The feat " + id + " is not on this server, " + why + ". Packs and siblings are read at start.";
+    }
+
+    /** The active packs as one line, such as "Packs on: SOCIAL, CALENDAR", or "Packs on: none". */
+    static String packsLine(FeatRegistry registry) {
+        StringBuilder sb = new StringBuilder("Packs on: ");
+        int n = 0;
+        for (Pack p : Pack.values()) {
+            if (registry.packs().contains(p)) {
+                sb.append(n++ == 0 ? "" : ", ").append(p.name());
+            }
+        }
+        return n == 0 ? sb.append("none").toString() : sb.toString();
     }
 
     private static String where(Lease lease) {
@@ -281,7 +311,63 @@ final class AdminCommand extends AbstractCommandCollection {
 
         @Override
         protected void executeSync(CommandContext context) {
-            plugin.reload().thenAccept(summary -> Targets.reply(context, ok(summary)));
+            plugin.reload().thenAccept(summary -> {
+                Targets.reply(context, ok(summary));
+                Targets.reply(context, ok(packsLine(plugin.tracker().registry())
+                        + ". A changed Pack setting needs a restart or /plugin reload to take effect."));
+            });
+        }
+    }
+
+    /** {@code totals} lists every server total and which total milestones the server has reached. */
+    static final class Totals extends CommandBase {
+        private final FeatsPlugin plugin;
+
+        Totals(FeatsPlugin plugin) {
+            super("totals", "Show the server totals and their milestones.");
+            this.plugin = plugin;
+        }
+
+        @Override
+        protected void executeSync(CommandContext context) {
+            WorldStore world = plugin.world();
+            FeatRegistry registry = plugin.tracker().registry();
+            if (world == null) {
+                context.sendMessage(ok("Server totals are not loaded."));
+                return;
+            }
+            for (String line : totalLines(world, registry)) {
+                context.sendMessage(line.startsWith(" ") ? ok(line) : Message.raw(line).color(Targets.GOLD).bold(true));
+            }
+        }
+
+        /**
+         * The report, one entry per line. Headings have no leading space, rows start with one. Totals come first,
+         * sorted by key, then every total milestone with its current value, target and whether it is reached.
+         */
+        static List<String> totalLines(WorldStore world, FeatRegistry registry) {
+            List<String> out = new ArrayList<>();
+            java.util.Map<String, Long> totals = world.totals();
+            out.add("Server totals");
+            if (totals.isEmpty()) {
+                out.add(" None counted yet.");
+            }
+            for (java.util.Map.Entry<String, Long> e : totals.entrySet()) {
+                out.add(String.format(" %s  %,d", e.getKey(), e.getValue()));
+            }
+            List<Feat> feats = registry.totalTriggered();
+            out.add("Total milestones");
+            if (feats.isEmpty()) {
+                out.add(" None on this server.");
+            }
+            for (Feat f : feats) {
+                Trigger t = f.trigger();
+                long now = world.total(t.key());
+                boolean reached = world.hasMilestone(f.id()) || now >= t.target();
+                out.add(String.format(" %s  %s %,d / %,d  %s", f.name(), t.key(), now, t.target(),
+                        reached ? "reached" : "not yet"));
+            }
+            return out;
         }
     }
 

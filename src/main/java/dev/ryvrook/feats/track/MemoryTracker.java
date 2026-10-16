@@ -2,10 +2,13 @@ package dev.ryvrook.feats.track;
 
 import com.hypixel.hytale.builtin.adventure.memories.component.PlayerMemories;
 import com.hypixel.hytale.builtin.adventure.memories.memories.Memory;
+import com.hypixel.hytale.builtin.adventure.memories.memories.npc.NPCMemory;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import com.hypixel.hytale.server.npc.role.Role;
+import dev.ryvrook.feats.stats.PlayerProgress;
 import dev.ryvrook.feats.stats.StatKeys;
 
 import java.util.UUID;
@@ -16,8 +19,9 @@ import java.util.logging.Level;
 /**
  * Watches the Memories a player has recorded. The recorded set empties when the player hands their
  * Memories in, so every Memory id is remembered as a one time discovery and the total only grows.
- * The component is read on the world thread, see {@link #read}. If the Memories classes ever change
- * shape the tracker switches itself off with one warning.
+ * A Memory seen for the first time whose NPC role only unlocks it by a kill also counts towards
+ * {@code memory_by_kill}. The component is read on the world thread, see {@link #read}. If the Memories
+ * classes ever change shape the tracker switches itself off with one warning.
  */
 public final class MemoryTracker {
     private final FeatsTracker tracker;
@@ -46,9 +50,16 @@ public final class MemoryTracker {
             if (memories == null) {
                 return;
             }
+            PlayerProgress progress = tracker.loadedProgress(uuid);
             for (Memory memory : memories.getRecordedMemories()) {
-                if (memory != null) {
-                    tracker.discover(uuid, StatKeys.MEMORY_PREFIX, memory.getId(), StatKeys.MEMORIES);
+                if (memory == null) {
+                    continue;
+                }
+                String id = memory.getId();
+                boolean fresh = progress != null && id != null && progress.get(StatKeys.MEMORY_PREFIX + id) == 0;
+                tracker.discover(uuid, StatKeys.MEMORY_PREFIX, id, StatKeys.MEMORIES);
+                if (fresh && progress.get(StatKeys.MEMORY_PREFIX + id) > 0 && byKill(memory)) {
+                    tracker.increment(uuid, StatKeys.MEMORY_BY_KILL, 1);
                 }
             }
         } catch (LinkageError e) {
@@ -56,6 +67,15 @@ public final class MemoryTracker {
         } catch (RuntimeException e) {
             skip(e); // one player or one world misbehaved, carry on with the rest
         }
+    }
+
+    /** True for an NPC Memory that only a kill unlocks, false for proximity Memories and other kinds. */
+    private static boolean byKill(Memory memory) {
+        if (!(memory instanceof NPCMemory npc)) {
+            return false;
+        }
+        Role.MemoriesUnlockMethod method = npc.getUnlockedBy();
+        return method != null && "Kill".equals(method.name());
     }
 
     /**

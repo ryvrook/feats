@@ -295,6 +295,7 @@ public final class FeatsPlugin extends JavaPlugin {
         loadWorld();
         UnlockNotifier notifier = new UnlockNotifier(this::config, getLogger());
         tracker = new FeatsTracker(registry, store, notifier, getLogger(), io, world);
+        tracker.setServerTotals(() -> config().serverTotals(), () -> config().fullHouse());
         exporter = new LeaderboardExporter(this);
         notifier.setRarity(exporter::rarity);
         tracker.setUnlockListener(exporter::recordUnlock);
@@ -951,7 +952,7 @@ public final class FeatsPlugin extends JavaPlugin {
         LeaderboardExporter ranks = exporter;
         double rarity = ranks == null ? -1 : ranks.rarity(feat.id());
         FeatUnlockedEvent event = UnlockEvents.of(unlock.uuid(), name, feat, tracker.points(progress),
-                unlock.catchUp(), unlock.admin(), rarity);
+                unlock.catchUp(), unlock.admin(), rarity, feat.banner());
         try {
             IEventDispatcher<FeatUnlockedEvent, FeatUnlockedEvent> dispatcher =
                     HytaleServer.get().getEventBus().dispatchFor(FeatUnlockedEvent.class, null);
@@ -1054,6 +1055,9 @@ public final class FeatsPlugin extends JavaPlugin {
                 runIo(() -> {
                     try {
                         tracker.saveDirty();
+                        if (world != null && world.isDirty()) {
+                            world.save(); // the server totals move on hot paths and only flush here and at shutdown
+                        }
                     } finally {
                         autosaveQueued.set(false);
                     }
