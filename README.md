@@ -336,8 +336,9 @@ every feat with its id, name, tier, points, category, scope and hidden flag. Eve
 world record carries `banner`, and feat rows and recent unlocks carry `pack`, the pack name or null, and
 `requires`, the plugin names the feat needs. The file is rewritten on the `ExportSeconds` interval when
 something changed, and at shutdown, atomically. Players sort by points, then by who got there first, then by
-name. Timestamps are epoch milliseconds. Atlas reads this file, and any other tool can without linking against
-Feats.
+name. Timestamps are epoch milliseconds. Since 1.7.3 the file ends with `"version": 1`, which only goes up when a
+field is moved, renamed or removed, so a reader can check the shape. Atlas, Chronicle Stats and RestAPI read this
+file, and any other tool can without linking against Feats.
 
 ## For plugin authors
 

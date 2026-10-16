@@ -22,6 +22,8 @@ feats worth 23,440 points.
 - A `/plugin reload` of TrackerAPI 1.0.3 or newer no longer logs the warning that TrackerAPI was unloaded. Feats
   logs one INFO line that TrackerAPI reloads it by itself, and warns only when TrackerAPI is still gone after 30
   seconds.
+- export/feats.json ends with `"version": 1`, the shape of the file, for Atlas, Chronicle Stats and RestAPI to
+  check. Nothing else in the file changed.
 - `/feats admin status` prints the Feats version and one line per suite mod, TrackerAPI, Coinage, Dominion
   Factions, Chronicle Stats, Atlas, SocialBridge, RestAPI and Lullaby, with its version, the link and its setting.
 

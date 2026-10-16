@@ -61,7 +61,9 @@ class ExportFieldsTest {
         Document root = export(new FeatRegistry(), true).root();
         List<String> keys = new ArrayList<>(root.keySet());
         assertEquals(OLD_TOP_LEVEL, keys.subList(0, OLD_TOP_LEVEL.size()));
-        assertEquals(List.of("packs", "siblings", "totals", "feats"), keys.subList(OLD_TOP_LEVEL.size(), keys.size()));
+        assertEquals(List.of("packs", "siblings", "totals", "feats", "version"), keys.subList(OLD_TOP_LEVEL.size(), keys.size()));
+        assertEquals(LeaderboardExporter.FORMAT_VERSION, root.getInteger("version"));
+        assertEquals(1, LeaderboardExporter.FORMAT_VERSION);
     }
 
     @Test

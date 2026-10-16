@@ -128,7 +128,7 @@ Everything lives in `mods/Ryvrook_Feats/`.
 | `Rewards.json` | `RewardService` | template written only when `RewardsEnabled` is on and the file is missing |
 | `players/<uuid>.json` | `ProgressStore` | temp file then atomic move. A file that fails to parse moves to `<uuid>.corrupt-<time>.json`, only the newest kept. Since 1.7.2 also `FirstSeen`, `LastJoinDay` and `Met`, each optional |
 | `server.json` | `WorldStore` | milestones, firsts and since 1.7.2 `totals`, same atomic write, corrupt copy kept the same way |
-| `export/feats.json` | `LeaderboardExporter` | rewritten only when the body changed, read by Atlas and Chronicle Stats |
+| `export/feats.json` | `LeaderboardExporter` | rewritten only when the body changed, read by Atlas, Chronicle Stats and RestAPI. Since 1.7.3 the last top level field is `"version": 1`, `LeaderboardExporter.FORMAT_VERSION`, which goes up only when a field moves, is renamed or is removed. A file without it is the same shape as version 1 |
 | `CoinsWaiting.json` | `RewardService` | only when a shutdown found Coins rewards waiting for Coinage, read and deleted at the next start |
 
 The exporter and the rarity scan read every player file at most once a minute. `ProgressStore.loadAll` keeps

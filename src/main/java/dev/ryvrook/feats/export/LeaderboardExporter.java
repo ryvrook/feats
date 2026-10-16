@@ -342,6 +342,12 @@ public final class LeaderboardExporter {
         }
     }
 
+    /**
+     * The shape of export/feats.json, written last as {@code "version"} since 1.7.3. It goes up only when a field
+     * is moved, renamed or removed. Added fields keep the number, so a reader checks for this version or newer.
+     */
+    public static final int FORMAT_VERSION = 1;
+
     private synchronized void export(boolean force, int online) throws IOException {
         refreshDiskCache();
         String body = body(online);
@@ -597,6 +603,7 @@ public final class LeaderboardExporter {
         sb.append(']');
         appendWorld(sb);
         appendServer(sb);
+        sb.append(",\n \"version\": ").append(FORMAT_VERSION);
         sb.append("}\n");
         return sb.toString();
     }
