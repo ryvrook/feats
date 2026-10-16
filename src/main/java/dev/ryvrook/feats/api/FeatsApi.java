@@ -122,6 +122,27 @@ public final class FeatsApi {
         return exporter == null ? 0 : exporter.rankOf(uuid);
     }
 
+    /**
+     * The points leaderboard, best first, at most {@code limit} rows. The same order as {@code /feats top} and
+     * {@link #rank}: most points, then whoever reached their latest unlock earliest, then name. Built from the last
+     * export with online players up to date, at most 5 seconds old. Empty when {@code limit} is below 1. Since
+     * API version 2.
+     */
+    public List<LeaderboardEntry> top(int limit) {
+        LeaderboardExporter exporter = plugin.exporter();
+        return exporter == null ? List.of() : entries(exporter.liveRanking(), limit);
+    }
+
+    static List<LeaderboardEntry> entries(List<LeaderboardExporter.Ranked> rows, int limit) {
+        int n = Math.min(Math.max(0, limit), rows.size());
+        List<LeaderboardEntry> out = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
+            LeaderboardExporter.Ranked r = rows.get(i);
+            out.add(new LeaderboardEntry(i + 1, r.uuid(), r.name(), r.points(), r.unlocked(), r.lastUnlockAt()));
+        }
+        return Collections.unmodifiableList(out);
+    }
+
     /** Every feat in display order. Unmodifiable. */
     public List<FeatInfo> feats() {
         return feats;

@@ -255,6 +255,20 @@ public final class LeaderboardExporter {
         if (uuid == null) {
             return 0;
         }
+        List<Ranked> rows = liveRanking();
+        for (int i = 0; i < rows.size(); i++) {
+            if (rows.get(i).uuid().equals(uuid)) {
+                return i + 1;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Everyone ranked, best first, from the last export with online players brought up to date. When the export
+     * is off it ranks from the last disk read. Recomputed at most every 5 seconds. Safe from any thread.
+     */
+    public List<Ranked> liveRanking() {
         long now = System.currentTimeMillis();
         List<Ranked> rows = liveRanking;
         if (now - liveRankingAt >= RANK_CACHE_MILLIS) {
@@ -277,12 +291,7 @@ public final class LeaderboardExporter {
             liveRanking = rows;
             liveRankingAt = now;
         }
-        for (int i = 0; i < rows.size(); i++) {
-            if (rows.get(i).uuid().equals(uuid)) {
-                return i + 1;
-            }
-        }
-        return 0;
+        return rows;
     }
 
     /**
