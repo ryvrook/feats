@@ -3,7 +3,6 @@ package dev.ryvrook.feats.integration;
 import com.hypixel.hytale.common.plugin.PluginIdentifier;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.plugin.PluginBase;
-import com.hypixel.hytale.server.core.plugin.PluginManager;
 import dev.ryvrook.feats.model.Sibling;
 
 import java.lang.invoke.MethodHandle;
@@ -147,8 +146,7 @@ public final class CrossModFeats implements CoinageFeats.Facts {
 
     private static PluginBase plugin() {
         try {
-            PluginManager manager = PluginManager.get();
-            return manager == null ? null : manager.getPlugin(new PluginIdentifier(Sibling.GROUP, Sibling.DOMINION.pluginName()));
+            return GatedLookup.plugin(new PluginIdentifier(Sibling.GROUP, Sibling.DOMINION.pluginName()));
         } catch (RuntimeException | LinkageError e) {
             return null;
         }

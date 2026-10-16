@@ -3,7 +3,6 @@ package dev.ryvrook.feats.integration;
 import com.hypixel.hytale.common.plugin.PluginIdentifier;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.plugin.PluginBase;
-import com.hypixel.hytale.server.core.plugin.PluginManager;
 import com.hypixel.hytale.server.core.plugin.PluginState;
 import dev.ryvrook.feats.model.Sibling;
 import dev.ryvrook.feats.stats.PlayerProgress;
@@ -396,8 +395,7 @@ public final class ChronicleFeats implements AutoCloseable {
 
     private static PluginBase plugin() {
         try {
-            PluginManager manager = PluginManager.get();
-            return manager == null ? null : manager.getPlugin(new PluginIdentifier(Sibling.GROUP, Sibling.CHRONICLE.pluginName()));
+            return GatedLookup.plugin(new PluginIdentifier(Sibling.GROUP, Sibling.CHRONICLE.pluginName()));
         } catch (RuntimeException | LinkageError e) {
             return null;
         }

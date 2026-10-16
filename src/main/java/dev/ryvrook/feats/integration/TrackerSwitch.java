@@ -72,6 +72,11 @@ public final class TrackerSwitch {
 
     /** The engine lookup. Safe from any thread, a failed lookup counts as missing. */
     public static final Lookup ENGINE = TrackerSwitch::findInEngine;
+    /** The engine lookup through {@link GatedLookup}, for the 5 second watch on the engine scheduler. */
+    public static final Lookup GATED = () -> {
+        Found found = GatedLookup.ENGINE.find(Found.class, TrackerSwitch::findInEngine);
+        return found == null ? Found.MISSING : found;
+    };
 
     private final Mode mode;
     private final Path path;

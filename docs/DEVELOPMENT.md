@@ -115,6 +115,19 @@ fails once is skipped for that sample.
   reload's new instance starts clean.
 - Chat runs on the engine's async chat future, at LATE priority so moderation plugins cancel first.
 
+The plugin manager holds the write side of its private `lock` for a whole server stop and for every
+`/plugin reload`, and calls each shutdown under it. `getPlugin` and `getPlugins` take the read side, so any look
+from a timer or the IO thread during that window parks until the stop is over, and a shutdown that waits for that
+thread stalls the stop. Every lookup off Feats' own setup and start goes through `integration.GatedLookup`, the
+TrackerAPI watch (`TrackerSwitch.GATED`), the Chronicle poll, the Dominion faction reads, `LeaderboardExporter`
+and its SocialBridge check (`Siblings.installedNow`) and the settle check of `Dependents`. It reads the lock by
+reflection, only tries the read side, answers the last result for that key while another thread holds the write
+side and makes no look once `HytaleServer.isShuttingDown()` is true. Without the field every look goes through
+as before. Setup and start still call the manager directly, so `Siblings.present` and `Dependents.enabled` see
+the real state. `PoolStop` bounds the IO drain at shutdown to 1 s, then interrupts the running task and waits
+0.5 s more before it leaves the thread behind. The saves of everyone online are written inline before that.
+`StopUnderManagerLockTest` covers both with no engine.
+
 Nothing in Feats touches a store, ref or component off its world thread, and nothing does file work on a world
 thread except that one read at join.
 

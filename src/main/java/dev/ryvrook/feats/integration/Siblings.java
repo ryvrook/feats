@@ -45,6 +45,23 @@ public final class Siblings {
         }
     }
 
+    /**
+     * As {@link #installed} for a timer or the IO thread. The loaded check goes through {@link GatedLookup}, so it
+     * never waits while the plugin manager stops or reloads a plugin.
+     */
+    public static boolean installedNow(String name) {
+        try {
+            PluginIdentifier id = new PluginIdentifier(GROUP, name);
+            if (GatedLookup.plugin(id) != null) {
+                return true;
+            }
+            PluginManager manager = PluginManager.get();
+            return manager != null && manager.getAvailablePlugins().containsKey(id);
+        } catch (RuntimeException | LinkageError e) {
+            return false;
+        }
+    }
+
     /** The version string of a loaded plugin, or null when it is not loaded or has no manifest version. */
     public static String version(String name) {
         try {

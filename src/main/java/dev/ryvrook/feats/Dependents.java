@@ -246,7 +246,7 @@ final class Dependents {
 
     /** True when the manager holds a different, enabled instance of the plugin than the one seen at start. */
     private static boolean replaced(PluginManager manager, Dependent d) {
-        PluginBase now = manager.getPlugin(d.id());
+        PluginBase now = dev.ryvrook.feats.integration.GatedLookup.plugin(d.id());
         return now != null && now != d.instance() && now.getState() == PluginState.ENABLED;
     }
 }

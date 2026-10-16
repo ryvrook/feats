@@ -101,7 +101,7 @@ import java.util.logging.Level;
 public final class FeatsPlugin extends JavaPlugin {
     private static final long CHAT_GAP_MILLIS = 5_000L; // at most one counted chat message per 5 seconds
     private static final long OFFLINE_KEEP_MILLIS = 60L * 60 * 1000; // anti farming memory outlives a relog by an hour
-    private static final long IO_DRAIN_SECONDS = 10L;
+    private static final long IO_DRAIN_SECONDS = 10L; // the wait for server.json at setup
     /** How often the running session of everyone online is written to the longest session record. */
     private static final int SESSION_RECORD_TICKS = 300;
 
@@ -152,6 +152,8 @@ public final class FeatsPlugin extends JavaPlugin {
      * /plugin reload stops the old one in shutdown and the new instance starts its own.
      */
     private ScheduledExecutorService io;
+    /** The thread behind {@link #io}, so a stop can interrupt a stuck file task. */
+    private volatile Thread ioThread;
     private final AtomicBoolean autosaveQueued = new AtomicBoolean();
     private final AtomicBoolean exportQueued = new AtomicBoolean();
 
@@ -325,7 +327,7 @@ public final class FeatsPlugin extends JavaPlugin {
         TrackerSwitch.Found found = mode == TrackerSwitch.Mode.NEVER ? TrackerSwitch.Found.MISSING
                 : TrackerSwitch.ENGINE.find();
         TrackerSwitch.Path path = TrackerSwitch.decide(mode, found);
-        trackerSwitch = new TrackerSwitch(mode, path, found, TrackerSwitch.ENGINE);
+        trackerSwitch = new TrackerSwitch(mode, path, found, TrackerSwitch.GATED);
         hookContext = new Hooks.Context(this, tracker, registry, this::config, getLogger(), world, siblings,
                 path == TrackerSwitch.Path.OWN, sessions);
         if (path == TrackerSwitch.Path.OWN) {
@@ -676,19 +678,17 @@ public final class FeatsPlugin extends JavaPlugin {
         AssetPackFix.release(this);
     }
 
-    /** Lets queued saves finish, then stops the IO thread. Waits up to 10 seconds. */
+    /**
+     * Lets queued file tasks finish, then stops the IO thread. Waits {@link PoolStop#GRACE_MILLIS}, interrupts a
+     * task still running and waits {@link PoolStop#INTERRUPT_MILLIS} more, so a stop never waits 10 seconds here.
+     */
     private void stopIo() {
         if (io == null) {
             return;
         }
-        io.shutdown();
-        try {
-            if (!io.awaitTermination(IO_DRAIN_SECONDS, TimeUnit.SECONDS)) {
-                getLogger().at(Level.WARNING).log("Feats file thread did not finish within %d seconds", IO_DRAIN_SECONDS);
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            getLogger().at(Level.WARNING).log("Feats was interrupted while waiting for its file thread");
+        if (!PoolStop.stop(io, () -> ioThread, PoolStop.GRACE_MILLIS, PoolStop.INTERRUPT_MILLIS)) {
+            getLogger().at(Level.WARNING).log("Feats file thread did not finish within %d ms and was left behind",
+                    PoolStop.GRACE_MILLIS + PoolStop.INTERRUPT_MILLIS);
         }
     }
 
@@ -699,6 +699,7 @@ public final class FeatsPlugin extends JavaPlugin {
     private ScheduledExecutorService newIoExecutor() {
         ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1, task -> {
             Thread thread = new Thread(task, "Feats-IO");
+            ioThread = thread;
             thread.setDaemon(true);
             thread.setUncaughtExceptionHandler((t, e) ->
                     getLogger().at(Level.SEVERE).withCause(e).log("Feats file thread failed"));

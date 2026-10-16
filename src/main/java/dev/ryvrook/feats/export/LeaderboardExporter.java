@@ -2,11 +2,11 @@ package dev.ryvrook.feats.export;
 
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.HytaleServer;
-import com.hypixel.hytale.server.core.plugin.PluginManager;
 import com.hypixel.hytale.server.core.universe.Universe;
 import dev.ryvrook.feats.DiscordVia;
 import dev.ryvrook.feats.FeatsConfig;
 import dev.ryvrook.feats.FeatsPlugin;
+import dev.ryvrook.feats.integration.GatedLookup;
 import dev.ryvrook.feats.integration.Siblings;
 import dev.ryvrook.feats.model.Feat;
 import dev.ryvrook.feats.model.FeatRegistry;
@@ -401,8 +401,7 @@ public final class LeaderboardExporter {
         FeatsPlugin p = plugin;
         if (p == null) {
             try {
-                PluginManager manager = PluginManager.get();
-                p = manager == null ? null : manager.getPlugin(FeatsPlugin.class);
+                p = GatedLookup.plugin(FeatsPlugin.class);
             } catch (RuntimeException | LinkageError e) {
                 p = null;
             }
@@ -439,7 +438,7 @@ public final class LeaderboardExporter {
             return;
         }
         String via = cfg.discordVia();
-        if (!DiscordVia.useWebhook(via, DiscordVia.AUTO.equals(via) && Siblings.installed(Siblings.SOCIALBRIDGE))) {
+        if (!DiscordVia.useWebhook(via, DiscordVia.AUTO.equals(via) && Siblings.installedNow(Siblings.SOCIALBRIDGE))) {
             return; // SocialBridge posts the unlock from the event, or Discord posts are off
         }
         DiscordWebhook hook = discord;

@@ -14,6 +14,13 @@ Needs the Hytale 0.7.0 release server or newer. No feat was added or removed.
   a crop is planted. Planting a tree seed counts toward Arborist the same way, it read `placed:sapling` and only
   a sapling item set down by hand gave it.
 
+### For admins
+
+- A server stop no longer hangs for up to 10 seconds on Feats. The TrackerAPI watch, the Chronicle poll and the
+  IO thread looked plugins up while the plugin manager held its lock for the stop, and parked there. Those lookups
+  now only try the lock and reuse the last answer, and the stop gives the Feats file thread 1 second plus 0.5
+  seconds after an interrupt.
+
 ## 1.7.3 - 2026-10-16
 
 Needs the Hytale 0.7.0 release server or newer. With every pack and every sibling mod installed there are 528
