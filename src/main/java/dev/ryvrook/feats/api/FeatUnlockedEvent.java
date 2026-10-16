@@ -24,9 +24,22 @@ public final class FeatUnlockedEvent implements IEvent<Void> {
     private final int points;
     private final int totalPoints;
     private final boolean catchUp;
+    private final boolean admin;
+    private final boolean hidden;
+    private final double rarity;
+    private final String category;
+    private final String description;
 
+    /** The form from before Feats 1.7.0. The fields added since read as false, -1 and empty. */
     public FeatUnlockedEvent(UUID uuid, String playerName, String featId, String featName, String tier, int points,
                              int totalPoints, boolean catchUp) {
+        this(uuid, playerName, featId, featName, tier, points, totalPoints, catchUp, false, false, -1, "", "");
+    }
+
+    /** Every field. Since Feats 1.7.0, API version 2. */
+    public FeatUnlockedEvent(UUID uuid, String playerName, String featId, String featName, String tier, int points,
+                             int totalPoints, boolean catchUp, boolean admin, boolean hidden, double rarity,
+                             String category, String description) {
         this.uuid = uuid;
         this.playerName = playerName;
         this.featId = featId;
@@ -35,6 +48,11 @@ public final class FeatUnlockedEvent implements IEvent<Void> {
         this.points = points;
         this.totalPoints = totalPoints;
         this.catchUp = catchUp;
+        this.admin = admin;
+        this.hidden = hidden;
+        this.rarity = rarity;
+        this.category = category == null ? "" : category;
+        this.description = description == null ? "" : description;
     }
 
     /** The player who unlocked the feat. */
@@ -80,9 +98,42 @@ public final class FeatUnlockedEvent implements IEvent<Void> {
         return catchUp;
     }
 
+    /**
+     * True when an admin gave the feat with {@code /feats admin grant} or it followed an admin {@code setstat},
+     * rather than the player earning it. A grant through {@link FeatsApi#grant} is not an admin unlock. Since
+     * API version 2.
+     */
+    public boolean admin() {
+        return admin;
+    }
+
+    /** True when the browser shows the feat as ??? until it is unlocked. Since API version 2. */
+    public boolean hidden() {
+        return hidden;
+    }
+
+    /**
+     * The share of counted players who owned the feat at the last rarity scan, from 0 to 1, or -1 when Feats does
+     * not know yet, for a world or first feat, or while fewer players count than {@code RarityMinimumPlayers}.
+     * The scan runs at most once a minute, so this is the share before this unlock. Since API version 2.
+     */
+    public double rarity() {
+        return rarity;
+    }
+
+    /** The category display name, such as Mining or World. Empty from the old constructor. Since API version 2. */
+    public String category() {
+        return category;
+    }
+
+    /** What the player had to do, as the browser shows it. Empty from the old constructor. Since API version 2. */
+    public String description() {
+        return description;
+    }
+
     @Override
     public String toString() {
         return "FeatUnlockedEvent{" + playerName + " " + featId + " " + tier + " total " + totalPoints
-                + (catchUp ? " catch up" : "") + "}";
+                + (catchUp ? " catch up" : "") + (admin ? " admin" : "") + "}";
     }
 }

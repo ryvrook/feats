@@ -853,8 +853,10 @@ public final class FeatsPlugin extends JavaPlugin {
         Feat feat = unlock.feat();
         PlayerProgress progress = unlock.progress();
         String name = progress.username();
-        FeatUnlockedEvent event = new FeatUnlockedEvent(unlock.uuid(), name == null ? "" : name, feat.id(),
-                feat.name(), feat.tier().name(), feat.tier().points(), tracker.points(progress), unlock.catchUp());
+        LeaderboardExporter ranks = exporter;
+        double rarity = ranks == null ? -1 : ranks.rarity(feat.id());
+        FeatUnlockedEvent event = UnlockEvents.of(unlock.uuid(), name, feat, tracker.points(progress),
+                unlock.catchUp(), unlock.admin(), rarity);
         try {
             IEventDispatcher<FeatUnlockedEvent, FeatUnlockedEvent> dispatcher =
                     HytaleServer.get().getEventBus().dispatchFor(FeatUnlockedEvent.class, null);
