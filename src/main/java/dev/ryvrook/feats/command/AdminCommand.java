@@ -49,6 +49,7 @@ final class AdminCommand extends AbstractCommandCollection {
         addSubCommand(new Rates(plugin));
         addSubCommand(new Scan(plugin));
         addSubCommand(new Totals(plugin));
+        addSubCommand(new Status(plugin));
     }
 
     private static Message ok(String text) {
@@ -316,6 +317,26 @@ final class AdminCommand extends AbstractCommandCollection {
                 Targets.reply(context, ok(packsLine(plugin.tracker().registry())
                         + ". A changed Pack setting needs a restart or /plugin reload to take effect."));
             });
+        }
+    }
+
+    /** {@code status} prints the Feats version and one line per suite mod with its link and setting. */
+    static final class Status extends CommandBase {
+        private final FeatsPlugin plugin;
+
+        Status(FeatsPlugin plugin) {
+            super("status", "Show the Feats version and its links to the other mods.");
+            this.plugin = plugin;
+        }
+
+        @Override
+        protected void executeSync(CommandContext context) {
+            FeatRegistry registry = plugin.tracker().registry();
+            Targets.reply(context, ok("Feats " + plugin.getManifest().getVersion() + " with " + registry.count()
+                    + " feats worth " + registry.totalPoints() + " points. " + packsLine(registry) + "."));
+            for (String line : plugin.suiteStatus()) {
+                Targets.reply(context, ok(line));
+            }
         }
     }
 

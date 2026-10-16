@@ -364,6 +364,16 @@ public final class FeatsPlugin extends JavaPlugin {
         return siblings;
     }
 
+    /** The lines of {@code /feats admin status}, one per suite mod. */
+    public java.util.List<String> suiteStatus() {
+        SiblingLinks links = siblingLinks;
+        FeatsConfig cfg = config();
+        return dev.ryvrook.feats.integration.SuiteStatus.lines(new dev.ryvrook.feats.integration.SuiteStatus.Inputs(
+                siblings == null ? Set.of() : siblings, links == null ? java.util.List.of() : links.linked(),
+                trackerSwitch != null && trackerSwitch.path() == TrackerSwitch.Path.TRACKER_API, coinageLink != null,
+                cfg::link, cfg.discordVia(), Siblings::version, Siblings::installed));
+    }
+
     /** What the tracking hooks and sibling bindings can reach. Null before setup. */
     public Hooks.Context hookContext() {
         return hookContext;

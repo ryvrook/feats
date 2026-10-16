@@ -93,6 +93,7 @@ they find offline players by the name in their file.
 | `/feats admin rates` | The ten least and ten most earned feats |
 | `/feats admin totals` | Every server total and each total milestone with its value, target and whether it is reached |
 | `/feats admin scan <player or all> [--dry-run]` | Credit what Hytale already recorded, see below |
+| `/feats admin status` | The Feats version, then one line per suite mod with its version, whether Feats is linked to it and the setting that controls the link |
 | `/feats admin reload` | Re-read `Feats.json` and `Rewards.json`, then list the packs that are on |
 
 A revoked feat whose counter still meets the target comes back on the next matching action. Lower the counter
@@ -224,7 +225,7 @@ so run it once after installing on a server that already has players. Running it
 ## With the other mods
 
 Each link is found by plugin name when Feats starts and has a setting in `Feats.json`. Feats is complete with
-none of them.
+none of them. `/feats admin status` prints one line per mod with its version and what Feats does with it.
 
 | Mod | What appears when it is installed | Setting |
 |---|---|---|

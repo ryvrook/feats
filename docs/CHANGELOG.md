@@ -19,6 +19,8 @@ feats worth 23,440 points.
   `Tracker`. `auto` links when the mod is installed and new enough, as before. `always` also warns at start when
   it is missing. `never` leaves its feats, bindings and coin rewards out. Read at start.
 - Coin rewards now link to Coinage only when it is 1.2.0 or newer, the same check as the Coinage tab.
+- `/feats admin status` prints the Feats version and one line per suite mod, TrackerAPI, Coinage, Dominion
+  Factions, Chronicle Stats, Atlas, SocialBridge, RestAPI and Lullaby, with its version, the link and its setting.
 
 ## 1.7.2 - 2026-10-16
 
