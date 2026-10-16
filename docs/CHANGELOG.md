@@ -3,6 +3,34 @@
 Every notable change to Feats is recorded here. The format follows Keep a Changelog and the project uses
 semantic versioning.
 
+## 1.7.0 - 2026-10-16
+
+Needs the Hytale 0.7.0 release server or newer. The feats are the same as in 1.6.0.
+
+### For admins
+
+- `DiscordVia` in `Feats.json`, `auto` by default. On `auto` Feats stops posting unlocks through
+  `DiscordWebhookUrl` while SocialBridge is installed and SocialBridge posts them instead, so nothing is posted
+  twice. `webhook` keeps the Feats webhook either way, `off` posts nothing from Feats. The log says so once at start
+  when a webhook is set and SocialBridge takes over.
+- A `/plugin reload` of Feats now reloads Dominion Factions, SocialBridge, RestAPI and any other enabled plugin that
+  lists Feats, two seconds after Feats started, so they link to the new instance.
+
+### Upgrading
+
+- Swap the jar. The new key is added to `Feats.json` with its default and every player file carries on.
+- With SocialBridge installed and a webhook set, unlocks move from the webhook to SocialBridge's channel. Set
+  `DiscordVia` to `webhook` to keep the old posts.
+
+### For plugin authors
+
+- `FeatsApi.onEnable`, `onDisable`, `removeHooks` and `isEnabled`. Enable hooks run at the end of start, at once
+  for a hook added later, disable hooks first thing in shutdown.
+- `FeatsApi.top(limit)` returns the points leaderboard as `LeaderboardEntry` rows, the same order as `/feats top`.
+- `FeatUnlockedEvent` gains `admin()`, `hidden()`, `rarity()`, `category()` and `description()`. The old
+  constructor still works and fills them with false, -1 and empty.
+- `FeatsApi.API_VERSION`, 2 for this release.
+
 ## 1.6.0 - 2026-10-15
 
 Needs the Hytale 0.7.0 release server or newer. 327 feats as before, plus 15 in a Factions tab when Dominion

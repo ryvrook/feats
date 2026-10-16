@@ -9,11 +9,11 @@ unmodified client.
 
 Hytale server 0.7.0 release or newer, built against 0.7.1, and Java 25. Feats 1.0.0 is the last version for
 0.6.8, because the Chapter I hooks do not exist there. TrackerAPI, Coinage, Dominion Factions and
-PlaceholderAPI are optional.
+PlaceholderAPI are optional, and so are SocialBridge and RestAPI, which read Feats.
 
 ## Install
 
-Drop `Feats-1.6.0.jar` into `UserData/Mods` for a singleplayer world or into the server's `mods/` folder and
+Drop `Feats-1.7.0.jar` into `UserData/Mods` for a singleplayer world or into the server's `mods/` folder and
 start it. Tracking starts the first time a player joins. Type `/feats`.
 
 To update a running server, swap the jar and run `/plugin reload Ryvrook:Feats`. The engine prints
@@ -185,6 +185,13 @@ Dominion when it starts, so after adding it restart or reload Feats.
 
 **Atlas** reads `export/feats.json` for its leaderboard panel.
 
+**SocialBridge** posts unlocks to its Discord channel from `FeatUnlockedEvent` and adds points, rank and title to
+its `/profile`. With `DiscordVia` on `auto` Feats stops posting through `DiscordWebhookUrl` while SocialBridge is
+installed, so an unlock is never posted twice. Set `DiscordVia` to `webhook` to keep the webhook as well, or `off`
+for neither from Feats.
+
+**RestAPI** serves feats, player progress, world records and the points leaderboard under `/api/feats`.
+
 Lullaby does not touch Feats.
 
 ## PlaceholderAPI
@@ -213,20 +220,26 @@ can without linking against Feats.
 
 ## For plugin authors
 
-List Feats as a dependency, `"Ryvrook:Feats": ">=1.3.0"`, and use `dev.ryvrook.feats.api.FeatsApi`.
+List Feats as a dependency or optional dependency, `"Ryvrook:Feats": ">=1.7.0"`, and use
+`dev.ryvrook.feats.api.FeatsApi`.
 
 ```java
-FeatsApi feats = FeatsApi.get(); // null when Feats is not loaded
-if (feats != null) {
+FeatsApi.onEnable(feats -> {           // now when Feats is up, and after every start
     int points = feats.points(uuid);
     boolean digger = feats.hasFeat(uuid, "digger");
     feats.addStat(uuid, "fish_caught", 1);
+    List<LeaderboardEntry> top = feats.top(10);
     Runnable stop = feats.onUnlock(e -> log(e.playerName() + " unlocked " + e.featName()));
-}
+});
+FeatsApi.onDisable(() -> { /* drop what you kept */ });
 ```
 
-The API has `points`, `rank`, `unlocked`, `hasFeat`, `progress`, `title`, `stats`, `feats`, `milestones`,
-`firsts`, `addStat`, `grant` and `onUnlock`. `addStat` works for offline players, the add waits in memory and the
+The API has `points`, `rank`, `top`, `unlocked`, `hasFeat`, `progress`, `title`, `stats`, `feats`, `milestones`,
+`firsts`, `addStat`, `grant` and `onUnlock`, plus the static `onEnable`, `onDisable`, `removeHooks` and
+`API_VERSION`, which is 2 since 1.7.0. `FeatUnlockedEvent` carries the player, the feat, its tier and points, the
+new total, `catchUp`, and since 1.7.0 `admin`, `hidden`, `rarity` (0 to 1, or -1 when not known), `category` and
+`description`. After a `/plugin reload` of Feats every enabled plugin that lists Feats is reloaded two seconds
+later, so its hooks land on the new copy. `addStat` works for offline players, the add waits in memory and the
 file thread writes it, and their feats unlock quietly with rewards at the next join. `grant` needs the player
 online. Every unlock also fires `FeatUnlockedEvent` on the server's event bus from the thread that caused it,
 usually a world thread, so keep listeners short. Ask `FeatsApi.get()` again after a reload of Feats. Methods are
