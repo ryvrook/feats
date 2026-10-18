@@ -9,6 +9,7 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.ryvrook.feats.FeatsPlugin;
+import dev.ryvrook.feats.lang.Lang;
 import dev.ryvrook.feats.export.LeaderboardExporter;
 import dev.ryvrook.feats.export.LeaderboardExporter.Ranked;
 import dev.ryvrook.feats.model.FeatRegistry;
@@ -57,14 +58,13 @@ final class TopCommand extends AbstractPlayerCommand {
             return;
         }
         if (!claimDiskRead(self)) {
-            context.sendMessage(Message.raw("The leaderboard was just checked. Try again in a few seconds.")
-                    .color("#96a9be"));
+            context.sendMessage(Message.translation(Lang.CMD_TOP_WAIT).color(Targets.MUTED));
             return;
         }
         try {
             plugin.runIo(() -> readAndReply(playerRef, world, self, registry));
         } catch (RejectedExecutionException e) {
-            context.sendMessage(Message.raw("The leaderboard could not be read right now.").color("#ff6b6b"));
+            context.sendMessage(Message.translation(Lang.CMD_TOP_FAILED).color(Targets.ERROR));
         }
     }
 
@@ -85,8 +85,7 @@ final class TopCommand extends AbstractPlayerCommand {
                     return;
                 }
                 if (result == null) {
-                    playerRef.sendMessage(Message.raw("The leaderboard could not be read right now.")
-                            .color("#ff6b6b"));
+                    playerRef.sendMessage(Message.translation(Lang.CMD_TOP_FAILED).color(Targets.ERROR));
                 } else {
                     reply(playerRef::sendMessage, result, self, registry.count());
                 }
@@ -131,21 +130,24 @@ final class TopCommand extends AbstractPlayerCommand {
     }
 
     private static void reply(Consumer<Message> out, List<Ranked> rows, UUID self, int totalFeats) {
-        out.accept(Message.raw("Feats leaderboard").color("#E8A93B").bold(true));
+        out.accept(Message.translation(Lang.CMD_TOP_TITLE).color(Targets.GOLD).bold(true));
         int rank = 1;
         for (Ranked r : rows) {
             if (rank > SHOWN) {
                 break;
             }
             boolean mine = r.uuid().equals(self);
-            out.accept(Message.join(
-                    Message.raw(" " + rank + ". ").color("#878e9c"),
-                    Message.raw(r.name()).color(mine ? "#7fe3ff" : "#d3d6db").bold(mine),
-                    Message.raw("  " + r.points() + " pts  ·  " + r.unlocked() + "/" + totalFeats).color("#96a9be")));
+            out.accept(Message.translation(Lang.CMD_TOP_ROW)
+                    .param("rank", rank)
+                    .param("player", Message.raw(r.name()).color(mine ? "#7fe3ff" : "#d3d6db").bold(mine))
+                    .param("points", r.points())
+                    .param("unlocked", r.unlocked())
+                    .param("total", totalFeats)
+                    .color(Targets.MUTED));
             rank++;
         }
         if (rows.isEmpty()) {
-            out.accept(Message.raw("Nobody has unlocked anything yet.").color("#96a9be"));
+            out.accept(Message.translation(Lang.CMD_TOP_EMPTY).color(Targets.MUTED));
         }
     }
 }

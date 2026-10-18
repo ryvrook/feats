@@ -11,6 +11,7 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.ryvrook.feats.FeatsPlugin;
+import dev.ryvrook.feats.lang.Lang;
 import dev.ryvrook.feats.model.Category;
 import dev.ryvrook.feats.model.Feat;
 import dev.ryvrook.feats.model.FeatRegistry;
@@ -35,14 +36,14 @@ final class CompareCommand extends AbstractPlayerCommand {
     protected void execute(CommandContext context, Store<EntityStore> store, Ref<EntityStore> ref,
                            PlayerRef playerRef, World world) {
         if (!plugin.config().allowViewOthers()) {
-            context.sendMessage(Message.raw("Viewing other players is turned off on this server.").color(Targets.MUTED));
+            context.sendMessage(Message.translation(Lang.CMD_VIEW_OFF).color(Targets.MUTED));
             return;
         }
         PlayerProgress self = plugin.tracker().load(playerRef.getUuid(), playerRef.getUsername());
         Targets.find(plugin, context, context.get(player), target -> {
             PlayerProgress other = plugin.tracker().peek(target.uuid());
             if (other == null) {
-                Targets.reply(context, Message.raw(target.name() + " has no feats yet.").color(Targets.MUTED));
+                Targets.reply(context, Message.translation(Lang.CMD_NO_FEATS).param("player", target.name()).color(Targets.MUTED));
                 return;
             }
             String otherName = other.username().isEmpty() ? target.name() : other.username();
@@ -56,13 +57,13 @@ final class CompareCommand extends AbstractPlayerCommand {
         FeatRegistry registry = plugin.tracker().registry();
         int total = registry.count();
         List<Message> out = new ArrayList<>();
-        out.add(Message.join(
-                Message.raw("You").color("#7fe3ff").bold(true),
-                Message.raw("  vs  ").color(Targets.MUTED),
-                Message.raw(otherName).color("#7a9cc6").bold(true)));
-        out.add(row("Points", String.valueOf(plugin.tracker().points(self)),
+        out.add(Message.translation(Lang.CMD_COMPARE_HEAD)
+                .param("you", Message.translation(Lang.CMD_COMPARE_YOU).color("#7fe3ff").bold(true))
+                .param("other", Message.raw(otherName).color("#7a9cc6").bold(true))
+                .color(Targets.MUTED));
+        out.add(row(Message.translation(Lang.CMD_COMPARE_POINTS), String.valueOf(plugin.tracker().points(self)),
                 String.valueOf(plugin.tracker().points(other))));
-        out.add(row("Unlocked", self.unlockedCount() + "/" + total, other.unlockedCount() + "/" + total));
+        out.add(row(Message.translation(Lang.CMD_COMPARE_UNLOCKED), self.unlockedCount() + "/" + total, other.unlockedCount() + "/" + total));
         for (Category category : Category.values()) {
             List<Feat> feats = registry.inCategory(category);
             if (feats.isEmpty()) {
@@ -78,16 +79,16 @@ final class CompareCommand extends AbstractPlayerCommand {
                     theirs++;
                 }
             }
-            out.add(row(category.displayName(), mine + "/" + feats.size(), theirs + "/" + feats.size()));
+            out.add(row(Lang.category(category), mine + "/" + feats.size(), theirs + "/" + feats.size()));
         }
         return out;
     }
 
-    private static Message row(String label, String mine, String theirs) {
-        return Message.join(
-                Message.raw(" " + label + "  ").color("#d3d6db"),
-                Message.raw(mine).color("#7fe3ff"),
-                Message.raw("  vs  ").color(Targets.MUTED),
-                Message.raw(theirs).color("#7a9cc6"));
+    private static Message row(Message label, String mine, String theirs) {
+        return Message.translation(Lang.CMD_COMPARE_ROW)
+                .param("label", label.color("#d3d6db"))
+                .param("mine", Message.raw(mine).color("#7fe3ff"))
+                .param("theirs", Message.raw(theirs).color("#7a9cc6"))
+                .color(Targets.MUTED);
     }
 }

@@ -33,6 +33,8 @@ import dev.ryvrook.feats.integration.TrackerBridge;
 import dev.ryvrook.feats.integration.TrackerHost;
 import dev.ryvrook.feats.integration.Siblings;
 import dev.ryvrook.feats.integration.TrackerSwitch;
+import dev.ryvrook.feats.lang.Lang;
+import dev.ryvrook.feats.lang.LangPack;
 import dev.ryvrook.feats.model.Category;
 import dev.ryvrook.feats.model.Feat;
 import dev.ryvrook.feats.model.FeatRegistry;
@@ -145,6 +147,8 @@ public final class FeatsPlugin extends JavaPlugin {
     private LeaderboardExporter exporter;
     /** The unlock announcer, kept so shutdown can stop its banner timers. */
     private UnlockNotifier notifier;
+    /** The lang folder of the data directory as a second asset pack, see {@link LangPack}. */
+    private LangPack langPack;
     private ScheduledFuture<?> export;
     private volatile boolean exporting;
     /**
@@ -219,13 +223,15 @@ public final class FeatsPlugin extends JavaPlugin {
      */
     public CompletableFuture<String> reload() {
         CompletableFuture<String> result = new CompletableFuture<>();
+        // On the caller's thread, since registering a pack dispatches engine events.
+        String langLine = langPack == null ? "" : " " + langPack.reload(registry) + ".";
         try {
             runIo(() -> {
                 try {
                     config.load().join();
                     applyConfig();
                     String rewardLine = rewards.reload();
-                    result.complete("Feats.json reloaded. " + rewardLine + ".");
+                    result.complete("Feats.json reloaded. " + rewardLine + "." + langLine);
                 } catch (RuntimeException e) {
                     getLogger().at(Level.WARNING).withCause(e).log("Feats could not reload its config");
                     result.complete("Feats.json could not be read, see the server log.");
@@ -294,6 +300,7 @@ public final class FeatsPlugin extends JavaPlugin {
         boolean factions = siblings.contains(Sibling.DOMINION);
         Set<Pack> packs = config().packs(() -> Hardcore.detect(getLogger()));
         registry = new FeatRegistry(siblings, packs);
+        langPack = new LangPack(this);
         store = new ProgressStore(getDataDirectory(), getLogger());
         world = new WorldStore(getDataDirectory(), getLogger());
         loadWorld();
@@ -439,6 +446,7 @@ public final class FeatsPlugin extends JavaPlugin {
     @Override
     protected void start() {
         AssetPackFix.report(this);
+        langPack.register(registry);
         loadOnlinePlayers();
         FeatsExpansion.registerIfPresent(this); // does nothing without PlaceholderAPI
         if (flags != null) {
@@ -675,6 +683,9 @@ public final class FeatsPlugin extends JavaPlugin {
             exporter.flush(LeaderboardExporter.onlineNow());
         }
         stopIo();
+        if (langPack != null) {
+            langPack.unregister();
+        }
         AssetPackFix.release(this);
     }
 
@@ -760,11 +771,12 @@ public final class FeatsPlugin extends JavaPlugin {
         hooks.joined(hookContext, uuid, playerRef, progress, joinedAt);
         if (config().welcomeHint()) {
             int unlocked = progress.unlockedCount();
-            playerRef.sendMessage(Message.join(
-                    Message.raw("Feats ").color("#E8A93B").bold(true),
-                    Message.raw(unlocked + "/" + registry.count() + " unlocked · ").color("#96a9be"),
-                    Message.raw("/feats").color("#d3d6db"),
-                    Message.raw(" to browse").color("#96a9be")));
+            playerRef.sendMessage(Message.translation(Lang.CHAT_WELCOME)
+                    .param("label", Message.translation(Lang.CHAT_LABEL).color("#E8A93B").bold(true))
+                    .param("unlocked", unlocked)
+                    .param("total", registry.count())
+                    .param("command", Message.raw("/feats").color("#d3d6db"))
+                    .color("#96a9be"));
         }
     }
 
@@ -953,8 +965,8 @@ public final class FeatsPlugin extends JavaPlugin {
         if (feat == null || base != PlayerChatEvent.DEFAULT_FORMATTER) {
             return;
         }
-        Message prefix = Message.raw("[" + feat.name() + "] ").color(feat.tier().color());
-        event.setFormatter((sender, content) -> Message.join(prefix, base.format(sender, content)));
+        Message prefix = Message.translation(Lang.CHAT_TITLE).param("feat", Lang.name(feat)).color(feat.tier().color());
+        event.setFormatter((sender, content) -> Message.join(prefix, Message.raw(" "), base.format(sender, content)));
     }
 
     /** Sends every unlock to the engine event bus and the API listeners. */

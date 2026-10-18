@@ -8,6 +8,7 @@ import dev.ryvrook.feats.model.Scope;
 import dev.ryvrook.feats.model.Tier;
 import dev.ryvrook.feats.model.Trigger;
 import dev.ryvrook.feats.stats.PlayerProgress;
+import dev.ryvrook.feats.lang.Render;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -41,19 +42,65 @@ class UnlockNotifierBannerTest {
     void reasonFollowsTheSettingsAndTheRarityHook() {
         FeatsConfig cfg = new FeatsConfig();
         UnlockNotifier notifier = new UnlockNotifier(() -> cfg, TestTrackers.LOGGER);
-        assertEquals("RARE", cfg.banner(), "the default setting");
+        assertEquals("OFF", cfg.banner(), "the default setting");
+        assertNull(notifier.bannerReason(cfg, gold("flagged").withBanner()), "off by default");
+        assertNull(notifier.bannerReason(cfg, milestone("m")), "off by default");
+        setBanner(cfg, "rare");
+        assertEquals("RARE", cfg.banner());
         assertNull(notifier.bannerReason(cfg, gold("plain")), "rarity unknown and no flag");
-        assertEquals("Gold", notifier.bannerReason(cfg, gold("flagged").withBanner()));
+        assertEquals("Gold", Render.english(notifier.bannerReason(cfg, gold("flagged").withBanner())));
         notifier.setRarity(id -> id.equals("scarce") ? 0.004 : 0.5);
-        assertEquals("Rare, under 1% of players", notifier.bannerReason(cfg, gold("scarce")));
+        assertEquals("Rare, under 1% of players", Render.english(notifier.bannerReason(cfg, gold("scarce"))));
         assertNull(notifier.bannerReason(cfg, gold("common")));
-        assertEquals("Server milestone", notifier.bannerReason(cfg, milestone("m")));
+        assertEquals("Server milestone", Render.english(notifier.bannerReason(cfg, milestone("m"))));
         notifier.setRarity(id -> {
             throw new IllegalStateException("export not ready");
         });
         assertNull(notifier.bannerReason(cfg, gold("plain")), "a failing rarity hook reads as unknown");
         assertNull(notifier.bannerReason(null, gold("plain")));
         assertNull(notifier.bannerReason(cfg, null));
+    }
+
+    private static void setBanner(FeatsConfig cfg, String value) {
+        try {
+            java.lang.reflect.Field field = FeatsConfig.class.getDeclaredField("banner");
+            field.setAccessible(true);
+            field.set(cfg, value);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    @Test
+    void anUnknownBannerValueReadsAsOff() {
+        FeatsConfig cfg = new FeatsConfig();
+        setBanner(cfg, "sometimes");
+        assertEquals("OFF", cfg.banner());
+        setBanner(cfg, null);
+        assertEquals("OFF", cfg.banner());
+        setBanner(cfg, " all ");
+        assertEquals("ALL", cfg.banner());
+    }
+
+    @Test
+    void oneNotificationPerUnlockByDefault() {
+        FeatsConfig cfg = new FeatsConfig();
+        assertTrue(cfg.showToasts());
+        assertTrue(cfg.chatLine());
+        String min = cfg.bigTitleMinimumTier();
+        for (Tier tier : List.of(Tier.BRONZE, Tier.SILVER, Tier.GOLD)) {
+            boolean title = UnlockNotifier.showsBigTitle(true, tier, min);
+            assertFalse(title, tier + " gets no big title");
+            assertTrue(UnlockNotifier.sendsToast(true, cfg.showToasts(), title), tier + " gets the toast");
+        }
+        boolean title = UnlockNotifier.showsBigTitle(true, Tier.PLATINUM, min);
+        assertTrue(title, "Platinum gets the big title");
+        assertFalse(UnlockNotifier.sendsToast(true, cfg.showToasts(), title), "and no toast");
+        assertFalse(UnlockNotifier.showsBigTitle(false, Tier.PLATINUM, min), "muted with /feats notify off");
+        assertFalse(UnlockNotifier.sendsToast(false, true, false), "muted with /feats notify off");
+        assertFalse(UnlockNotifier.sendsToast(true, false, false), "ShowToasts false");
+        assertTrue(UnlockNotifier.sendsToast(true, true, UnlockNotifier.showsBigTitle(true, Tier.PLATINUM, "OFF")),
+                "a Platinum gets the toast when the big title is turned off");
     }
 
     @Test

@@ -23,6 +23,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.server.core.util.EventTitleUtil;
 import com.hypixel.hytale.server.core.util.NotificationUtil;
 import dev.ryvrook.feats.FeatsConfig;
+import dev.ryvrook.feats.lang.Lang;
 import dev.ryvrook.feats.model.Feat;
 import dev.ryvrook.feats.model.Tier;
 import dev.ryvrook.feats.stats.PlayerProgress;
@@ -222,22 +223,32 @@ public final class UnlockNotifier {
         }
         try {
             boolean loud = progress.notifications(); // false after /feats notify off
-            if (loud && cfg.showToasts()) {
+            boolean bigTitle = showsBigTitle(loud, feat.tier(), cfg.bigTitleMinimumTier());
+            if (sendsToast(loud, cfg.showToasts(), bigTitle)) {
                 sendToast(player, feat);
             }
-            String tag = rarityTag(cfg, feat);
-            player.sendMessage(Message.join(
-                    Message.raw("Feat unlocked ").color(GOLD).bold(true),
-                    Message.raw(feat.name()).color(feat.tier().color()).bold(true),
-                    Message.raw("  (" + feat.tier().displayName() + ", +" + feat.tier().points() + " pts, "
-                            + unlockedCount + "/" + totalCount + ")" + tag).color(MUTED)));
+            Message share = rareShare(cfg, feat);
+            Message line = Message.translation(share == null ? Lang.CHAT_UNLOCKED : Lang.CHAT_UNLOCKED_RARE)
+                    .param("label", Message.translation(Lang.CHAT_UNLOCKED_LABEL).color(GOLD).bold(true))
+                    .param("feat", Lang.colouredName(feat).bold(true))
+                    .param("tier", Lang.tier(feat.tier()))
+                    .param("points", feat.tier().points())
+                    .param("unlocked", unlockedCount)
+                    .param("total", totalCount)
+                    .color(MUTED);
+            if (share != null) {
+                line.param("share", share);
+            }
+            if (cfg.chatLine()) {
+                player.sendMessage(line);
+            }
             if (loud && cfg.playSound()) {
                 playSound(player, cfg.unlockSound());
             }
-            if (loud && meetsTitleTier(feat.tier(), cfg.bigTitleMinimumTier())) {
+            if (bigTitle) {
                 EventTitleUtil.showEventTitleToPlayer(player,
-                        Message.raw(feat.name()).color(feat.tier().color()),
-                        Message.raw(feat.description()),
+                        Lang.colouredName(feat),
+                        Lang.description(feat),
                         feat.tier() == Tier.PLATINUM ? EventTitleStyle.Major : EventTitleStyle.Default);
             }
             if (cfg.broadcastUnlocks() && meetsBroadcastTier(feat.tier(), cfg.broadcastMinimumTier())) {
@@ -247,7 +258,7 @@ public final class UnlockNotifier {
             logger.at(Level.WARNING).withCause(e).log("Feats could not announce %s to %s", feat.id(), uuid);
         }
         if (progress.notifications()) {
-            String why = bannerReason(cfg, feat);
+            Message why = bannerReason(cfg, feat);
             if (why != null) {
                 showBanner(player, feat, cfg, why, true);
             }
@@ -273,7 +284,7 @@ public final class UnlockNotifier {
                     || "OFF".equals(cfg.banner())) {
                 return;
             }
-            String why = BannerQueue.broadcastReason(feat, byName);
+            Message why = BannerQueue.broadcastReason(feat, byName);
             for (PlayerRef other : universe.getPlayers()) {
                 UUID uuid = other.getUuid();
                 if (uuid == null || uuid.equals(by) || !wantsNotifications(uuid)) {
@@ -295,7 +306,7 @@ public final class UnlockNotifier {
     }
 
     /** Why the unlock earns a banner under the current settings, or null. */
-    String bannerReason(FeatsConfig cfg, Feat feat) {
+    Message bannerReason(FeatsConfig cfg, Feat feat) {
         if (cfg == null || feat == null) {
             return null;
         }
@@ -314,7 +325,7 @@ public final class UnlockNotifier {
      * The removal does not depend on the add, so a banner shown while the player changes world still has a
      * timer that takes whatever is on screen down. Never throws.
      */
-    private void showBanner(PlayerRef player, Feat feat, FeatsConfig cfg, String why, boolean holder) {
+    private void showBanner(PlayerRef player, Feat feat, FeatsConfig cfg, Message why, boolean holder) {
         try {
             UUID uuid = player.getUuid();
             BannerQueue.Shown shown = grant(uuid, cfg.bannerSeconds() * 1000L);
@@ -323,7 +334,7 @@ public final class UnlockNotifier {
             }
             long generation = shown.generation();
             FeatsBannerHud.Frame frame = new FeatsBannerHud.Frame(
-                    feat.icon(), feat.name(), feat.tier().color(), feat.description(), why);
+                    feat.icon(), Lang.name(feat), feat.tier().color(), Lang.description(feat), why);
             String sound = cfg.bannerSound();
             boolean particles = holder && cfg.bannerParticles();
             onWorldThread(player, (ref, store, world) -> {
@@ -588,14 +599,20 @@ public final class UnlockNotifier {
 
     /** One chat line for unlocks that were not announced one by one, used when many unlock at once. */
     public void moreUnlocked(UUID uuid, int more, int unlockedCount, int totalCount) {
-        PlayerRef player = Universe.get().getPlayer(uuid);
-        if (player == null || more <= 0) {
+        FeatsConfig cfg = config.get();
+        if (more <= 0 || (cfg != null && !cfg.chatLine())) {
             return;
         }
-        player.sendMessage(Message.join(
-                Message.raw("Feats ").color(GOLD).bold(true),
-                Message.raw(more + (more == 1 ? " more feat" : " more feats") + " unlocked  (" + unlockedCount + "/"
-                        + totalCount + "), see /feats").color(MUTED)));
+        PlayerRef player = Universe.get().getPlayer(uuid);
+        if (player == null) {
+            return;
+        }
+        player.sendMessage(Message.translation(Lang.CHAT_MORE)
+                .param("label", Message.translation(Lang.CHAT_LABEL).color(GOLD).bold(true))
+                .param("n", more)
+                .param("unlocked", unlockedCount)
+                .param("total", totalCount)
+                .color(MUTED));
     }
 
     /**
@@ -607,10 +624,14 @@ public final class UnlockNotifier {
         if (player == null) {
             return;
         }
-        player.sendMessage(Message.join(
-                Message.raw("Server milestone reached, ").color(MUTED),
-                Message.raw(feat.name()).color(feat.tier().color()).bold(true),
-                Message.raw(byName == null || byName.isEmpty() ? "" : ", by " + byName).color(MUTED)));
+        boolean named = byName != null && !byName.isEmpty();
+        Message line = Message.translation(named ? Lang.CHAT_MILESTONE_BY : Lang.CHAT_MILESTONE)
+                .param("feat", Lang.colouredName(feat).bold(true))
+                .color(MUTED);
+        if (named) {
+            line.param("player", byName);
+        }
+        player.sendMessage(line);
     }
 
     /** One line for shared milestones beyond the few told one by one. */
@@ -619,15 +640,14 @@ public final class UnlockNotifier {
         if (player == null || more <= 0) {
             return;
         }
-        player.sendMessage(Message.raw(more + (more == 1 ? " more server milestone" : " more server milestones")
-                + " reached, see the World tab in /feats").color(MUTED));
+        player.sendMessage(Message.translation(Lang.CHAT_MORE_MILESTONES).param("n", more).color(MUTED));
     }
 
     private void sendToast(PlayerRef player, Feat feat) {
         NotificationUtil.sendNotification(
                 player.getPacketHandler(),
-                Message.raw(feat.name()).color(GOLD),
-                Message.raw(feat.description()),
+                Lang.name(feat).color(GOLD),
+                Lang.description(feat),
                 new ItemStack(feat.icon(), 1).toPacket(),
                 NotificationStyle.Success);
     }
@@ -669,26 +689,34 @@ public final class UnlockNotifier {
         }
     }
 
-    /** Worded like "  (rare, 3% of players)", or empty when the feat is not rare or rarity is off. */
-    private String rarityTag(FeatsConfig cfg, Feat feat) {
+    /** The share of players owning a rare feat, "under 1%" or "3%", or null when it is not rare or rarity is off. */
+    private Message rareShare(FeatsConfig cfg, Feat feat) {
         if (!cfg.showRarity()) {
-            return "";
+            return null;
         }
         double fraction;
         try {
             fraction = rarity.applyAsDouble(feat.id());
         } catch (RuntimeException | LinkageError e) {
-            return "";
+            return null;
         }
         if (fraction < 0 || fraction * 100.0 >= cfg.rareBelowPercent()) {
-            return "";
+            return null;
         }
-        double percent = fraction * 100.0;
-        String shown = percent < 1.0 ? "under 1%" : Math.round(percent) + "%";
-        return "  (rare, " + shown + " of players)";
+        return Lang.share(fraction);
     }
 
     /** True when the tier is at or above the configured minimum. OFF, or an unknown value, shows none. */
+    /** Whether the unlock puts Hytale's big event title on screen, a loud unlock at or above the minimum tier. */
+    static boolean showsBigTitle(boolean loud, Tier tier, String minimum) {
+        return loud && meetsTitleTier(tier, minimum);
+    }
+
+    /** Whether the unlock gets the toast. The big title replaces it, so one unlock never shows both. */
+    static boolean sendsToast(boolean loud, boolean showToasts, boolean bigTitle) {
+        return loud && showToasts && !bigTitle;
+    }
+
     private static boolean meetsTitleTier(Tier tier, String minimum) {
         if (minimum == null) {
             return false;
@@ -705,11 +733,11 @@ public final class UnlockNotifier {
         if (universe.getPlayerCount() <= 1) {
             return;
         }
-        Message line = Message.join(
-                Message.raw(player.getUsername()).color("#7a9cc6").bold(true),
-                Message.raw(" unlocked the feat ").color(MUTED),
-                Message.raw(feat.name()).color(feat.tier().color()).bold(true),
-                Message.raw(" [" + feat.tier().displayName() + "]").color(MUTED));
+        Message line = Message.translation(Lang.CHAT_BROADCAST)
+                .param("player", Message.raw(player.getUsername()).color("#7a9cc6").bold(true))
+                .param("feat", Lang.colouredName(feat).bold(true))
+                .param("tier", Lang.tier(feat.tier()))
+                .color(MUTED);
         for (PlayerRef other : universe.getPlayers()) {
             if (!other.getUuid().equals(player.getUuid())) {
                 other.sendMessage(line);

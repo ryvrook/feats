@@ -1,5 +1,6 @@
 package dev.ryvrook.feats.ui;
 
+import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.player.hud.CustomUIHud;
 import com.hypixel.hytale.server.core.ui.builder.UICommandBuilder;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
@@ -18,18 +19,18 @@ public final class FeatsBannerHud extends CustomUIHud {
      * One banner's content.
      *
      * @param icon        the vanilla item id drawn in the icon slot
-     * @param name        the feat name
+     * @param name        the feat name, in the viewer's language
      * @param color       the hex colour of the name, normally the tier colour
-     * @param description what the player did
-     * @param why         the small line that says why the banner is on screen
+     * @param description what the player did, in the viewer's language
+     * @param why         the small line that says why the banner is on screen, in the viewer's language
      */
-    public record Frame(String icon, String name, String color, String description, String why) {
+    public record Frame(String icon, Message name, String color, Message description, Message why) {
         public Frame {
             icon = icon == null ? "" : icon;
-            name = name == null ? "" : name;
+            name = name == null ? Message.empty() : name;
             color = color == null || color.isBlank() ? "#d3d6db" : color;
-            description = description == null ? "" : description;
-            why = why == null ? "" : why;
+            description = description == null ? Message.empty() : description;
+            why = why == null ? Message.empty() : why;
         }
     }
 

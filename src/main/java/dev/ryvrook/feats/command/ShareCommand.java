@@ -12,14 +12,12 @@ import com.hypixel.hytale.server.core.universe.Universe;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.ryvrook.feats.FeatsPlugin;
+import dev.ryvrook.feats.lang.Lang;
 import dev.ryvrook.feats.export.Rarity;
 import dev.ryvrook.feats.model.Feat;
 import dev.ryvrook.feats.model.FeatRegistry;
 import dev.ryvrook.feats.stats.PlayerProgress;
 
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -32,7 +30,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class ShareCommand extends AbstractPlayerCommand {
     private static final long COOLDOWN_MILLIS = 30_000L;
     private static final String MUTED = "#96a9be";
-    private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH);
 
     private final FeatsPlugin plugin;
     private final RequiredArg<String> featArg;
@@ -49,31 +46,30 @@ public final class ShareCommand extends AbstractPlayerCommand {
     protected void execute(CommandContext context, Store<EntityStore> store, Ref<EntityStore> ref,
                            PlayerRef playerRef, World world) {
         FeatRegistry registry = plugin.tracker().registry();
-        Feat feat = find(registry, featArg.get(context));
+        Feat feat = find(registry, featArg.get(context), playerRef.getLanguage());
         PlayerProgress progress = plugin.tracker().load(playerRef.getUuid(), playerRef.getUsername());
         Long at = feat == null ? null : progress.unlockedAt(feat.id());
         if (feat == null || at == null) {
             // The same answer for unknown and locked feats, so share cannot be used to probe hidden ids.
-            context.sendMessage(Message.raw("You can only share a feat you have unlocked. Use its id, as shown by /feats.")
-                    .color("#ff6b6b"));
+            context.sendMessage(Message.translation(Lang.CMD_SHARE_LOCKED).color(Targets.ERROR));
             return;
         }
         long wait = claim(playerRef.getUuid());
         if (wait > 0) {
-            context.sendMessage(Message.raw("You can share again in " + ((wait + 999) / 1000) + " seconds.").color(MUTED));
+            context.sendMessage(Message.translation(Lang.CMD_SHARE_WAIT).param("n", (wait + 999) / 1000).color(MUTED));
             return;
         }
-        String date = DATE.format(Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()));
-        String tag = Rarity.tag(plugin.exporter(), plugin.config(), feat.id());
-        Message line = Message.join(
-                Message.raw(playerRef.getUsername()).color("#7a9cc6").bold(true),
-                Message.raw(" shares the feat ").color(MUTED),
-                Message.raw(feat.name()).color(feat.tier().color()).bold(true),
-                Message.raw(" [" + feat.tier().displayName() + "]  unlocked " + date
-                        + (tag.isEmpty() ? "" : ", " + tag)).color(MUTED));
-        // The same path the unlock broadcast uses, one message per online player.
+        Message tag = Rarity.message(plugin.exporter(), plugin.config(), feat.id());
+        // The same path the unlock broadcast uses, one message per online player, with the date in each
+        // reader's language.
         for (PlayerRef other : Universe.get().getPlayers()) {
-            other.sendMessage(line);
+            Message line = Message.translation(Lang.CMD_SHARE_LINE)
+                    .param("player", Message.raw(playerRef.getUsername()).color("#7a9cc6").bold(true))
+                    .param("feat", Lang.colouredName(feat).bold(true))
+                    .param("tier", Lang.tier(feat.tier()))
+                    .param("date", Lang.date(at, other.getLanguage()))
+                    .color(MUTED);
+            other.sendMessage(tag == null ? line : Message.join(line, Message.raw(", ").color(MUTED), tag.color(MUTED)));
         }
     }
 
@@ -94,8 +90,16 @@ public final class ShareCommand extends AbstractPlayerCommand {
         return left[0];
     }
 
-    /** Looks a feat up by id, ignoring case, or by its name with underscores for spaces. */
+    /** Looks a feat up by id, ignoring case, or by its English name with underscores for spaces. */
     static Feat find(FeatRegistry registry, String input) {
+        return find(registry, input, null);
+    }
+
+    /**
+     * Looks a feat up by id, ignoring case, or by its name with underscores for spaces, the English name or
+     * the name in the player's language, which is what they read on the page.
+     */
+    static Feat find(FeatRegistry registry, String input, String language) {
         if (input == null || input.isBlank()) {
             return null;
         }
@@ -114,10 +118,19 @@ public final class ShareCommand extends AbstractPlayerCommand {
                 return f;
             }
         }
+        if (language != null) {
+            for (Feat f : registry.all()) {
+                if (normalise(Lang.nameFor(f, language)).equals(wanted)) {
+                    return f;
+                }
+            }
+        }
         return null;
     }
 
+    /** Lower case letters and digits only, so accents, spaces and punctuation never matter. */
     private static String normalise(String s) {
-        return s.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+        String plain = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+        return plain.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]", "");
     }
 }

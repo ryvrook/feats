@@ -1,7 +1,7 @@
 # Feats
 
 Achievements for Hytale servers. Feats adds 455 of them, called feats, in eleven tabs worth 20,735 points,
-with an unlock toast, a chat line, a top of screen banner for the rarest unlocks and a `/feats` browser that
+with an unlock toast, a chat line, an optional top of screen banner for the rarest unlocks and a `/feats` browser that
 shows progress on every one, lifetime statistics and a points leaderboard. Two of the tabs are packs an admin can
 turn off, and four more appear with Coinage, Dominion Factions, Chronicle Stats and Atlas, up to 528 feats worth
 23,440 points. It runs on the server with a small UI pack inside the jar, so players join with an unmodified
@@ -16,7 +16,7 @@ SocialBridge and RestAPI, which read Feats.
 
 ## Install
 
-Drop `Feats-1.7.4.jar` into `UserData/Mods` for a singleplayer world or into the server's `mods/` folder and
+Drop `Feats-1.8.0.jar` into `UserData/Mods` for a singleplayer world or into the server's `mods/` folder and
 start it. Tracking starts the first time a player joins. Type `/feats`.
 
 To update a running server, swap the jar and run `/plugin reload Ryvrook:Feats`. The engine prints
@@ -44,14 +44,17 @@ Midwinter and the server's install anniversary, are on by default, which makes t
 above. Hardcore, 2 feats, turns itself on when the server runs hardcore lives. PvP, 3 feats, and Grind, 3 ladders
 that run to ten million blocks, 100,000 kills and 1,000 hours, are off.
 
-An unlock shows the game's own toast with the Memories unlock sound. Platinum also puts a big title on screen,
-and Silver or better is announced to everyone online. A Platinum, a feat owned by under 1 percent of players once
-rarity is known, a tab closer and every server first or milestone also shows a banner at the top of the screen for
-six seconds, with the feat, its description and why it is there. Feats that always get the banner show a dot after
-their tier in the browser. The browser has a Statistics tab with 44 rows, time played,
+Each unlock shows one notification on screen and a chat line for the player. Bronze to Gold show the game's own
+toast and Platinum shows the big title in the middle of the screen instead, both with the Memories unlock sound.
+Silver or better is announced to everyone online. Servers that turn the banner on with `Banner` also get a box at
+the top of the screen for six seconds on a Platinum, a feat owned by under 1 percent of players once rarity is
+known, a tab closer and every server first or milestone, with the feat, its description and why it is there.
+Feats that always get the banner show a dot after their tier in the browser. The browser has a Statistics tab with 44 rows, time played,
 distance, blocks, ore, kills, deaths, damage, chests, fish, the join streak, nights slept through, the longest
 life in game days, biomes, creature kinds and players met among them. Players can wear a Gold or Platinum feat as
-a chat title and see how rare each feat is once 10 players count toward rarity.
+a chat title and see how rare each feat is once 10 players count toward rarity. All of it, the feat names, the
+toast, the chat lines, the banner, the browser and the replies of the player commands, shows in the language the
+player's client runs in where a translation exists, and in English otherwise, see Languages.
 
 The World tab holds 30 records that belong to the server rather than to a player, 18 milestones and 12 firsts.
 Nine of the milestones read server totals, blocks broken, creatures and bosses defeated, players who have joined,
@@ -78,6 +81,9 @@ in it is not shown.
 
 Player commands only act on the player who runs them. `view` and `compare` need `AllowViewOthers`. A feat you
 do not own and a feat that does not exist get the same answer from `share`, so it cannot find hidden feats.
+`share` and `title` take a feat's id, its English name or its name in the player's language, with case, spaces,
+accents and punctuation ignored, so `/feats share rock_bottom` and `/feats share Rock Bottom` find the same feat.
+Their replies come in the player's language.
 
 Admin commands need two generated nodes together, `ryvrook.feats.command.feats.admin` and the sub command's
 own, such as `ryvrook.feats.command.feats.admin.grant`. All of them except `view` work from the console, and
@@ -94,7 +100,7 @@ they find offline players by the name in their file.
 | `/feats admin totals` | Every server total and each total milestone with its value, target and whether it is reached |
 | `/feats admin scan <player or all> [--dry-run]` | Credit what Hytale already recorded, see below |
 | `/feats admin status` | The Feats version, then one line per suite mod with its version, whether Feats is linked to it and the setting that controls the link |
-| `/feats admin reload` | Re-read `Feats.json` and `Rewards.json`, then list the packs that are on |
+| `/feats admin reload` | Re-read `Feats.json` and `Rewards.json`, check the language files and save again any the engine has not read, send every online player their language, then list the packs that are on |
 
 A revoked feat whose counter still meets the target comes back on the next matching action. Lower the counter
 with `setstat` first. A reset keeps the record of rewards already given, so they cannot be earned twice. A grant
@@ -106,11 +112,13 @@ packs and siblings are read at start.
 `Feats.json` sits in the plugin's data folder. `/feats admin reload` applies everything except
 `AutosaveSeconds`, `ExportSeconds`, `Tracker`, the four sibling link keys and the five `Pack` keys, which need a restart or
 `/plugin reload Ryvrook:Feats`. The reload reply lists the packs that are on so a change that has not taken
-effect yet is easy to spot.
+effect yet is easy to spot. There is no language setting. Each player gets the language their client runs in, see
+Languages.
 
 | Key | Default | What it does |
 |---|---|---|
-| `ShowToasts` | `true` | Toast on unlock |
+| `ShowToasts` | `true` | Toast on unlock. Skipped when the big title shows for that unlock |
+| `ChatLine` | `true` | The player's own "Feat unlocked" chat line and the catch up summary line. The broadcast to other players is set by `BroadcastUnlocks` |
 | `PlaySound` | `true` | Unlock sound |
 | `UnlockSound` | `SFX_Memories_Unlock_Local` | Sound id. Empty or unknown falls back to this |
 | `BigTitleMinimumTier` | `"PLATINUM"` | Lowest tier with a big title on screen. `OFF` turns it off |
@@ -142,7 +150,7 @@ effect yet is easy to spot.
 | `PackPvp` | `false` | The PvP tab, 3 feats. Read at start |
 | `PackCalendar` | `true` | The Calendar tab, 4 feats on real dates. Read at start |
 | `PackGrind` | `false` | The Grind tab, 3 very long ladders. Read at start |
-| `Banner` | `"RARE"` | When the top of screen banner shows. `OFF` never, `PLATINUM` for Platinum unlocks and server records, `RARE` also for banner feats and feats under `BannerRareBelowPercent`, `ALL` for every unlock |
+| `Banner` | `"OFF"` | When the top of screen banner shows. `OFF` never, `PLATINUM` for Platinum unlocks and server records, `RARE` also for banner feats and feats under `BannerRareBelowPercent`, `ALL` for every unlock |
 | `BannerSeconds` | `6` | How long the banner stays, 2 to 30 |
 | `BannerRareBelowPercent` | `1` | Owned by fewer than this percent of players earns the banner on `RARE` |
 | `BannerBroadcast` | `true` | Milestones and firsts show the banner to everyone online, with the holder's name |
@@ -155,9 +163,77 @@ effect yet is easy to spot.
 A player who counts toward rarity has at least one unlock or 10 minutes played, so visitors do not make every
 feat look rare. A player sees at most three banners a minute, the rest stay in chat.
 
+The banner is off by default. It sits at the top of the screen next to the compass and can overlap the HUD of
+other mods, such as the faction tag of Dominion. Set `Banner` to `PLATINUM`, `RARE` or `ALL` to turn it on.
+
 Player progress lives in `players/<uuid>.json`. Delete a file while the player is offline to reset them. A file
 that fails to load is renamed `<uuid>.corrupt-<timestamp>.json` and the player starts fresh. World records and
 the server totals live in `server.json`.
+
+## Languages
+
+Feats speaks the language each player's client runs in. Hytale ships seven, en-US, es-ES, fr-FR, pt-BR, ru-RU,
+uk-UA and zh-CN, and the engine tells Feats which one a player uses, so there is no language setting and two
+players on the same server read it in different languages. Every feat name and description, the chat lines, the
+toast, the big title, the banner, the whole `/feats` page and the replies of the player commands come from
+`feats.lang` files in `mods/Ryvrook_Feats/lang/Server/Languages/<language>/`. Dates and the decimal of a
+distance follow the player's language too. Feats ships English only, and a key a language file leaves out shows
+in English, so an older translation never hides a new feat.
+
+At every start Feats writes its English to `mods/Ryvrook_Feats/lang/Server/Languages/en-US/feats.lang`, 1,281
+keys, 165 for the text around the feats and 1,116 for the names and descriptions of the 558 feats and world
+records. That file is rewritten from the jar whenever it differs, so do not edit it. The folder also gets a
+`README.txt`, written once, and an empty `Common/` folder the engine needs. It is registered with the engine as
+an asset pack once, at start.
+
+To translate:
+
+1. Start the server once, then copy `mods/Ryvrook_Feats/lang/Server/Languages/en-US/feats.lang`. The same file
+   is `src/main/resources/lang/en-US/feats.lang` in this repository.
+2. Put the copy beside it as `mods/Ryvrook_Feats/lang/Server/Languages/<language>/feats.lang`, with the folder
+   named as the game names the language, such as `fr-FR`. The file must be called `feats.lang`.
+3. Delete its first line, the one that starts `# Feats language file, generated from the code`. Feats replaces a
+   file that still has that line when an update ships that language, and never touches a file without it.
+4. Translate the right hand side of each line and leave the keys alone. A line you delete shows in English.
+5. Save it as UTF-8 without a byte order mark. Within about 10 seconds the log shows `Handled language changes
+   for: {fr-FR}` and online players get the new lines. If nothing happens, run `/feats admin reload`.
+6. Read the log for `Feats language file fr-FR/feats.lang checked, no problem`, or the problems listed above it.
+
+The format is one line per key, `key = text`, and `#` starts a comment line. The file name adds `feats.` to every
+key, so the file holds `chat.label = Feats` and writing `feats.chat.label` is reported. The keys are
+`feat.<id>.name` and `feat.<id>.desc`, `category.<tab>`, `tier.<tier>`, `stat.<counter>`, `chat.*`, `banner.*`,
+`rarity.*`, `page.*` and `cmd.*`. Keep each `{placeholder}` exactly as the English line has it. Plurals use the
+ICU form, `{n, plural, one {1 day} other {{n} days}}`, and always need the `other` form. Write an apostrophe
+next to a brace as `’`, since `'` there makes the client show the placeholder as text. `\n` is a line break
+and `\t` a tab, there is no other escape. A line ending in a backslash goes on on the next line, one pair of
+double quotes around a whole text is removed, and when a key is written twice the first one counts.
+
+Feats checks every file but its own English at start and on each reload, and logs one WARNING per problem in
+the form `Feats language file fr-FR/feats.lang, <key>: <problem>`, then `Feats language file fr-FR/feats.lang
+checked, <n> problem(s), see above`. It reports a placeholder added or left out, an unmatched brace, a key that is
+not a Feats key or carries `feats.`, a plural without `other`, a `'` before a brace, a plural in a `tier.*` or
+`rarity.*` line or in `page.world.someone` or `page.row.points` (the server fills those in itself and only knows
+plain placeholders), a byte order mark, a copy that still has the generated first line, and a `.lang` file in the
+folder that is not named `feats.lang`. A line with a problem still loads, so fix it and save again.
+
+The engine watches the folder unless the server runs with `--disable-file-watcher`, and the boot log shows
+`Asset monitor enabled!` when it does. A new language folder is watched as soon as it exists, but a file written
+in the same instant as its new folder, such as a copy that creates `it-IT/` and the file at once, can be missed.
+Saving it again, or `/feats admin reload`, fixes that. The reload checks the files, saves again every file the
+engine has not read as written so the watcher reads it within seconds, and sends every online player their
+language. Its reply ends with `Language files are read by the engine when saved, sent to <n> online player(s)`,
+with `saved <language> again so it reads them in a few seconds` before the count when it saved a file. With the
+watcher off it replies `Language files are read at start, restart to apply`.
+
+A translation that should ship in the jar is welcome as a pull request that adds
+`src/main/resources/lang/<language>/feats.lang`. Keep the generated first line in it, so Feats replaces the
+copy on each server with the one of every new release. `LangFileTest` checks it the
+same way the server does and fails the build on a problem.
+
+The console, the log, `/feats admin` and its replies, the command descriptions in `/help`, the API, the
+`FeatUnlockedEvent`, `export/feats.json`, the Discord webhook and the placeholders stay English, so SocialBridge,
+RestAPI, Atlas, Chronicle Stats and Dominion Factions show the English names. A `Message` in `Rewards.json` is
+sent as written.
 
 ## Rewards
 
@@ -325,7 +401,8 @@ With the PlaceholderAPI plugin installed Feats registers the `feats` expansion.
 | `%feats_pack_<name>%` | `true` while that pack is on, such as `%feats_pack_social%` |
 | `%feats_siblings%` | The sibling plugins found at start, comma separated |
 
-Titles show in chat only when no other plugin formats chat. A chat plugin can use `%feats_title%` instead.
+Titles show in chat only when no other plugin formats chat. A chat plugin can use `%feats_title%` instead. The
+names in `%feats_title%` and `%feats_last%` are English.
 
 ## Leaderboard export
 
@@ -338,7 +415,7 @@ world record carries `banner`, and feat rows and recent unlocks carry `pack`, th
 something changed, and at shutdown, atomically. Players sort by points, then by who got there first, then by
 name. Timestamps are epoch milliseconds. Since 1.7.3 the file ends with `"version": 1`, which only goes up when a
 field is moved, renamed or removed, so a reader can check the shape. Atlas, Chronicle Stats and RestAPI read this
-file, and any other tool can without linking against Feats.
+file, and any other tool can without linking against Feats. Names in the file are English.
 
 ## For plugin authors
 
@@ -369,7 +446,8 @@ is reloaded two seconds later, so its hooks land on the new copy. `addStat` work
 waits in memory and the file thread writes it, and their feats unlock quietly with rewards at the next join.
 `grant` needs the player online. Every unlock also fires `FeatUnlockedEvent` on the server's event bus from the
 thread that caused it, usually a world thread, so keep listeners short. Ask `FeatsApi.get()` again after a
-reload of Feats. Methods are only ever added.
+reload of Feats. Methods are only ever added. Names, descriptions, categories and tiers in the API and the event
+are the English text, whatever language a player reads.
 
 ## How counting works
 
@@ -484,7 +562,9 @@ feat("digger", "Digger", "Break 100 blocks.", MINING, BRONZE, "Tool_Pickaxe_Copp
 `define(...)`, as in `define(of(...).requiring(Sibling.ATLAS))`, `.inPack(Pack.SOCIAL)` or `.withBanner()`.
 World records live in `defineWorld()`, with `total(key, target)` for the ones that read a server total. Ids are
 stored in player files, so never rename one that shipped. Counter keys are in `stats/StatKeys.java` and the
-groups such as "any pickaxe" in `track/Classify.java`. [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) has the rest.
+groups such as "any pickaxe" in `track/Classify.java`. After adding a feat or changing any text a player sees, run
+`./gradlew generateLang` and commit `src/main/resources/lang/en-US/feats.lang`, since `LangFileTest`
+fails while the file is behind the code. [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) has the rest.
 
 Issues and pull requests are welcome on [GitHub](https://github.com/ryvrook/feats).
 

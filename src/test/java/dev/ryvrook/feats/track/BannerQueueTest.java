@@ -6,6 +6,7 @@ import dev.ryvrook.feats.model.Requirement;
 import dev.ryvrook.feats.model.Scope;
 import dev.ryvrook.feats.model.Tier;
 import dev.ryvrook.feats.model.Trigger;
+import dev.ryvrook.feats.lang.Render;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -18,6 +19,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BannerQueueTest {
+    private static String english(com.hypixel.hytale.server.core.Message m) {
+        return Render.english(m);
+    }
+
     private static final double UNKNOWN = -1;
 
     private static Feat personal(String id, Tier tier) {
@@ -47,45 +52,45 @@ class BannerQueueTest {
 
     @Test
     void platinumShowsPlatinumAndServerEvents() {
-        assertEquals("Platinum", BannerQueue.reason("PLATINUM", personal("a", Tier.PLATINUM), UNKNOWN, 1));
-        assertEquals("Server milestone", BannerQueue.reason("PLATINUM", milestone("m"), UNKNOWN, 1));
-        assertEquals("Server first", BannerQueue.reason("PLATINUM", first("f"), UNKNOWN, 1));
+        assertEquals("Platinum", english(BannerQueue.reason("PLATINUM", personal("a", Tier.PLATINUM), UNKNOWN, 1)));
+        assertEquals("Server milestone", english(BannerQueue.reason("PLATINUM", milestone("m"), UNKNOWN, 1)));
+        assertEquals("Server first", english(BannerQueue.reason("PLATINUM", first("f"), UNKNOWN, 1)));
         assertNull(BannerQueue.reason("PLATINUM", personal("a", Tier.GOLD).withBanner(), 0.001, 1));
         assertNull(BannerQueue.reason("PLATINUM", personal("a", Tier.GOLD), 0.001, 1));
     }
 
     @Test
     void rareAddsTheFlagAndTheRarityRule() {
-        assertEquals("Platinum", BannerQueue.reason("RARE", personal("a", Tier.PLATINUM), UNKNOWN, 1));
-        assertEquals("Gold", BannerQueue.reason("RARE", personal("a", Tier.GOLD).withBanner(), UNKNOWN, 1));
-        assertEquals("Rare, under 1% of players", BannerQueue.reason("RARE", personal("a", Tier.SILVER), 0.005, 1));
-        assertEquals("Rare, 3% of players", BannerQueue.reason("RARE", personal("a", Tier.SILVER), 0.03, 5));
+        assertEquals("Platinum", english(BannerQueue.reason("RARE", personal("a", Tier.PLATINUM), UNKNOWN, 1)));
+        assertEquals("Gold", english(BannerQueue.reason("RARE", personal("a", Tier.GOLD).withBanner(), UNKNOWN, 1)));
+        assertEquals("Rare, under 1% of players", english(BannerQueue.reason("RARE", personal("a", Tier.SILVER), 0.005, 1)));
+        assertEquals("Rare, 3% of players", english(BannerQueue.reason("RARE", personal("a", Tier.SILVER), 0.03, 5)));
         assertNull(BannerQueue.reason("RARE", personal("a", Tier.SILVER), 0.05, 5), "5% is not under 5%");
         assertNull(BannerQueue.reason("RARE", personal("a", Tier.GOLD), UNKNOWN, 1), "unknown rarity is not rare");
         assertNull(BannerQueue.reason("RARE", personal("a", Tier.GOLD), 0.001, 0), "a zero threshold turns rarity off");
-        assertEquals("Server milestone", BannerQueue.reason("RARE", milestone("m"), UNKNOWN, 1));
-        assertEquals("Server first", BannerQueue.reason("RARE", first("f"), UNKNOWN, 1));
-        assertEquals("Rare, under 1% of players", BannerQueue.reason("RARE", personal("a", Tier.GOLD).withBanner(), 0.001, 1),
+        assertEquals("Server milestone", english(BannerQueue.reason("RARE", milestone("m"), UNKNOWN, 1)));
+        assertEquals("Server first", english(BannerQueue.reason("RARE", first("f"), UNKNOWN, 1)));
+        assertEquals("Rare, under 1% of players", english(BannerQueue.reason("RARE", personal("a", Tier.GOLD).withBanner(), 0.001, 1)),
                 "a known rarity is the more useful line for a flagged feat");
     }
 
     @Test
     void allShowsEveryUnlockWithTheTierAsTheWhy() {
-        assertEquals("Bronze", BannerQueue.reason("ALL", personal("a", Tier.BRONZE), UNKNOWN, 1));
-        assertEquals("Platinum", BannerQueue.reason("ALL", personal("a", Tier.PLATINUM), UNKNOWN, 1));
-        assertEquals("Rare, under 1% of players", BannerQueue.reason("ALL", personal("a", Tier.BRONZE), 0.001, 1));
-        assertEquals("Gold", BannerQueue.reason("all", personal("a", Tier.GOLD), UNKNOWN, 1), "case does not matter");
-        assertEquals("Gold", BannerQueue.reason("nonsense", personal("a", Tier.GOLD).withBanner(), UNKNOWN, 1),
+        assertEquals("Bronze", english(BannerQueue.reason("ALL", personal("a", Tier.BRONZE), UNKNOWN, 1)));
+        assertEquals("Platinum", english(BannerQueue.reason("ALL", personal("a", Tier.PLATINUM), UNKNOWN, 1)));
+        assertEquals("Rare, under 1% of players", english(BannerQueue.reason("ALL", personal("a", Tier.BRONZE), 0.001, 1)));
+        assertEquals("Gold", english(BannerQueue.reason("all", personal("a", Tier.GOLD), UNKNOWN, 1)), "case does not matter");
+        assertEquals("Gold", english(BannerQueue.reason("nonsense", personal("a", Tier.GOLD).withBanner(), UNKNOWN, 1)),
                 "an unknown setting reads as RARE");
         assertNull(BannerQueue.reason("nonsense", personal("a", Tier.GOLD), UNKNOWN, 1));
     }
 
     @Test
     void broadcastLinesCarryTheName() {
-        assertEquals("Server first, by Ada", BannerQueue.broadcastReason(first("f"), "Ada"));
-        assertEquals("Server milestone, by Ada", BannerQueue.broadcastReason(milestone("m"), " Ada "));
-        assertEquals("Server milestone", BannerQueue.broadcastReason(milestone("m"), null));
-        assertEquals("Server first", BannerQueue.broadcastReason(first("f"), ""));
+        assertEquals("Server first, by Ada", english(BannerQueue.broadcastReason(first("f"), "Ada")));
+        assertEquals("Server milestone, by Ada", english(BannerQueue.broadcastReason(milestone("m"), " Ada ")));
+        assertEquals("Server milestone", english(BannerQueue.broadcastReason(milestone("m"), null)));
+        assertEquals("Server first", english(BannerQueue.broadcastReason(first("f"), "")));
     }
 
     @Test

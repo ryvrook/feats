@@ -11,6 +11,7 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.ryvrook.feats.FeatsPlugin;
+import dev.ryvrook.feats.lang.Lang;
 import dev.ryvrook.feats.model.Feat;
 import dev.ryvrook.feats.model.Tier;
 import dev.ryvrook.feats.stats.PlayerProgress;
@@ -38,20 +39,21 @@ final class TitleCommand extends AbstractPlayerCommand {
         PlayerProgress progress = plugin.tracker().load(playerRef.getUuid(), playerRef.getUsername());
         List<Feat> choices = choices(progress);
         Feat current = progress.title() == null ? null : plugin.tracker().registry().get(progress.title());
-        context.sendMessage(Message.join(
-                Message.raw("Your title ").color(Targets.GOLD).bold(true),
-                current == null ? Message.raw("none").color(Targets.MUTED)
-                        : Message.raw(current.name()).color(current.tier().color()).bold(true)));
+        context.sendMessage(Message.translation(Lang.CMD_TITLE_CURRENT)
+                .param("title", current == null ? Message.translation(Lang.CMD_TITLE_NONE).color(Targets.MUTED)
+                        : Lang.colouredName(current).bold(true))
+                .color(Targets.GOLD).bold(true));
         if (choices.isEmpty()) {
-            context.sendMessage(Message.raw("Unlock a Gold or Platinum feat to wear it as a title.").color(Targets.MUTED));
+            context.sendMessage(Message.translation(Lang.CMD_TITLE_HINT).color(Targets.MUTED));
             return;
         }
         for (Feat f : choices) {
-            context.sendMessage(Message.join(
-                    Message.raw(" " + f.name()).color(f.tier().color()),
-                    Message.raw("  /feats title " + f.id()).color(Targets.MUTED)));
+            context.sendMessage(Message.translation(Lang.CMD_TITLE_ROW)
+                    .param("feat", Lang.colouredName(f))
+                    .param("id", f.id())
+                    .color(Targets.MUTED));
         }
-        context.sendMessage(Message.raw("Use /feats title off to clear it.").color(Targets.MUTED));
+        context.sendMessage(Message.translation(Lang.CMD_TITLE_CLEAR_HINT).color(Targets.MUTED));
     }
 
     private List<Feat> choices(PlayerProgress progress) {
@@ -87,39 +89,26 @@ final class TitleCommand extends AbstractPlayerCommand {
             String wanted = context.get(feat).trim();
             if (wanted.equalsIgnoreCase("off") || wanted.equalsIgnoreCase("none")) {
                 progress.setTitle(null);
-                context.sendMessage(Message.raw("Your title is cleared.").color(Targets.MUTED));
+                context.sendMessage(Message.translation(Lang.CMD_TITLE_CLEARED).color(Targets.MUTED));
                 return;
             }
-            Feat chosen = find(wanted);
+            Feat chosen = ShareCommand.find(plugin.tracker().registry(), wanted, playerRef.getLanguage());
             if (chosen == null) {
-                context.sendMessage(Message.raw("There is no feat called " + wanted + ".").color(Targets.ERROR));
+                context.sendMessage(Message.translation(Lang.CMD_TITLE_UNKNOWN).param("name", wanted).color(Targets.ERROR));
                 return;
             }
             if (!progress.isUnlocked(chosen.id())) {
-                context.sendMessage(Message.raw("You have not unlocked that feat yet.").color(Targets.ERROR));
+                context.sendMessage(Message.translation(Lang.CMD_TITLE_LOCKED).color(Targets.ERROR));
                 return;
             }
             if (!eligible(chosen)) {
-                context.sendMessage(Message.raw("Only Gold and Platinum feats can be titles.").color(Targets.ERROR));
+                context.sendMessage(Message.translation(Lang.CMD_TITLE_TIER).color(Targets.ERROR));
                 return;
             }
             progress.setTitle(chosen.id());
-            context.sendMessage(Message.join(
-                    Message.raw("Your title is now ").color(Targets.MUTED),
-                    Message.raw(chosen.name()).color(chosen.tier().color()).bold(true)));
-        }
-
-        private Feat find(String wanted) {
-            Feat byId = plugin.tracker().registry().get(wanted);
-            if (byId != null) {
-                return byId;
-            }
-            for (Feat f : plugin.tracker().registry().all()) {
-                if (f.id().equalsIgnoreCase(wanted) || f.name().equalsIgnoreCase(wanted)) {
-                    return f;
-                }
-            }
-            return null;
+            context.sendMessage(Message.translation(Lang.CMD_TITLE_SET)
+                    .param("feat", Lang.colouredName(chosen).bold(true))
+                    .color(Targets.MUTED));
         }
     }
 }

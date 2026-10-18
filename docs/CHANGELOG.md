@@ -3,6 +3,63 @@
 Every notable change to Feats is recorded here. The format follows Keep a Changelog and the project uses
 semantic versioning.
 
+## 1.8.0 - 2026-10-18
+
+Needs the Hytale 0.7.0 release server or newer. No feat was added or removed.
+
+### For players
+
+- Feats shows in the language the client runs in. Every feat name and description, the chat lines, the toast,
+  the big title, the banner, the whole `/feats` page and the replies of the player commands are translation keys
+  the engine sends to each client in its own language, with the English for every key a language file leaves
+  out. Dates and the decimal of a distance follow the viewer's language too. Feats ships English, see the README
+  for how a language is added.
+- `/feats share` and `/feats title` also find a feat by the name shown in the player's language, accents and
+  case aside.
+- An unlock shows one notification on screen by default. Bronze to Gold show the toast and Platinum shows the
+  big title instead of the toast, each with the chat line. The top of screen banner is off by default, since it
+  sits next to the compass and can cover the HUD of other mods.
+
+### For admins
+
+- A `lang` folder in `mods/Ryvrook_Feats/` is the one place the engine reads Feats' lines from. At every start
+  Feats writes its English to `lang/Server/Languages/en-US/feats.lang`, rewritten whenever it differs, adds a
+  `README.txt` once and an empty `Common/` folder, and registers the folder as an asset pack once. A
+  translation goes beside it as `<language>/feats.lang`, copied from the English with its generated first line
+  deleted, and a file without that line is never touched.
+- The engine's asset monitor, on unless the server runs with `--disable-file-watcher`, reads a saved file within
+  about 10 seconds and sends the new lines to online players. `/feats admin reload` checks the files, saves again
+  any file the engine has not read, such as one written in the same instant as its new language folder, and
+  sends every online player their language. Its reply reads `Language files are read by the engine when saved,
+  sent to <n> online player(s)`, or `Language files are read at start, restart to apply` without the monitor.
+- Every file but the generated English is checked at start and on reload, one WARNING per problem and then
+  `Feats language file <language>/feats.lang checked, no problem` or `checked, <n> problem(s), see above`. The
+  checks cover placeholders added or left out, unmatched braces, unknown keys, keys written with `feats.`, a
+  plural without `other`, a `'` before a brace, a plural in a line the server fills in, a byte order mark, a copy
+  that kept the generated line and a `.lang` file not named `feats.lang`.
+- There is no language setting. The console, the log, `/feats admin` and its replies stay English.
+- New setting `ChatLine`, default `true`. When false the player gets no "Feat unlocked" chat line and no catch
+  up summary line. The broadcast to other players, the shared milestone lines and `/feats notify` are unchanged.
+  `Banner` now defaults to `"OFF"`, was `"RARE"`, and a toast is skipped when the big title shows for the same
+  unlock. These are default changes for new `Feats.json` files only. An existing file keeps its value, so set
+  `Banner` to `"OFF"` by hand to match. `Feats.json` has 42 keys.
+
+### For developers
+
+- `lang/Lang.java` holds every key with its English text, `lang/LangFiles.java` reads the `.lang` format the way
+  the engine's parser does and checks a translation against the English, and `lang/LangPack.java` copies the
+  bundled files into the data folder and registers it. `./gradlew generateLang` writes
+  `src/main/resources/lang/en-US/feats.lang`, outside `Server/Languages` so the jar's own pack holds no Feats
+  line. It has 1,281 keys, 165 for the text around the feats and 1,116 for the 558 feats and world records,
+  written without `feats.`, since the engine puts the file name in front of every key. `LangFileTest` keeps it
+  in step with the code and checks every bundled translation.
+- A text slot of a UI page or HUD document only takes a translation with plain string and number params. A
+  `Message.join` or a message param there makes the client disconnect, so the `/feats` page resolves the tier,
+  the rarity tag and the points suffix to strings with `Lang.text` first, and the banner's rare line is two keys,
+  `feats.banner.rare.under1` and `feats.banner.rare` with an int `{percent}`. Chat lines keep message params.
+- `BannerQueue.reason`, `broadcastReason` and `FeatsBannerHud.Frame` carry messages now, not strings. The API,
+  the export, the Discord webhook and the placeholders still give English names.
+
 ## 1.7.4 - 2026-10-16
 
 Needs the Hytale 0.7.0 release server or newer. No feat was added or removed.

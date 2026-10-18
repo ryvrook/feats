@@ -1,7 +1,7 @@
 {
   "Group": "Ryvrook",
   "Name": "Feats",
-  "Version": "1.7.4",
+  "Version": "1.8.0",
   "Description": "455 achievements for Hytale servers with unlock toasts, a /feats browser, lifetime statistics and a points leaderboard. Up to 528 with every pack and with Coinage, Dominion Factions, Chronicle Stats and Atlas installed.",
   "Main": "dev.ryvrook.feats.FeatsPlugin",
   "Authors": [

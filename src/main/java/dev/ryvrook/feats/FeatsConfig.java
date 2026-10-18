@@ -16,6 +16,10 @@ public final class FeatsConfig {
                     (c, v, extra) -> c.showToasts = v,
                     (c, extra) -> c.showToasts)
             .add()
+            .append(new KeyedCodec<>("ChatLine", Codec.BOOLEAN),
+                    (c, v, extra) -> c.chatLine = v,
+                    (c, extra) -> c.chatLine)
+            .add()
             .append(new KeyedCodec<>("PlaySound", Codec.BOOLEAN),
                     (c, v, extra) -> c.playSound = v,
                     (c, extra) -> c.playSound)
@@ -179,6 +183,7 @@ public final class FeatsConfig {
             .build();
 
     private boolean showToasts = true;
+    private boolean chatLine = true;
     private boolean playSound = true;
     private boolean broadcastUnlocks = true;
     private String broadcastMinimumTier = "SILVER";
@@ -202,7 +207,7 @@ public final class FeatsConfig {
     private boolean packPvp = false;
     private boolean packCalendar = true;
     private boolean packGrind = false;
-    private String banner = "RARE";
+    private String banner = "OFF";
     private int bannerSeconds = 6;
     private int bannerRareBelowPercent = 1;
     private boolean bannerBroadcast = true;
@@ -222,6 +227,11 @@ public final class FeatsConfig {
 
     public boolean showToasts() {
         return showToasts;
+    }
+
+    /** Whether the player gets their own unlock chat line and the catch up summary line. */
+    public boolean chatLine() {
+        return chatLine;
     }
 
     public boolean playSound() {
@@ -385,12 +395,12 @@ public final class FeatsConfig {
         return out;
     }
 
-    /** OFF, PLATINUM, RARE or ALL, upper case. Unknown reads as RARE. */
+    /** OFF, PLATINUM, RARE or ALL, upper case. Unknown reads as OFF, the default. */
     public String banner() {
-        String b = banner == null ? "RARE" : banner.trim().toUpperCase(Locale.ROOT);
+        String b = banner == null ? "OFF" : banner.trim().toUpperCase(Locale.ROOT);
         return switch (b) {
             case "OFF", "PLATINUM", "RARE", "ALL" -> b;
-            default -> "RARE";
+            default -> "OFF";
         };
     }
 

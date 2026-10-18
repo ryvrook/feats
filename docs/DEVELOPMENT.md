@@ -6,9 +6,10 @@ how the plugin is put together, which thread does what, and how I test it.
 ## Layout
 
 `FeatsPlugin` owns the lifecycle. Setup builds the registry, the stores, the tracker, the exporter and the
-reward service, installs `FeatsApi`, then picks the tracking path. Start loads players already online after a
-reload, registers the placeholders, starts the flag watcher, links TrackerAPI and Coinage, starts the sibling
-bindings and the hook sets, and starts the timers. Shutdown undoes it in reverse and drains the file thread for up to 10 seconds.
+reward service, installs `FeatsApi`, then picks the tracking path. Start copies the bundled English into the `lang`
+folder and registers it as a language pack, loads players already online after a reload, registers the placeholders, starts the flag watcher, links TrackerAPI and Coinage, starts the sibling
+bindings and the hook sets, and starts the timers. Shutdown undoes it in reverse, bounds the file thread drain as described under Threads and unregisters the
+language pack last.
 
 `model` holds the feat definitions. `FeatRegistry` builds all of them in code from the siblings found at setup
 and the packs that are on. A plain server has 445 personal feats in nine tabs, the default packs make it 455,
@@ -21,7 +22,10 @@ creature or cause id into the counter keys it feeds, the small anti farm memorie
 `BannerQueue`). `systems` holds the engine systems Feats registers when it tracks on its own. `integration`
 holds the only classes that touch TrackerAPI, Coinage and Atlas types and the reflective Chronicle and Dominion
 bindings. `stats` holds the player and server files. `export` holds the leaderboard file
-and the Discord webhook. `rewards` reads `Rewards.json`. `scan` is the admin scan of existing worlds.
+and the Discord webhook. `rewards` reads `Rewards.json`. `scan` is the admin scan of existing worlds. `lang`,
+since 1.8.0, holds `Lang`, every key a player sees with its English text, `LangFiles`, the `.lang` reader, writer
+and placeholder check, and `LangPack`, which copies the bundled files into the `lang` folder of the data directory and registers it as
+an asset pack, see Languages.
 
 Files added in 1.7.2.
 
@@ -143,6 +147,7 @@ Everything lives in `mods/Ryvrook_Feats/`.
 | `server.json` | `WorldStore` | milestones, firsts and since 1.7.2 `totals`, same atomic write, corrupt copy kept the same way |
 | `export/feats.json` | `LeaderboardExporter` | rewritten only when the body changed, read by Atlas, Chronicle Stats and RestAPI. Since 1.7.3 the last top level field is `"version": 1`, `LeaderboardExporter.FORMAT_VERSION`, which goes up only when a field moves, is renamed or is removed. A file without it is the same shape as version 1 |
 | `CoinsWaiting.json` | `RewardService` | only when a shutdown found Coins rewards waiting for Coinage, read and deleted at the next start |
+| `lang/README.txt`, `lang/Server/Languages/<language>/feats.lang` | `LangPack` writes the README and copies the bundled files, admins write their own languages | en-US is rewritten from the jar whenever it differs, another bundled language only when missing or still starting with the generated marker line, and a file without the marker is never touched. The folder is the only source of `feats.*` lines, registered as a RUNTIME asset pack in start (once, never again on reload) and unregistered at shutdown. The engine's asset monitor reads a saved file on its own, see Languages. The README is written only when missing. An empty `lang/Common/` is created too, since the engine's common asset module throws when asked to stop watching a `Common` folder that never existed |
 
 The exporter and the rarity scan read every player file at most once a minute. `ProgressStore.loadAll` keeps
 the size, modified time and file key of each file it read and parses a file again when any of the three differ,
@@ -247,6 +252,81 @@ holds. `syncMeta` runs once per load from disk before the catch up and sets all 
 file, which is how a file from before 1.7.2 gets its points and a tab finished earlier gets its closer at the
 next join.
 
+## Languages
+
+The engine's `I18nModule` reads `Server/Languages/<language>/*.lang` from every registered asset pack when the
+pack is registered, and stores each key of a file as `<file name without .lang>.<key>`: vanilla `server.lang`
+holds `commands.op.added` for the key `server.commands.op.added`. So `feats.lang` holds `chat.label = Feats` for
+the code key `feats.chat.label`. `getMessages(language)` lays the language's map over the en-US map, so the
+fallback to English is per key. The map is sent to each client as `UpdateTranslations`, and a
+`Message.translation(key)` with its params crosses the wire as a key, so the client formats it, ICU plurals and
+number formats included, in the language its own settings say. Across packs and files the first definition of a
+key wins, a later different one is dropped with `'%s' has multiple definitions`, and unregistering a pack
+removes no line, so registering a pack again never changes a loaded line. All of this was read from the 0.7.1
+server bytecode, `I18nModule.loadMessagesFromPack`, `loadMessagesFrom`, `getMessages(Map, String)` and the
+`I18nAssetMonitorHandler`.
+
+`lang/Lang.java` defines every key as a constant with its English text, prefixed `feats.` (`Lang.PREFIX`).
+Feat names and descriptions stay in the registry and are keyed by id, `feats.feat.<id>.name` and `.desc`, which
+`Lang.name` and `Lang.description` turn into messages. Categories, tiers and the statistics rows are keyed from
+their enum and `StatKeys.DISPLAY`. The rules for a line: no outer whitespace, backslash or outer double quote
+(the generator throws, the engine's parser would change the value), a coloured or bold piece is passed as a
+message param (`.param("feat", Lang.colouredName(feat))`) in chat, never spliced from raw pieces, dates are
+formatted on the server with `Lang.date`, and whole numbers go through `{n, number}`. `Render` in the tests
+renders a message back to English for assertions. A UI page or HUD Text slot (`UICommandBuilder.set`, the
+banner's `FeatsBannerHud.Frame`) takes a translation with string and number params and nothing else: a
+`Message.join` or a message param drops the connection with `CustomUI Set command couldn't set value`. So a
+page line built from pieces resolves them to strings with `Lang.text`, and the banner's rare line is two keys,
+`feats.banner.rare.under1` and `feats.banner.rare` with an int `{percent}`. The keys `Lang.text` resolves on the
+server are listed in `Lang.SERVER_FILLED` (`feats.tier.*`, `feats.rarity.*`, `feats.page.world.someone`,
+`feats.page.row.points`). `Lang.text` fills only `{name}` and `{name, number}`, so a plural there is a problem.
+Chat, toasts and titles may use message params and joins.
+
+`./gradlew generateLang` runs `WriteLangFile` and writes `src/main/resources/lang/en-US/feats.lang` from
+`Lang.english()` and a registry with every sibling and pack. Its first line is `LangFiles.MARKER`. The jar keeps
+it outside `Server/Languages` on purpose, so the jar's own pack holds no Feats line and cannot win over the data
+folder. A future bundled translation goes to `src/main/resources/lang/<language>/feats.lang`. `LangFileTest`
+fails when the committed English differs from the code or anything is left in `src/main/resources/Server/Languages`,
+parses the English back, and runs `LangFiles.check` on every other bundled file.
+
+`LangFiles.parse` follows the engine's `LangFileParser`: strict UTF-8, no BOM handling (a BOM sticks to the first
+key), each line trimmed, blank and `#` lines skipped also inside a continuation, split at the first `=`, empty key
+or value skipped, a value ending in `\` continues with each next line trimmed, its `\` removed and trimmed again,
+joined with nothing between, one pair of outer quotes removed from a one line value, then only `\n` and `\t`
+replaced, first definition wins. `LangFiles.check` takes code keys on both sides (`LangFiles.prefixed` turns a
+parsed file into them) and names problems by file key: a key not in the English, a key written with `feats.`, a
+placeholder added or dropped, an unmatched brace, a plural or select without `other`, a `'` before a brace
+(ICU quoting, use `’`), a plural or select in a `SERVER_FILLED` key, and a BOM that swallowed the first key.
+
+`LangPack.register`, in start, copies every bundled `lang/<language>/feats.lang` (found by listing the jar, plus
+a known list probed with `getResourceAsStream`) to `<data>/lang/Server/Languages/<language>/feats.lang`. en-US is
+rewritten whenever it differs, it is the complete fallback. Another language is written when its file is missing
+or its first line is the marker and the content differs. A file without the marker is never touched. Then it
+logs `LangFiles.check` problems for every file but the generated en-US (feat keys the running registry lacks are
+allowed), plus a note for a non-bundled language whose file kept the marker line (a hand copy should drop
+it, a bundled translation keeps it so releases can update it), and registers `<data>/lang` as a RUNTIME pack named `Ryvrook:Feats/Languages`, unless it is already
+registered. Shutdown unregisters it.
+
+Reloading, tested headless on 0.7.1: the asset monitor is on unless the server runs with
+`--disable-file-watcher`, and it watches our `Server/Languages` and every language folder in it, also one made
+later. A saved file logs `Handled language changes for: {fr-FR}`, the engine drops that file's keys for that
+language, reads it again and pushes the changes to online players, with no `multiple definitions` warning. Only
+a file written in the same moment as its new folder (`mkdir -p` and write) is missed. `LangPack.reload`, from
+`/feats admin reload`, never registers the pack again: it copies and checks the files, saves again every file
+whose lines the engine does not hold as written (compared through `Lang.resolve`), which the monitor then reads,
+and queues every online player's language through `I18nModule.queueTranslations`. Without the monitor it
+replies that the files are read at start and logs one warning. `ShareCommand.find` and the title command match
+a feat by its name in the player's language through `Lang.nameFor`.
+
+What stays English: the console and the log, `/feats admin` and its replies, the command descriptions,
+`FeatInfo` and the rest of the API,
+`export/feats.json`, the Discord webhook and the PlaceholderAPI expansion. Each is read by machines or by
+another plugin that cannot ask a client for a language.
+
+Not seen in a client yet: a translation message in the toast, the big title and the banner HUD document. All
+three take the same `Message` type the chat and the page already render through, and vanilla sends
+translation keys to the same slots.
+
 ## The asset pack rule
 
 The engine registers the jar's UI pack right after setup and refuses a pack whose name is already registered.
@@ -261,11 +341,12 @@ unwatch a jar file system, which logs a SEVERE `ProviderMismatchException`. Coin
 export JAVA_HOME=/opt/homebrew/opt/openjdk@25/libexec/openjdk.jdk/Contents/Home
 ./gradlew build
 ./gradlew test -Pbench   # prints the tracking and export benchmarks
+./gradlew generateLang   # rewrites src/main/resources/lang/en-US/feats.lang from the code
 ```
 
 The tests run without a server. The server jar is only on the test classpath for bson and the logger. Feats
-compiles and tests against `TrackerAPI-1.0.0.jar`, `Coinage-api-1.2.0.jar` and `Atlas-1.9.0.jar` from the sibling
-checkouts, the oldest version of each it supports so nothing newer is used by accident, see `siblingJar` in
+compiles and tests against `TrackerAPI-1.1.1.jar`, `Coinage-api-1.2.0.jar` and `Atlas-1.9.0.jar` from the sibling
+checkouts, the oldest version of each it needs so nothing newer is used by accident, see `siblingJar` in
 `build.gradle.kts`. Chronicle Stats and Dominion need no jar, and their bindings are tested over fakes.
 
 For a headless boot I copy the jars into a fresh folder under `mods/`, write an empty `permissions.json` and run

@@ -1,6 +1,8 @@
 package dev.ryvrook.feats.export;
 
+import com.hypixel.hytale.server.core.Message;
 import dev.ryvrook.feats.FeatsConfig;
+import dev.ryvrook.feats.lang.Lang;
 
 import java.util.Locale;
 
@@ -51,5 +53,22 @@ public final class Rarity {
             return "";
         }
         return tag(exporter.rarity(featId), config.rareBelowPercent());
+    }
+
+    /** {@link #tag(double, int)} as a message in the viewer's language, or null where the tag is empty. */
+    public static Message message(double fraction, int rareBelowPercent) {
+        if (fraction < 0) {
+            return null;
+        }
+        return Message.translation(isRare(fraction, rareBelowPercent) ? Lang.RARITY_RARE : Lang.RARITY_SHARE)
+                .param("share", percent(fraction));
+    }
+
+    /** {@link #tag(LeaderboardExporter, FeatsConfig, String)} as a message, or null where the tag is empty. */
+    public static Message message(LeaderboardExporter exporter, FeatsConfig config, String featId) {
+        if (exporter == null || config == null || !config.showRarity()) {
+            return null;
+        }
+        return message(exporter.rarity(featId), config.rareBelowPercent());
     }
 }

@@ -12,6 +12,7 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.ryvrook.feats.FeatsPlugin;
+import dev.ryvrook.feats.lang.Lang;
 import dev.ryvrook.feats.stats.PlayerProgress;
 import dev.ryvrook.feats.ui.FeatsPage;
 
@@ -34,7 +35,7 @@ final class ViewCommand extends AbstractPlayerCommand {
     protected void execute(CommandContext context, Store<EntityStore> store, Ref<EntityStore> ref,
                            PlayerRef playerRef, World world) {
         if (!plugin.config().allowViewOthers()) {
-            context.sendMessage(Message.raw("Viewing other players is turned off on this server.").color(Targets.MUTED));
+            context.sendMessage(Message.translation(Lang.CMD_VIEW_OFF).color(Targets.MUTED));
             return;
         }
         open(plugin, context, context.get(player));
@@ -46,14 +47,14 @@ final class ViewCommand extends AbstractPlayerCommand {
      */
     static void open(FeatsPlugin plugin, CommandContext context, String name) {
         if (!context.isPlayer()) {
-            context.sendMessage(Message.raw("Only a player can open the feats browser.").color(Targets.ERROR));
+            context.sendMessage(Message.translation(Lang.CMD_VIEW_PLAYER_ONLY).color(Targets.ERROR));
             return;
         }
         PlayerRef viewer = context.senderAs(PlayerRef.class);
         Targets.find(plugin, context, name, target -> {
             PlayerProgress progress = plugin.tracker().peek(target.uuid());
             if (progress == null) {
-                Targets.reply(context, Message.raw(target.name() + " has no feats yet.").color(Targets.MUTED));
+                Targets.reply(context, Message.translation(Lang.CMD_NO_FEATS).param("player", target.name()).color(Targets.MUTED));
                 return;
             }
             Targets.onSenderWorld(context, () -> openPage(plugin, viewer, progress));

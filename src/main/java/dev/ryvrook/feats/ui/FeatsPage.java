@@ -7,6 +7,7 @@ import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.protocol.packets.interface_.CustomPageLifetime;
 import com.hypixel.hytale.protocol.packets.interface_.CustomUIEventBindingType;
+import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.player.pages.InteractiveCustomUIPage;
 import com.hypixel.hytale.server.core.plugin.PluginManager;
 import com.hypixel.hytale.server.core.ui.builder.EventData;
@@ -18,6 +19,7 @@ import dev.ryvrook.feats.FeatsConfig;
 import dev.ryvrook.feats.FeatsPlugin;
 import dev.ryvrook.feats.export.LeaderboardExporter;
 import dev.ryvrook.feats.export.Rarity;
+import dev.ryvrook.feats.lang.Lang;
 import dev.ryvrook.feats.model.Category;
 import dev.ryvrook.feats.model.Feat;
 import dev.ryvrook.feats.model.FeatRegistry;
@@ -27,14 +29,15 @@ import dev.ryvrook.feats.stats.StatKeys;
 import dev.ryvrook.feats.stats.WorldStore;
 import dev.ryvrook.feats.track.FeatsTracker;
 
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-/** The /feats browser with a category sidebar on the left and feat rows (or stats) on the right. */
+/**
+ * The /feats browser with a category sidebar on the left and feat rows (or stats) on the right. Every label
+ * is a translation the viewer's client renders in its own language, dates and numbers are formatted for the
+ * viewer's language on the server.
+ */
 public final class FeatsPage extends InteractiveCustomUIPage<FeatsPage.Event> {
     private static final String PAGE = "Pages/Feats_Page.ui";
     private static final String CATEGORY_BUTTON = "Pages/Feats_CategoryButton.ui";
@@ -45,7 +48,7 @@ public final class FeatsPage extends InteractiveCustomUIPage<FeatsPage.Event> {
     private static final String TAB_UNLOCKED = "unlocked";
     private static final String TAB_STATS = "stats";
     private static final String HIDDEN_ICON = "Furniture_Crude_Chest_Small";
-    private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("d MMM yyyy");
+    private static final String SEPARATOR = "  ·  ";
 
     /** Tabs that commands can open the page on directly. */
     public enum Tab {
@@ -91,6 +94,15 @@ public final class FeatsPage extends InteractiveCustomUIPage<FeatsPage.Event> {
         }
     }
 
+    /** The viewer's language, as the client reports it, for dates and numbers. */
+    private String language() {
+        try {
+            return playerRef == null ? null : playerRef.getLanguage();
+        } catch (RuntimeException | LinkageError e) {
+            return null;
+        }
+    }
+
     @Override
     public void build(Ref<EntityStore> ref, UICommandBuilder commands, UIEventBuilder events, Store<EntityStore> store) {
         FeatRegistry registry = tracker.registry();
@@ -102,14 +114,16 @@ public final class FeatsPage extends InteractiveCustomUIPage<FeatsPage.Event> {
         int maxPoints = registry.totalPoints();
 
         commands.set("#PlayerName.Text", target.username().isEmpty() ? "Feats" : target.username());
-        commands.set("#UnlockedText.Text", unlocked + " / " + total + " unlocked");
+        commands.set("#UnlockedText.Text", Message.translation(Lang.PAGE_UNLOCKED)
+                .param("unlocked", unlocked).param("total", total));
         commands.set("#TotalBar.Value", total == 0 ? 0f : (float) unlocked / (float) total);
         // Points include world and first feats, the maximum and the percentage cover personal feats only,
         // so past the maximum the points read on their own.
-        String pointsText = points <= maxPoints ? String.format("%,d / %,d points", points, maxPoints)
-                : String.format("%,d points", points);
-        commands.set("#PointsText.Text", String.format("%s  ·  %d%% complete",
-                pointsText, total == 0 ? 0 : (100 * unlocked) / total));
+        int percent = total == 0 ? 0 : (100 * unlocked) / total;
+        Message pointsText = points <= maxPoints
+                ? Message.translation(Lang.PAGE_POINTS).param("points", points).param("max", maxPoints).param("percent", percent)
+                : Message.translation(Lang.PAGE_POINTS_OVER).param("points", points).param("percent", percent);
+        commands.set("#PointsText.Text", pointsText);
 
         buildSidebar(commands, events, registry, unlocked, total);
 
@@ -123,7 +137,7 @@ public final class FeatsPage extends InteractiveCustomUIPage<FeatsPage.Event> {
     private void buildSidebar(UICommandBuilder commands, UIEventBuilder events, FeatRegistry registry, int unlocked, int total) {
         commands.clear("#Categories");
         int index = 0;
-        index = addTab(commands, events, index, TAB_ALL, "All feats", unlocked + "/" + total);
+        index = addTab(commands, events, index, TAB_ALL, Message.translation(Lang.PAGE_TAB_ALL), unlocked + "/" + total);
         for (Category category : Category.values()) {
             List<Feat> feats = registry.inCategory(category);
             if (feats.isEmpty()) {
@@ -135,13 +149,13 @@ public final class FeatsPage extends InteractiveCustomUIPage<FeatsPage.Event> {
                     done++;
                 }
             }
-            index = addTab(commands, events, index, category.name(), category.displayName(), done + "/" + feats.size());
+            index = addTab(commands, events, index, category.name(), Lang.category(category), done + "/" + feats.size());
         }
-        index = addTab(commands, events, index, TAB_UNLOCKED, "Unlocked", String.valueOf(unlocked));
-        addTab(commands, events, index, TAB_STATS, "Statistics", "");
+        index = addTab(commands, events, index, TAB_UNLOCKED, Message.translation(Lang.PAGE_TAB_UNLOCKED), String.valueOf(unlocked));
+        addTab(commands, events, index, TAB_STATS, Message.translation(Lang.PAGE_TAB_STATS), "");
     }
 
-    private int addTab(UICommandBuilder commands, UIEventBuilder events, int index, String id, String label, String count) {
+    private int addTab(UICommandBuilder commands, UIEventBuilder events, int index, String id, Message label, String count) {
         String selector = "#Categories[" + index + "]";
         commands.append("#Categories", CATEGORY_BUTTON);
         boolean selected = id.equals(tab);
@@ -157,14 +171,14 @@ public final class FeatsPage extends InteractiveCustomUIPage<FeatsPage.Event> {
 
     private void buildFeatList(UICommandBuilder commands, FeatRegistry registry) {
         List<Feat> feats;
-        String title;
+        Message title;
         if (Category.WORLD.name().equals(tab)) {
             buildWorldList(commands, registry);
             return;
         }
         if (TAB_ALL.equals(tab)) {
             feats = registry.personal();
-            title = "All feats";
+            title = Message.translation(Lang.PAGE_TAB_ALL);
         } else if (TAB_UNLOCKED.equals(tab)) {
             feats = new ArrayList<>();
             for (Feat f : registry.personal()) {
@@ -173,7 +187,7 @@ public final class FeatsPage extends InteractiveCustomUIPage<FeatsPage.Event> {
                 }
             }
             feats.sort(Comparator.comparingLong((Feat f) -> target.unlockedAt(f.id())).reversed());
-            title = "Unlocked";
+            title = Message.translation(Lang.PAGE_TAB_UNLOCKED);
         } else {
             Category category;
             try {
@@ -183,7 +197,7 @@ public final class FeatsPage extends InteractiveCustomUIPage<FeatsPage.Event> {
                 tab = category.name();
             }
             feats = registry.inCategory(category);
-            title = category.displayName();
+            title = Lang.category(category);
         }
 
         int done = 0;
@@ -196,8 +210,8 @@ public final class FeatsPage extends InteractiveCustomUIPage<FeatsPage.Event> {
         }
         commands.set("#CategoryTitle.Text", title);
         commands.set("#CategoryCount.Text", feats.isEmpty()
-                ? "Nothing here yet"
-                : done + " / " + feats.size() + " unlocked  ·  " + points + " pts");
+                ? Message.translation(Lang.PAGE_EMPTY)
+                : Message.translation(Lang.PAGE_COUNT).param("done", done).param("total", feats.size()).param("points", points));
 
         commands.clear("#List");
         RarityView rarity = rarityView();
@@ -229,8 +243,10 @@ public final class FeatsPage extends InteractiveCustomUIPage<FeatsPage.Event> {
                 done++;
             }
         }
-        commands.set("#CategoryTitle.Text", Category.WORLD.displayName());
-        commands.set("#CategoryCount.Text", feats.isEmpty() ? "Nothing here yet" : done + " / " + feats.size() + " achieved");
+        commands.set("#CategoryTitle.Text", Lang.category(Category.WORLD));
+        commands.set("#CategoryCount.Text", feats.isEmpty()
+                ? Message.translation(Lang.PAGE_EMPTY)
+                : Message.translation(Lang.PAGE_COUNT_WORLD).param("done", done).param("total", feats.size()));
         commands.clear("#List");
         int index = 0;
         for (Feat feat : feats) {
@@ -239,31 +255,40 @@ public final class FeatsPage extends InteractiveCustomUIPage<FeatsPage.Event> {
             String selector = "#List[" + index++ + "]";
             commands.append("#List", ROW);
             commands.set(selector + " #Icon.ItemId", feat.icon());
-            commands.set(selector + " #Name.Text", feat.name());
-            commands.set(selector + " #Desc.Text", feat.description());
-            commands.set(selector + " #Tier.Text", tierLabel(feat, feat.scope() == Scope.FIRST ? "First" : "Milestone"));
+            commands.set(selector + " #Name.Text", Lang.name(feat));
+            commands.set(selector + " #Desc.Text", Lang.description(feat));
+            commands.set(selector + " #Tier.Text", tierLabel(feat,
+                    feat.scope() == Scope.FIRST ? Lang.PAGE_WORLD_FIRST : Lang.PAGE_WORLD_MILESTONE, language()));
             commands.set(selector + " #Check.Visible", entry != null);
             commands.set(selector + " #Bar.Value", entry == null ? 0f : 1f);
             commands.set(selector + " #Progress.Text", worldStatus(feat, entry));
         }
     }
 
-    private String worldStatus(Feat feat, WorldStore.Entry entry) {
-        String points = feat.tier().displayName() + "  ·  +" + feat.tier().points() + " pts";
+    /**
+     * The status line of a World row. Only a translation with string and number params goes into a Text slot,
+     * the client disconnects on a joined message or a message param, so the tier name, the holder's stand in
+     * and the points suffix are resolved to strings first.
+     */
+    private Message worldStatus(Feat feat, WorldStore.Entry entry) {
+        int points = feat.tier().points();
+        String language = language();
         if (entry == null) {
-            return (feat.scope() == Scope.FIRST ? "Unclaimed" : "Not yet achieved") + "  ·  " + points;
+            return Message.translation(feat.scope() == Scope.FIRST ? Lang.PAGE_WORLD_UNCLAIMED : Lang.PAGE_WORLD_NOT_YET)
+                    .param("tier", Lang.text(language, Lang.tierKey(feat.tier()))).param("points", points);
         }
-        StringBuilder sb = new StringBuilder(feat.scope() == Scope.FIRST ? "Held by " : "Achieved");
+        String date = Lang.date(entry.at(), language);
+        String suffix = target.isUnlocked(feat.id())
+                ? SEPARATOR + Lang.text(language, Lang.PAGE_ROW_POINTS, "points", points) : "";
         if (feat.scope() == Scope.FIRST) {
-            sb.append(entry.byName() == null ? "a player" : entry.byName());
-        } else if (entry.byName() != null) {
-            sb.append(" by ").append(entry.byName());
+            String holder = entry.byName() == null ? Lang.text(language, Lang.PAGE_WORLD_SOMEONE) : entry.byName();
+            return Message.translation(Lang.PAGE_WORLD_HELD_BY).param("player", holder).param("date", date).param("points", suffix);
         }
-        sb.append("  ·  ").append(DATE.format(Instant.ofEpochMilli(entry.at()).atZone(ZoneId.systemDefault())));
-        if (target.isUnlocked(feat.id())) {
-            sb.append("  ·  +").append(feat.tier().points()).append(" pts");
+        if (entry.byName() != null) {
+            return Message.translation(Lang.PAGE_WORLD_ACHIEVED_BY).param("player", entry.byName()).param("date", date)
+                    .param("points", suffix);
         }
-        return sb.toString();
+        return Message.translation(Lang.PAGE_WORLD_ACHIEVED).param("date", date).param("points", suffix);
     }
 
     /** What the rows need to show a rarity tag, or null when tags are off or not known yet. */
@@ -299,16 +324,23 @@ public final class FeatsPage extends InteractiveCustomUIPage<FeatsPage.Event> {
         return null;
     }
 
-    /** Appends the rarity tag, leaving hidden feats untagged until the viewer has earned them. */
-    private static String withRarity(String text, Feat feat, RarityView rarity) {
+    /**
+     * The {@code {rarity}} param of a row line, ", rare, 3% of players" as a plain string, or empty for hidden
+     * feats until the viewer has earned them, when tags are off or when the share is not known yet.
+     */
+    private String rarityParam(Feat feat, RarityView rarity) {
         if (rarity == null) {
-            return text;
+            return "";
         }
         if (feat.hidden() && (rarity.viewer() == null || !rarity.viewer().isUnlocked(feat.id()))) {
-            return text;
+            return "";
         }
-        String tag = Rarity.tag(rarity.exporter(), rarity.config(), feat.id());
-        return tag.isEmpty() ? text : text + ", " + tag;
+        double fraction = rarity.exporter().rarity(feat.id());
+        if (fraction < 0) {
+            return "";
+        }
+        boolean rare = Rarity.isRare(fraction, rarity.config().rareBelowPercent());
+        return ", " + Lang.text(language(), rare ? Lang.RARITY_RARE : Lang.RARITY_SHARE, "share", Rarity.percent(fraction));
     }
 
     private void addRow(UICommandBuilder commands, int index, Feat feat, RarityView rarity) {
@@ -316,37 +348,44 @@ public final class FeatsPage extends InteractiveCustomUIPage<FeatsPage.Event> {
         commands.append("#List", ROW);
         boolean unlocked = target.isUnlocked(feat.id());
         boolean secret = feat.hidden() && !unlocked;
+        int points = feat.tier().points();
 
         commands.set(selector + " #Icon.ItemId", secret ? HIDDEN_ICON : feat.icon());
-        commands.set(selector + " #Name.Text", secret ? "???" : feat.name());
-        commands.set(selector + " #Desc.Text", secret ? "Hidden feat. Its name shows once you unlock it." : feat.description());
-        commands.set(selector + " #Tier.Text", tierLabel(feat, feat.tier().displayName()));
+        commands.set(selector + " #Name.Text", secret ? Message.translation(Lang.PAGE_HIDDEN_NAME) : Lang.name(feat));
+        commands.set(selector + " #Desc.Text", secret ? Message.translation(Lang.PAGE_HIDDEN_DESC) : Lang.description(feat));
+        commands.set(selector + " #Tier.Text", tierLabel(feat, Lang.tierKey(feat.tier()), language()));
         commands.set(selector + " #Check.Visible", unlocked);
 
         if (unlocked) {
             commands.set(selector + " #Bar.Value", 1f);
             Long at = target.unlockedAt(feat.id());
-            String when = at == null ? "" : "  ·  " + DATE.format(Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()));
-            commands.set(selector + " #Progress.Text",
-                    withRarity("Unlocked" + when + "  ·  +" + feat.tier().points() + " pts", feat, rarity));
+            Message line = at == null
+                    ? Message.translation(Lang.PAGE_ROW_UNLOCKED_NO_DATE).param("points", points)
+                    : Message.translation(Lang.PAGE_ROW_UNLOCKED).param("date", Lang.date(at, language())).param("points", points);
+            commands.set(selector + " #Progress.Text", line.param("rarity", rarityParam(feat, rarity)));
         } else if (secret) {
             commands.set(selector + " #Bar.Value", 0f);
-            commands.set(selector + " #Progress.Text", "+" + feat.tier().points() + " pts");
+            commands.set(selector + " #Progress.Text", Message.translation(Lang.PAGE_ROW_POINTS).param("points", points));
         } else {
             long current = feat.currentProgress(target);
             long total = feat.totalTarget();
             commands.set(selector + " #Bar.Value", (float) feat.fraction(target));
-            String label = feat.isSingleCounter()
-                    ? String.format("%,d / %,d", current, total)
-                    : String.format("%d / %d steps", countMet(feat), feat.requirements().size());
-            commands.set(selector + " #Progress.Text",
-                    withRarity(label + "  ·  +" + feat.tier().points() + " pts", feat, rarity));
+            Message label = feat.isSingleCounter()
+                    ? Message.translation(Lang.PAGE_ROW_PROGRESS).param("current", current).param("total", total).param("points", points)
+                    : Message.translation(Lang.PAGE_ROW_STEPS).param("met", countMet(feat))
+                            .param("total", feat.requirements().size()).param("points", points);
+            commands.set(selector + " #Progress.Text", label.param("rarity", rarityParam(feat, rarity)));
         }
     }
 
-    /** The tier label of a row. A feat whose unlock shows the banner carries a trailing dot as its marker. */
-    static String tierLabel(Feat feat, String tier) {
-        return feat.banner() ? tier + "." : tier;
+    /**
+     * The tier label of a row. A feat whose unlock shows the banner carries a trailing dot as its marker. The
+     * dotted form takes the tier as a string, since a joined message in a Text slot disconnects the client.
+     */
+    static Message tierLabel(Feat feat, String tierKey, String language) {
+        return feat.banner()
+                ? Message.translation(Lang.PAGE_ROW_TIER_BANNER).param("tier", Lang.text(language, tierKey))
+                : Message.translation(tierKey);
     }
 
     private int countMet(Feat feat) {
@@ -360,15 +399,16 @@ public final class FeatsPage extends InteractiveCustomUIPage<FeatsPage.Event> {
     }
 
     private void buildStats(UICommandBuilder commands) {
-        commands.set("#CategoryTitle.Text", "Statistics");
-        commands.set("#CategoryCount.Text", "Lifetime totals");
+        commands.set("#CategoryTitle.Text", Message.translation(Lang.PAGE_STATS_TITLE));
+        commands.set("#CategoryCount.Text", Message.translation(Lang.PAGE_STATS_SUBTITLE));
         commands.clear("#List");
         int index = 0;
+        var locale = Lang.locale(language());
         for (StatKeys.StatRow row : StatKeys.DISPLAY) {
             String selector = "#List[" + index++ + "]";
             commands.append("#List", STAT_ROW);
-            commands.set(selector + " #Name.Text", row.label());
-            commands.set(selector + " #Value.Text", StatKeys.format(target.get(row.key()), row.format()));
+            commands.set(selector + " #Name.Text", Message.translation(Lang.statKey(row.key())));
+            commands.set(selector + " #Value.Text", Lang.statValue(target.get(row.key()), row.format(), locale));
         }
     }
 

@@ -10,6 +10,7 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.ryvrook.feats.FeatsPlugin;
+import dev.ryvrook.feats.lang.Lang;
 import dev.ryvrook.feats.stats.PlayerProgress;
 import dev.ryvrook.feats.ui.FeatsPage;
 
@@ -49,7 +50,7 @@ public final class FeatsCommand extends AbstractPlayerCommand {
                          PlayerRef playerRef, FeatsPage.Tab tab) {
         Player player = store.getComponent(ref, Player.getComponentType());
         if (player == null) {
-            context.sendMessage(Message.raw("Feats can only be opened by a player.").color("#ff6b6b"));
+            context.sendMessage(Message.translation(Lang.CMD_PLAYER_ONLY).color(Targets.ERROR));
             return;
         }
         PlayerProgress progress = plugin.tracker().load(playerRef.getUuid(), playerRef.getUsername());

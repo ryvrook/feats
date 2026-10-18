@@ -7,6 +7,7 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.Universe;
 import com.hypixel.hytale.server.core.universe.world.World;
 import dev.ryvrook.feats.FeatsPlugin;
+import dev.ryvrook.feats.lang.Lang;
 
 import java.util.UUID;
 import java.util.concurrent.RejectedExecutionException;
@@ -48,18 +49,18 @@ final class Targets {
                     }
                 }
                 if (target == null) {
-                    reply(context, Message.raw("No player named " + name + " has played on this server.").color(ERROR));
+                    reply(context, Message.translation(Lang.CMD_NO_PLAYER).param("name", name).color(ERROR));
                     return;
                 }
                 try {
                     then.accept(target);
                 } catch (RuntimeException e) {
                     plugin.getLogger().at(Level.WARNING).withCause(e).log("Feats command failed for %s", name);
-                    reply(context, Message.raw("That did not work, see the server log.").color(ERROR));
+                    reply(context, Message.translation(Lang.CMD_FAILED).color(ERROR));
                 }
             });
         } catch (RejectedExecutionException e) {
-            context.sendMessage(Message.raw("Feats is shutting down.").color(ERROR));
+            context.sendMessage(Message.translation(Lang.CMD_STOPPING).color(ERROR));
         }
     }
 

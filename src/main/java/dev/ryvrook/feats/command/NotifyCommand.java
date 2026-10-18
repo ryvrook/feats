@@ -11,6 +11,7 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.ryvrook.feats.FeatsPlugin;
+import dev.ryvrook.feats.lang.Lang;
 import dev.ryvrook.feats.stats.PlayerProgress;
 
 /**
@@ -31,8 +32,8 @@ final class NotifyCommand extends AbstractPlayerCommand {
     protected void execute(CommandContext context, Store<EntityStore> store, Ref<EntityStore> ref,
                            PlayerRef playerRef, World world) {
         PlayerProgress progress = plugin.tracker().load(playerRef.getUuid(), playerRef.getUsername());
-        context.sendMessage(Message.raw("Unlock toasts, sounds and titles are "
-                + (progress.notifications() ? "on" : "off") + ". Use /feats notify on or /feats notify off.")
+        context.sendMessage(Message.translation(Lang.CMD_NOTIFY_STATE)
+                .param("state", Message.translation(progress.notifications() ? Lang.CMD_NOTIFY_ON : Lang.CMD_NOTIFY_OFF))
                 .color(Targets.MUTED));
     }
 
@@ -57,14 +58,12 @@ final class NotifyCommand extends AbstractPlayerCommand {
             } else if (value.equals("off")) {
                 on = false;
             } else {
-                context.sendMessage(Message.raw("Use /feats notify on or /feats notify off.").color(Targets.ERROR));
+                context.sendMessage(Message.translation(Lang.CMD_NOTIFY_USAGE).color(Targets.ERROR));
                 return;
             }
             PlayerProgress progress = plugin.tracker().load(playerRef.getUuid(), playerRef.getUsername());
             progress.setNotifications(on);
-            context.sendMessage(Message.raw(on
-                    ? "Unlock toasts, sounds and titles are on."
-                    : "Unlock toasts, sounds and titles are off. Unlocks still show in chat.").color(Targets.MUTED));
+            context.sendMessage(Message.translation(on ? Lang.CMD_NOTIFY_NOW_ON : Lang.CMD_NOTIFY_NOW_OFF).color(Targets.MUTED));
         }
     }
 }

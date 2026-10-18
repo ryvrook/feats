@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "dev.ryvrook"
-version = "1.7.4"
+version = "1.8.0"
 
 java {
     toolchain {
@@ -77,6 +77,19 @@ tasks.test {
     // The engine logger insists on owning java.util.logging before anything logs.
     systemProperty("java.util.logging.manager", "com.hypixel.hytale.logger.backend.HytaleLogManager")
     jvmArgs("-Xmx1G")
+}
+
+/**
+ * Writes src/main/resources/lang/en-US/feats.lang from the code, every key with its English
+ * text. LangFileTest fails when the committed file is behind, so run this after adding a feat or a string.
+ */
+val generateLang by tasks.registering(JavaExec::class) {
+    group = "hytale"
+    description = "Regenerates the bundled English language file, src/main/resources/lang/en-US/feats.lang, from the code."
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("dev.ryvrook.feats.lang.WriteLangFile")
+    systemProperty("java.util.logging.manager", "com.hypixel.hytale.logger.backend.HytaleLogManager")
+    workingDir = projectDir
 }
 
 tasks.withType<JavaCompile>().configureEach {

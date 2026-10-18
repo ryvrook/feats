@@ -1,5 +1,7 @@
 package dev.ryvrook.feats.track;
 
+import com.hypixel.hytale.server.core.Message;
+import dev.ryvrook.feats.lang.Lang;
 import dev.ryvrook.feats.model.Feat;
 import dev.ryvrook.feats.model.Scope;
 import dev.ryvrook.feats.model.Tier;
@@ -63,7 +65,7 @@ public final class BannerQueue {
      * @param rarityFraction   the fraction of players owning the feat, 0 to 1, or -1 when unknown
      * @param rareBelowPercent feats owned by under this percent of players count as rare
      */
-    public static String reason(String setting, Feat feat, double rarityFraction, int rareBelowPercent) {
+    public static Message reason(String setting, Feat feat, double rarityFraction, int rareBelowPercent) {
         if (feat == null || setting == null) {
             return null;
         }
@@ -75,35 +77,38 @@ public final class BannerQueue {
             mode = "RARE";
         }
         if (feat.scope() == Scope.FIRST) {
-            return "Server first";
+            return Message.translation(Lang.BANNER_FIRST);
         }
         if (feat.scope() == Scope.WORLD) {
-            return "Server milestone";
+            return Message.translation(Lang.BANNER_MILESTONE);
         }
         if (feat.tier() == Tier.PLATINUM) {
-            return "Platinum";
+            return Message.translation(Lang.BANNER_PLATINUM);
         }
         if (mode.equals("PLATINUM")) {
             return null;
         }
-        String rare = rareLine(rarityFraction, rareBelowPercent);
+        Message rare = rareLine(rarityFraction, rareBelowPercent);
         if (rare != null) {
             return rare;
         }
         if (feat.banner() || mode.equals("ALL")) {
-            return feat.tier().displayName();
+            return Lang.tier(feat.tier());
         }
         return null;
     }
 
     /** The why line for a milestone or first shown to the rest of the server, with the holder's name. */
-    public static String broadcastReason(Feat feat, String byName) {
-        String head = feat != null && feat.scope() == Scope.FIRST ? "Server first" : "Server milestone";
-        return byName == null || byName.isBlank() ? head : head + ", by " + byName.trim();
+    public static Message broadcastReason(Feat feat, String byName) {
+        boolean first = feat != null && feat.scope() == Scope.FIRST;
+        if (byName == null || byName.isBlank()) {
+            return Message.translation(first ? Lang.BANNER_FIRST : Lang.BANNER_MILESTONE);
+        }
+        return Message.translation(first ? Lang.BANNER_FIRST_BY : Lang.BANNER_MILESTONE_BY).param("player", byName.trim());
     }
 
     /** "Rare, under 1% of players" or "Rare, 3% of players", or null when not rare or unknown. */
-    static String rareLine(double fraction, int rareBelowPercent) {
+    static Message rareLine(double fraction, int rareBelowPercent) {
         if (fraction < 0 || rareBelowPercent <= 0) {
             return null;
         }
@@ -111,8 +116,9 @@ public final class BannerQueue {
         if (percent >= rareBelowPercent) {
             return null;
         }
-        String shown = percent < 1.0 ? "under 1%" : Math.round(percent) + "%";
-        return "Rare, " + shown + " of players";
+        // Plain params only, the banner's Text slot disconnects the client on a message param.
+        return percent < 1.0 ? Message.translation(Lang.BANNER_RARE_UNDER_ONE)
+                : Message.translation(Lang.BANNER_RARE).param("percent", (int) Math.round(percent));
     }
 
     // ---- timing ---------------------------------------------------------------------------------------

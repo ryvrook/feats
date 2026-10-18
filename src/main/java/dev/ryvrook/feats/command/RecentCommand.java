@@ -9,6 +9,7 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.ryvrook.feats.FeatsPlugin;
+import dev.ryvrook.feats.lang.Lang;
 import dev.ryvrook.feats.export.LeaderboardExporter.RecentUnlock;
 import dev.ryvrook.feats.model.Feat;
 import dev.ryvrook.feats.model.FeatRegistry;
@@ -38,7 +39,7 @@ public final class RecentCommand extends AbstractPlayerCommand {
         FeatRegistry registry = plugin.tracker().registry();
         PlayerProgress self = plugin.tracker().load(playerRef.getUuid(), playerRef.getUsername());
         List<RecentUnlock> recent = plugin.exporter().recentUnlocks();
-        context.sendMessage(Message.raw("Recent feats").color("#E8A93B").bold(true));
+        context.sendMessage(Message.translation(Lang.CMD_RECENT_TITLE).color(Targets.GOLD).bold(true));
         long now = System.currentTimeMillis();
         int shown = 0;
         for (RecentUnlock r : recent) {
@@ -50,37 +51,33 @@ public final class RecentCommand extends AbstractPlayerCommand {
                 continue;
             }
             boolean secret = feat.hidden() && !self.isUnlocked(feat.id());
-            context.sendMessage(Message.join(
-                    Message.raw(" " + r.name()).color("#7a9cc6").bold(true),
-                    Message.raw(" unlocked ").color(MUTED),
-                    secret ? Message.raw("a hidden feat").color(MUTED)
-                            : Message.raw(feat.name()).color(feat.tier().color()).bold(true),
-                    Message.raw(" [" + feat.tier().displayName() + "]  " + ago(now - r.at())).color(MUTED)));
+            context.sendMessage(Message.translation(Lang.CMD_RECENT_ROW)
+                    .param("player", Message.raw(r.name()).color("#7a9cc6").bold(true))
+                    .param("feat", secret ? Message.translation(Lang.CMD_RECENT_HIDDEN) : Lang.colouredName(feat).bold(true))
+                    .param("tier", Lang.tier(feat.tier()))
+                    .param("ago", ago(now - r.at()))
+                    .color(MUTED));
             shown++;
         }
         if (shown == 0) {
-            context.sendMessage(Message.raw("Nobody has unlocked anything yet.").color(MUTED));
+            context.sendMessage(Message.translation(Lang.CMD_TOP_EMPTY).color(MUTED));
         }
     }
 
-    /** {@code just now}, {@code 5 minutes ago}, {@code 3 hours ago} or {@code 2 days ago}. */
-    static String ago(long millis) {
+    /** {@code just now}, {@code 5 minutes ago}, {@code 3 hours ago} or {@code 2 days ago}, in the viewer's language. */
+    static Message ago(long millis) {
         long seconds = Math.max(0, millis / 1000);
         if (seconds < 60) {
-            return "just now";
+            return Message.translation(Lang.CMD_RECENT_JUST_NOW);
         }
         long minutes = seconds / 60;
         if (minutes < 60) {
-            return plural(minutes, "minute") + " ago";
+            return Message.translation(Lang.CMD_RECENT_MINUTES).param("n", minutes);
         }
         long hours = minutes / 60;
         if (hours < 24) {
-            return plural(hours, "hour") + " ago";
+            return Message.translation(Lang.CMD_RECENT_HOURS).param("n", hours);
         }
-        return plural(hours / 24, "day") + " ago";
-    }
-
-    private static String plural(long n, String unit) {
-        return n + " " + unit + (n == 1 ? "" : "s");
+        return Message.translation(Lang.CMD_RECENT_DAYS).param("n", hours / 24);
     }
 }
