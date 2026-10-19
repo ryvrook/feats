@@ -16,7 +16,7 @@ SocialBridge and RestAPI, which read Feats.
 
 ## Install
 
-Drop `Feats-1.8.0.jar` into `UserData/Mods` for a singleplayer world or into the server's `mods/` folder and
+Drop `Feats-1.8.1.jar` into `UserData/Mods` for a singleplayer world or into the server's `mods/` folder and
 start it. Tracking starts the first time a player joins. Type `/feats`.
 
 To update a running server, swap the jar and run `/plugin reload Ryvrook:Feats`. The engine prints
@@ -456,7 +456,8 @@ These are the rules that decide whether something counts.
 - Breaking a block you placed recently counts nothing, and neither does placing again on that spot. Feats
   remembers the last 256 spots per player. Seeds and fishing traps count on every placement.
 - Items you dropped in the last 5 minutes do not count again when picked up, and items moved through a chest
-  count once.
+  count once, swaps included. Items taken out of a chest someone placed never count as obtained, except what a
+  furnace or other processing bench made.
 - Chat counts at most once every 5 seconds per player.
 - Distance ignores jumps of more than 64 metres in a second, so teleports do not count. Swimming, gliding and
   riding count toward their own totals as well.

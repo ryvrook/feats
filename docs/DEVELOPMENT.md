@@ -65,6 +65,20 @@ record carries (rolls, mantles, double jumps, seats, shield blocks, repairs, cap
 `memory_by_kill`, void stages, late portal exits and merchants) only move on the own path, and the README says
 which feats that leaves out.
 
+Items obtained on the own path. `InventorySystem` reads every move whose other side is not one of the player's
+own sections through `MoveSides`, slot before against slot after on the player's side (the add transaction of a
+`MOVE_TO_SELF`, the remove transaction of a `MOVE_FROM_SELF`), so a swap of two stacks that do not stack is a
+put away and a take in one move. Put away and dropped items go onto `StashBalance`, the silent counter
+`stash:<item id>` in the player's file, kept only for items an obtained feat watches and never expiring. A take
+or pickup counts what the balance does not cover. A take from a container block that carries the engine's
+`PlacedByInteractionComponent`, found through the open `ContainerBlockWindow` or processing bench window whose
+container is the move's other side, never counts and still lowers the balance. A processing bench's output slots
+are the exception and count against the balance like a world generated chest. Any lookup that fails falls back
+to the balance. In Creative only moves are read, deposits add to the balance and takes lower it, nothing counts.
+`MoveSidesTest` and `StashBalanceTest` cover the swaps, the 50 round loop, placed and generated takes, bench slots
+and the Creative deposit. With TrackerAPI the bridge uses `ItemsGained.fresh`, which follows the same rules since
+TrackerAPI 1.1.2.
+
 `TrackerBridgeTest` feeds synthetic TrackerAPI records through the bridge and checks the counters come out as
 the Feats systems made them. A reload of TrackerAPI leaves Feats with hooks on the old classes. TrackerAPI 1.0.3
 and newer reload their dependents themselves, so the 5 second watch in `TrackerSwitch` stays quiet for those and

@@ -3,6 +3,27 @@
 Every notable change to Feats is recorded here. The format follows Keep a Changelog and the project uses
 semantic versioning.
 
+## 1.8.1 - 2026-10-19
+
+Needs the Hytale 0.7.0 release server or newer. No feat was added or removed. Updating is a jar swap. This only
+changes how Feats counts on its own. With TrackerAPI 1.1.2 or newer installed the same rules come from TrackerAPI.
+
+### For players
+
+- Swapping two items between a chest and your inventory, by dropping a stack on a slot that holds a different
+  item, counted the item from the chest as obtained every time and never noted the one that went in. Done back
+  and forth, it raised the obtained feats without end. Every move to or from a chest is now read on your side,
+  what left and what arrived, so a swap is a put away and a take at once. Quick stack, take all and put all go
+  the same way.
+- Items taken out of a chest or other container block a player placed never count as obtained. The game marks
+  every placed block with who placed it and keeps that with the world, so chests placed before this version count
+  as placed too. The output slots of furnaces and other processing benches still count, as their items are new.
+  World generated chests count what you did not put in yourself.
+- Items put into a chest in Creative are remembered, so taking them out later in Adventure does not count. Items
+  gained in Creative still never count.
+- Obtained counts that earlier versions already raised this way and feats they already unlocked stay as they
+  are. Nothing is taken back.
+
 ## 1.8.0 - 2026-10-18
 
 Needs the Hytale 0.7.0 release server or newer. No feat was added or removed.
