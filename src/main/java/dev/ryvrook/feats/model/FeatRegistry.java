@@ -1,7 +1,14 @@
 package dev.ryvrook.feats.model;
 
 import dev.ryvrook.feats.integration.VersionCompare;
+import dev.ryvrook.feats.model.mods.ArcanumFeats;
+import dev.ryvrook.feats.model.mods.DecorFeats;
 import dev.ryvrook.feats.model.mods.DungeonsFeats;
+import dev.ryvrook.feats.model.mods.FishingFeats;
+import dev.ryvrook.feats.model.mods.GardenFeats;
+import dev.ryvrook.feats.model.mods.MachinesFeats;
+import dev.ryvrook.feats.model.mods.MusicFeats;
+import dev.ryvrook.feats.model.mods.StorageFeats;
 import dev.ryvrook.feats.model.mods.EnchantFeats;
 import dev.ryvrook.feats.model.mods.EndgameFeats;
 import dev.ryvrook.feats.model.mods.LuckyFeats;
@@ -52,6 +59,10 @@ public final class FeatRegistry {
     private final String trackerVersion;
     /** Why the feats of the mods TrackerAPI reads are out, one line for the log, or null when they are in. */
     private String modsNote;
+    /** The oldest TrackerAPI that publishes ModTally and binds the three mods of 1.10.0, see {@code integration/TallyKinds}. */
+    public static final String TALLY_MINIMUM = "1.3.0";
+    /** Why the Fishing, Arcanum and Music feats are out on a TrackerAPI that has the 1.9.0 mods, or null. */
+    private String tallyNote;
 
     /** The built-in feats without the Factions tab, no sibling and no pack. */
     public FeatRegistry() {
@@ -93,6 +104,7 @@ public final class FeatRegistry {
         defineCoinage();
         defineChronicle();
         defineMods();
+        defineCounted();
         defineWorld();
         for (Map.Entry<String, List<Feat>> e : byAfter.entrySet()) {
             Feat source = byId.get(e.getKey());
@@ -246,6 +258,33 @@ public final class FeatRegistry {
      */
     public String modsNote() {
         return modsNote;
+    }
+
+    /**
+     * Why the Fishing, Arcanum and Music feats were left out while TrackerAPI is installed but older than
+     * {@link #TALLY_MINIMUM}, one line for the log, or null. Only set when one of those three mods is installed.
+     * Without TrackerAPI {@link #modsNote()} already says why.
+     */
+    public String tallyNote() {
+        return tallyNote;
+    }
+
+    /**
+     * Why the feats of this mod TrackerAPI reads were left out for the TrackerAPI found at setup, or null when they
+     * are in or the sibling is no mod TrackerAPI reads.
+     */
+    public String modNote(Sibling mod) {
+        if (mod == null || !mod.isMod()) {
+            return null;
+        }
+        String gap = trackerGap(mod.trackerMinimum());
+        if (gap == null) {
+            return null;
+        }
+        if (modsNote != null) {
+            return modsNote;
+        }
+        return tallyNote != null ? tallyNote : "Feats leaves out the Fishing, Arcanum and Music feats, " + gap;
     }
 
     /** The TrackerAPI version this registry was built with, or null. */
@@ -1197,14 +1236,9 @@ public final class FeatRegistry {
      * none of the records {@code ModKinds} mirrors and the counters could never move.
      */
     private void defineMods() {
-        if (!present.contains(Sibling.TRACKER_API)) {
-            modsNote = "Feats leaves out the feats of the mods TrackerAPI reads, TrackerAPI is not installed or"
-                    + " its Tracker setting is never";
-            return;
-        }
-        if (trackerVersion == null || VersionCompare.below(trackerVersion, MODS_MINIMUM)) {
-            modsNote = "Feats leaves out the feats of the mods TrackerAPI reads, they need TrackerAPI " + MODS_MINIMUM
-                    + " and this server has " + (trackerVersion == null ? "an unknown version" : trackerVersion);
+        String gap = trackerGap(MODS_MINIMUM);
+        if (gap != null) {
+            modsNote = "Feats leaves out the feats of the mods TrackerAPI reads, " + gap;
             return;
         }
         Definer d = new RegistryDefiner();
@@ -1231,6 +1265,59 @@ public final class FeatRegistry {
         section(Sibling.TAMEWORK);
         TameworkFeats.define(d);
         sectionRequires = Set.of();
+        defineTallyMods(d);
+    }
+
+    /**
+     * 1.10.0, the three mods TrackerAPI {@link #TALLY_MINIMUM} binds, Angler's Almanac, Arcanum and Ymmersive
+     * Melodies. Their bests and per id sums arrive as the ModTally record, so on an older TrackerAPI the three tabs
+     * stay out with {@link #tallyNote()} set and the eleven tabs of 1.9.0 stay in.
+     */
+    private void defineTallyMods(Definer d) {
+        String gap = trackerGap(TALLY_MINIMUM);
+        if (gap != null) {
+            if (present.contains(Sibling.FISHING) || present.contains(Sibling.ARCANUM) || present.contains(Sibling.MELODIES)) {
+                tallyNote = "Feats leaves out the Fishing, Arcanum and Music feats, " + gap;
+            }
+            return;
+        }
+        section(Sibling.FISHING);
+        FishingFeats.define(d);
+        section(Sibling.ARCANUM);
+        ArcanumFeats.define(d);
+        section(Sibling.MELODIES);
+        MusicFeats.define(d);
+        sectionRequires = Set.of();
+    }
+
+    /** Null when TrackerAPI is present and at least {@code minimum}, else the reason, the tail of a log line. */
+    private String trackerGap(String minimum) {
+        if (!present.contains(Sibling.TRACKER_API)) {
+            return "TrackerAPI is not installed or its Tracker setting is never";
+        }
+        if (trackerVersion == null || VersionCompare.below(trackerVersion, minimum)) {
+            return "they need TrackerAPI " + minimum + " and this server has "
+                    + (trackerVersion == null ? "an unknown version" : trackerVersion);
+        }
+        return null;
+    }
+
+    /**
+     * 1.10.0, the two plugins and the six asset packs without a binding. Their feats read the {@code crafted:},
+     * {@code placed:}, {@code obtained:}, {@code use:}, {@code kill:} and {@code portal:} keys Feats counts on either
+     * tracking path, so they need only their own sibling, never TrackerAPI. Storage, Machines and Lost Garden are a
+     * section each. The Decor feats name their own pack, so a pack that is not loaded takes only its own feats out.
+     */
+    private void defineCounted() {
+        Definer d = new RegistryDefiner();
+        sectionRequires = EnumSet.of(Sibling.STORAGE);
+        StorageFeats.define(d);
+        sectionRequires = EnumSet.of(Sibling.MACHINES);
+        MachinesFeats.define(d);
+        sectionRequires = EnumSet.of(Sibling.SIGS_GARDEN);
+        GardenFeats.define(d);
+        sectionRequires = Set.of();
+        DecorFeats.define(d);
     }
 
     /** Every feat defined next needs this mod and TrackerAPI. */

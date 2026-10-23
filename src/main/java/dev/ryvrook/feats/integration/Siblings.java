@@ -1,6 +1,8 @@
 package dev.ryvrook.feats.integration;
 
+import com.hypixel.hytale.assetstore.AssetPack;
 import com.hypixel.hytale.common.plugin.PluginIdentifier;
+import com.hypixel.hytale.server.core.asset.AssetModule;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.plugin.PluginBase;
 import com.hypixel.hytale.server.core.plugin.PluginManager;
@@ -18,6 +20,10 @@ import java.util.logging.Level;
  * it is safe on a server without it. A plugin is looked up by group and name, the {@link Sibling} carries both,
  * and a bare name is resolved through {@link Sibling#byPluginName} with the Ryvrook group as the fallback, so the
  * suite plugins that are no sibling, such as SocialBridge, are found by name as before.
+ *
+ * <p>An asset pack sibling is no plugin. It is looked up among the engine's asset packs by its {@code Group:Name} id,
+ * {@link Sibling#pluginId()}, through {@link #assetPacks}, which the tests replace. Every lookup by name or by
+ * sibling sends an asset pack there, so {@link #present()} and {@code /feats admin status} need no case of their own.
  */
 public final class Siblings {
     public static final String GROUP = "Ryvrook";
@@ -35,6 +41,58 @@ public final class Siblings {
         return s == null ? GROUP : s.group();
     }
 
+    /** The engine's asset packs by their {@code Group:Name} id, a seam for the tests. */
+    public interface AssetPacks {
+        /** True when the pack with this id is registered. */
+        boolean has(String packId);
+
+        /** The manifest version of the pack, or null when it is not registered or has none. */
+        String version(String packId);
+    }
+
+    /** {@code AssetModule.get().getAssetPack(id)}, the lookup is case sensitive and the id is used as written. */
+    public static final AssetPacks ENGINE_PACKS = new AssetPacks() {
+        @Override
+        public boolean has(String packId) {
+            return pack(packId) != null;
+        }
+
+        @Override
+        public String version(String packId) {
+            AssetPack pack = pack(packId);
+            try {
+                if (pack == null || pack.getManifest() == null || pack.getManifest().getVersion() == null) {
+                    return null;
+                }
+                return pack.getManifest().getVersion().toString();
+            } catch (RuntimeException | LinkageError e) {
+                return null;
+            }
+        }
+
+        private AssetPack pack(String packId) {
+            try {
+                AssetModule module = AssetModule.get();
+                return module == null ? null : module.getAssetPack(packId);
+            } catch (RuntimeException | LinkageError e) {
+                return null;
+            }
+        }
+    };
+
+    private static volatile AssetPacks assetPacks = ENGINE_PACKS;
+
+    /** Replaces the asset pack lookup, for the tests. Null puts the engine's back. */
+    static void useAssetPacks(AssetPacks packs) {
+        assetPacks = packs == null ? ENGINE_PACKS : packs;
+    }
+
+    /** The asset pack sibling with this name, or null for a plugin. */
+    private static Sibling packNamed(String name) {
+        Sibling s = Sibling.byPluginName(name);
+        return s != null && s.isAssetPack() ? s : null;
+    }
+
     private static PluginIdentifier id(String group, String name) {
         return new PluginIdentifier(group, name);
     }
@@ -45,11 +103,19 @@ public final class Siblings {
      * of available plugins. A failed lookup counts as not installed.
      */
     public static boolean installed(String name) {
-        return installed(groupOf(name), name);
+        Sibling pack = packNamed(name);
+        return pack != null ? installed(pack) : installed(groupOf(name), name);
     }
 
-    /** {@link #installed(String)} for a sibling, by its group and name. */
+    /** {@link #installed(String)} for a sibling, by its group and name, or by its pack id for an asset pack. */
     public static boolean installed(Sibling sibling) {
+        if (sibling.isAssetPack()) {
+            try {
+                return assetPacks.has(sibling.pluginId());
+            } catch (RuntimeException | LinkageError e) {
+                return false;
+            }
+        }
         return installed(sibling.group(), sibling.pluginName());
     }
 
@@ -71,12 +137,13 @@ public final class Siblings {
      * never waits while the plugin manager stops or reloads a plugin.
      */
     public static boolean installedNow(String name) {
-        return installedNow(groupOf(name), name);
+        Sibling pack = packNamed(name);
+        return pack != null ? installed(pack) : installedNow(groupOf(name), name);
     }
 
-    /** {@link #installedNow(String)} for a sibling, by its group and name. */
+    /** {@link #installedNow(String)} for a sibling, by its group and name. An asset pack needs no plugin lock. */
     public static boolean installedNow(Sibling sibling) {
-        return installedNow(sibling.group(), sibling.pluginName());
+        return sibling.isAssetPack() ? installed(sibling) : installedNow(sibling.group(), sibling.pluginName());
     }
 
     public static boolean installedNow(String group, String name) {
@@ -94,11 +161,19 @@ public final class Siblings {
 
     /** The version string of a loaded plugin, or null when it is not loaded or has no manifest version. */
     public static String version(String name) {
-        return version(groupOf(name), name);
+        Sibling pack = packNamed(name);
+        return pack != null ? version(pack) : version(groupOf(name), name);
     }
 
-    /** {@link #version(String)} for a sibling, by its group and name. */
+    /** {@link #version(String)} for a sibling, by its group and name, or the pack manifest's for an asset pack. */
     public static String version(Sibling sibling) {
+        if (sibling.isAssetPack()) {
+            try {
+                return assetPacks.version(sibling.pluginId());
+            } catch (RuntimeException | LinkageError e) {
+                return null;
+            }
+        }
         return version(sibling.group(), sibling.pluginName());
     }
 

@@ -37,6 +37,9 @@ class FeatRegistryTest {
     /** The nine mod tabs of 1.9.0, RPG 12, Dungeons 12, Parries 8, Relics 8, Zephyr 8, Enchanting 6, Vein 6, Lucky 5, Companions 8. */
     private static final int MODS_NINE = 73;
     private static final int MODS_NINE_POINTS = 420 + 455 + 320 + 280 + 295 + 260 + 260 + 210 + 295;
+    /** 1.10.0, the tabs counted from Feats' own keys, Storage 8, Machines 10, Lost Garden 12, Decor 15. */
+    private static final int COUNTED = 8 + 10 + 12 + 15;
+    private static final int COUNTED_POINTS = 320 + 485 + 405 + 440;
 
     @AfterAll
     static void restore() {
@@ -253,8 +256,11 @@ class FeatRegistryTest {
         // Everything on at once. The plan's 512 leaves out the 15 Factions feats from 1.6.0.
         // The eleven mod tabs of 1.9.0 from docs/MODS-PLAN.md section 2: MODS_NINE from ModFeatsTest, MMO Skill
         // Tree 20 feats for 725 points and Endgame 20 for 785 from MmoEndgameFeatsTest.
-        assertEquals(OLD_COUNT + 118 + 18 + 24 + OLD_FACTIONS + 14 + 1 + 6 + 2 + 3 + MODS_NINE + 20 + 20, FULL.count());
-        assertEquals(OLD_POINTS + 5_370 + 865 + 720 + OLD_FACTIONS_POINTS + 430 + 10 + 300 + 35 + 175 + MODS_NINE_POINTS + 725 + 785, FULL.totalPoints());
+        // 1.10.0 adds the four tabs counted from Feats' own keys. FULL is built on TrackerAPI 1.2.0, so the Fishing,
+        // Arcanum and Music tabs of TrackerAPI 1.3.0 are out, see model/mods/PackFeatsTest.
+        assertEquals(OLD_COUNT + 118 + 18 + 24 + OLD_FACTIONS + 14 + 1 + 6 + 2 + 3 + MODS_NINE + 20 + 20 + COUNTED, FULL.count());
+        assertEquals(OLD_POINTS + 5_370 + 865 + 720 + OLD_FACTIONS_POINTS + 430 + 10 + 300 + 35 + 175 + MODS_NINE_POINTS + 725 + 785
+                + COUNTED_POINTS, FULL.totalPoints());
     }
 
     @Test

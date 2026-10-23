@@ -9,7 +9,7 @@ import java.util.Set;
 import java.util.function.Function;
 
 /**
- * The lines of {@code /feats admin status}, one per suite mod and one per mod TrackerAPI reads, with its version,
+ * The lines of {@code /feats admin status}, one per suite mod, one per third party mod or asset pack, with its version,
  * whether Feats is linked to it and the setting that controls the link. Reads the plugin manager by name only, so
  * it touches no sibling class.
  */
@@ -63,21 +63,27 @@ public final class SuiteStatus {
                     ? (in.coinRewards() ? "is linked, with coin rewards" : "is linked") : "is not linked yet";
             case CHRONICLE -> in.linked().contains("Chronicle Stats") ? "is linked" : "is not linked yet";
             case ATLAS -> in.linked().contains("Atlas") ? "is linked" : "is not linked yet";
-            default -> mod(in);
+            default -> switch (s.kind()) {
+                case ASSET_PACK -> "is loaded, its feats read the item counters Feats keeps";
+                case PLUGIN -> "is installed, its feats read the item counters Feats keeps";
+                default -> mod(s, in);
+            };
         } + setting;
     }
 
     /**
      * A mod TrackerAPI reads is linked through TrackerAPI alone. Its feats are in when TrackerAPI feeds the counters
-     * and is at least {@link FeatRegistry#MODS_MINIMUM}, which is what {@code FeatRegistry.defineMods} checks.
+     * and is at least the mod's {@link Sibling#trackerMinimum()}, {@link FeatRegistry#MODS_MINIMUM} for the mods of
+     * 1.9.0 and {@link FeatRegistry#TALLY_MINIMUM} for those of 1.10.0, which is what {@code FeatRegistry.defineMods} checks.
      */
-    private static String mod(Inputs in) {
+    private static String mod(Sibling s, Inputs in) {
+        String minimum = s.trackerMinimum() == null ? FeatRegistry.MODS_MINIMUM : s.trackerMinimum();
         String tracker = in.version().apply(Sibling.TRACKER_API.pluginName());
-        boolean newEnough = tracker != null && !VersionCompare.below(tracker, FeatRegistry.MODS_MINIMUM);
+        boolean newEnough = tracker != null && !VersionCompare.below(tracker, minimum);
         if (in.trackerFeeds() && newEnough) {
             return "feeds its counters through TrackerAPI";
         }
-        return "is installed, its feats need TrackerAPI " + FeatRegistry.MODS_MINIMUM + " feeding the counters";
+        return "is installed, its feats need TrackerAPI " + minimum + " feeding the counters";
     }
 
     private static String reader(String name, Inputs in, String what, String setting) {

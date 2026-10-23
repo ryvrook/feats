@@ -36,6 +36,17 @@ class SuiteStatusTest {
                 "MMO Skill Tree 1.7.3 is installed and ignored, setting LinkMMOSkillTree never",
                 "Endgame and QoL is not installed, setting LinkEndgame auto",
                 "Alec's Tamework is not installed, setting LinkTamework auto",
+                "Angler's Almanac is not installed, setting LinkAnglersAlmanac auto",
+                "Arcanum is not installed, setting LinkArcanum auto",
+                "Ymmersive Melodies is not installed, setting LinkYmmersiveMelodies auto",
+                "Modern Storage is not installed, setting LinkModernStorage auto",
+                "Machine Blocks is not installed, setting LinkMachineBlocks auto",
+                "Sig's Fancy Storage is not installed, setting LinkFancyStorage auto",
+                "Sig's Potion Shop is not installed, setting LinkPotionShop auto",
+                "Sig's Garden is not installed, setting LinkSigsGarden auto",
+                "Blahaj Plushie is not installed, setting LinkBlahaj auto",
+                "Infinite Water Supply is not installed, setting LinkInfiniteWater auto",
+                "Infinite Teleporters is not installed, setting LinkInfiniteTeleporters auto",
                 "SocialBridge 0.2.0 reads Feats and posts the unlocks, setting DiscordVia auto",
                 "RestAPI is not installed",
                 "Lullaby is not installed"), lines);
@@ -54,5 +65,25 @@ class SuiteStatusTest {
                 s -> "auto", "auto", v::get, v::containsKey));
         assertEquals("Major Dungeons 0.4.14 is installed, its feats need TrackerAPI 1.2.0 feeding the counters,"
                 + " setting LinkMajorDungeons auto", own.get(Sibling.MAJOR_DUNGEONS.ordinal()));
+    }
+
+    @Test
+    void theModsOfTrackerApi130ThePluginsAndThePacks() {
+        Map<String, String> v = Map.of("TrackerAPI", "1.2.1", "Arcanum", "0.6.3", "MachineBlocks", "1.4.5",
+                "Sig's Garden", "0.5.8");
+        java.util.Set<Sibling> present = EnumSet.of(Sibling.TRACKER_API, Sibling.ARCANUM, Sibling.MACHINES, Sibling.SIGS_GARDEN);
+        List<String> lines = SuiteStatus.lines(new SuiteStatus.Inputs(present, List.of(), true, false,
+                s -> "auto", "auto", v::get, v::containsKey));
+        assertEquals("Arcanum 0.6.3 is installed, its feats need TrackerAPI 1.3.0 feeding the counters, setting LinkArcanum auto",
+                lines.get(Sibling.ARCANUM.ordinal()));
+        assertEquals("Machine Blocks 1.4.5 is installed, its feats read the item counters Feats keeps, setting LinkMachineBlocks auto",
+                lines.get(Sibling.MACHINES.ordinal()));
+        assertEquals("Sig's Garden 0.5.8 is loaded, its feats read the item counters Feats keeps, setting LinkSigsGarden auto",
+                lines.get(Sibling.SIGS_GARDEN.ordinal()));
+        Map<String, String> newer = Map.of("TrackerAPI", "1.3.0", "Arcanum", "0.6.3");
+        List<String> fed = SuiteStatus.lines(new SuiteStatus.Inputs(EnumSet.of(Sibling.TRACKER_API, Sibling.ARCANUM), List.of(),
+                true, false, s -> "auto", "auto", newer::get, newer::containsKey));
+        assertEquals("Arcanum 0.6.3 feeds its counters through TrackerAPI, setting LinkArcanum auto",
+                fed.get(Sibling.ARCANUM.ordinal()));
     }
 }

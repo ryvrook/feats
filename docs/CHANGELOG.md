@@ -3,6 +3,42 @@
 Every notable change to Feats is recorded here. The format follows Keep a Changelog and the project uses
 semantic versioning.
 
+## 1.10.0 - 2026-10-23
+
+Needs the Hytale 0.7.0 release server or newer. The Fishing, Arcanum and Music tabs need TrackerAPI 1.3.0, the other
+four new tabs need no TrackerAPI. Updating is a jar swap, the eleven new `Link` keys are written to `Feats.json` with
+their defaults on the first start.
+
+### For players
+
+- Fishing tab of 15 feats for Angler's Almanac: catches, the 40 species, the 35 Almanac pages and 6 zones,
+  legendary fish and the five legendary fish of the ocean, a golden fish, perfect grades and a perfect streak.
+- Arcanum tab of 10 feats: spells cast, the 89 runes, energy spent, the most expensive and the largest spell.
+- Music tab of 8 feats for Ymmersive Melodies: songs played and finished, the 55 songs, the 9 instruments and
+  playing together in a band.
+- Storage tab of 8 feats for Modern Storage and Machines tab of 10 feats for Machine Blocks, from the workbenches to
+  the 64k disk, the infinite range card, an ultimate crusher and a singularity power core.
+- Lost Garden tab of 12 feats for the Sig's Garden asset pack: entering the realm, the Prisma Phoenix and the two
+  archmages, tea from seven herbs, Celestium ore, ingots and every Celestium weapon, and the garden's tulips.
+- Decor tab of 15 feats for five asset packs, Sig's Fancy Storage, Sig's Potion Shop, Blahaj Plushie, Infinite Water
+  Supply and Infinite Teleporters. Each feat shows only while its own pack is loaded.
+- Four server firsts in the World tab: the first legendary fish, the first full Almanac, the first ultimate crusher
+  and the first Prisma Phoenix kill.
+- 78 feats worth 2,915 points in all. With every mod, pack and sibling Feats now holds up to 719 feats worth 30,660
+  points.
+
+### For admins
+
+- New settings, `auto` by default: `LinkAnglersAlmanac`, `LinkArcanum`, `LinkYmmersiveMelodies`,
+  `LinkModernStorage`, `LinkMachineBlocks`, `LinkFancyStorage`, `LinkPotionShop`, `LinkSigsGarden`, `LinkBlahaj`,
+  `LinkInfiniteWater` and `LinkInfiniteTeleporters`. `never` leaves that mod or pack out.
+- Asset packs are found among the engine's asset packs by their exact `Group:Name` id, such as
+  `Sigyn_Laufeyson:Sig's Garden`, not in the plugin list. `/feats admin status` lists them with the mods.
+- On TrackerAPI 1.2.x the Fishing, Arcanum and Music tabs stay out and one log line says why, the eleven tabs of
+  1.9.0 stay in. Storage, Machines, Lost Garden and Decor count with or without TrackerAPI.
+- TrackerAPI 1.3.0's tally record is mirrored into the player file like the other mod records, under `fish:`,
+  `arcanum:` and `melodies:`.
+
 ## 1.9.0 - 2026-10-23
 
 Needs the Hytale 0.7.0 release server or newer. The new tabs need TrackerAPI 1.2.0. Updating is a jar swap, the

@@ -5,10 +5,12 @@ package dev.ryvrook.feats.model;
  * the engine's plugin manager at setup, see {@code integration/Siblings}. {@code minimum} is the oldest version the
  * binding is written against. {@code Siblings.present} leaves out a loaded sibling that is older.
  *
- * <p>The first five are the Ryvrook plugins. The rest are the third party mods TrackerAPI 1.2.0 reads, see
+ * <p>The first five are the Ryvrook plugins. Next come the third party mods TrackerAPI reads, see
  * {@code docs/MODS-PLAN.md}. Feats never touches a class of those mods, their counters arrive through TrackerAPI as
- * the generic mod records and are mirrored by {@code integration/ModKinds} under {@link #modId()}, so each of them
- * needs {@link #TRACKER_API} as well.
+ * the generic mod records and are mirrored by {@code integration/ModKinds} and {@code integration/TallyKinds} under
+ * {@link #modId()}, so each of them needs {@link #TRACKER_API} at {@link #trackerMinimum()} as well. Since 1.10.0 two
+ * more kinds follow, see {@link Kind}: plugins whose feats read the item counters Feats keeps itself, and asset
+ * packs, found by their {@code Group:Name} id among the engine's asset packs rather than in the plugin manager.
  */
 public enum Sibling {
     TRACKER_API(Sibling.GROUP, "TrackerAPI", "TrackerAPI", "1.0.0", "Tracker", null),
@@ -27,7 +29,45 @@ public enum Sibling {
     LUCKY_MINING("Buuz135", "LuckyMining", "Lucky Mining", "1.0.8", "LinkLuckyMining", "lucky"),
     MMO_SKILL_TREE("Ziggfreed", "MMOSkillTree", "MMO Skill Tree", "1.7.3", "LinkMMOSkillTree", "mmo"),
     ENDGAME("Config", "Endgame&QoL", "Endgame and QoL", "6.0.4", "LinkEndgame", "endgame"),
-    TAMEWORK("Alechilles", "Alec's Tamework!", "Alec's Tamework", "5.5.1", "LinkTamework", "tamework");
+    TAMEWORK("Alechilles", "Alec's Tamework!", "Alec's Tamework", "5.5.1", "LinkTamework", "tamework"),
+    // 1.10.0, the mods TrackerAPI 1.3.0 reads, whose counts arrive partly as the ModTally record of 1.3.0.
+    FISHING("dev.rm20", "AnglersAlmanac", "Angler's Almanac", "1.2.2", "LinkAnglersAlmanac", "fish", Kind.MOD,
+            Sibling.TALLY_TRACKER),
+    ARCANUM("com.zenkuro", "Arcanum", "Arcanum", "0.6.3", "LinkArcanum", "arcanum", Kind.MOD, Sibling.TALLY_TRACKER),
+    // The manifest of Ymmersive Melodies 1.1.5 says 0.0.1, so the minimum is that.
+    MELODIES("Conczin", "Ymmersive Melodies", "Ymmersive Melodies", "0.0.1", "LinkYmmersiveMelodies", "melodies",
+            Kind.MOD, Sibling.TALLY_TRACKER),
+    // 1.10.0, plugins without a binding. Their feats read crafted:, placed: and obtained: keys Feats counts itself.
+    STORAGE("ModernKnight", "ModernStorage", "Modern Storage", "1.0.33", "LinkModernStorage", null, Kind.PLUGIN, null),
+    MACHINES("AipocsHouse", "MachineBlocks", "Machine Blocks", "1.4.5", "LinkMachineBlocks", null, Kind.PLUGIN, null),
+    // 1.10.0, asset packs. The plugin name is the name half of the pack id, exactly as the pack's manifest writes it.
+    FANCY_STORAGE("Sigyn_Laufeyson", "Sig's Fancy Storage", "Sig's Fancy Storage", "1.6.3", "LinkFancyStorage", null,
+            Kind.ASSET_PACK, null),
+    POTION_SHOP("Sigyn_Laufeyson", "Sig's Potion Shop", "Sig's Potion Shop", "1.5.7", "LinkPotionShop", null,
+            Kind.ASSET_PACK, null),
+    SIGS_GARDEN("Sigyn_Laufeyson", "Sig's Garden", "Sig's Garden", "0.5.8", "LinkSigsGarden", null, Kind.ASSET_PACK, null),
+    BLAHAJ("Yernemm", "Blahaj", "Blahaj Plushie", "1.2.5", "LinkBlahaj", null, Kind.ASSET_PACK, null),
+    INFINITE_WATER("AvidPixel", "AvidPixel's Infinite Water Supply", "Infinite Water Supply", "1.1.1", "LinkInfiniteWater",
+            null, Kind.ASSET_PACK, null),
+    INFINITE_TELEPORTERS("VictorLuck", "InfiniteTeleporters", "Infinite Teleporters", "1.0.5", "LinkInfiniteTeleporters",
+            null, Kind.ASSET_PACK, null);
+
+    /** How Feats finds a sibling and where its counters come from. */
+    public enum Kind {
+        /** A Ryvrook plugin. */
+        SUITE,
+        /** A third party mod read through TrackerAPI, its counters under {@link #modId()}. */
+        MOD,
+        /** A third party plugin with no binding, its feats read the item counters Feats keeps on either tracking path. */
+        PLUGIN,
+        /** An asset pack, found by its {@code Group:Name} id in the engine's asset module, counted like {@link #PLUGIN}. */
+        ASSET_PACK
+    }
+
+    /** The TrackerAPI that publishes the records of the eleven mods of 1.9.0. */
+    static final String MOD_TRACKER = "1.2.0";
+    /** The TrackerAPI that publishes ModTally and binds the three mods of 1.10.0. */
+    static final String TALLY_TRACKER = "1.3.0";
 
     /** The group of the Ryvrook plugins. */
     public static final String GROUP = "Ryvrook";
@@ -38,14 +78,46 @@ public enum Sibling {
     private final String minimum;
     private final String settingKey;
     private final String modId;
+    private final Kind kind;
+    private final String trackerMinimum;
 
     Sibling(String group, String pluginName, String displayName, String minimum, String settingKey, String modId) {
+        this(group, pluginName, displayName, minimum, settingKey, modId,
+                modId != null ? Kind.MOD : Kind.SUITE, modId != null ? MOD_TRACKER : null);
+    }
+
+    Sibling(String group, String pluginName, String displayName, String minimum, String settingKey, String modId,
+            Kind kind, String trackerMinimum) {
         this.group = group;
         this.pluginName = pluginName;
         this.displayName = displayName;
         this.minimum = minimum;
         this.settingKey = settingKey;
         this.modId = modId;
+        this.kind = kind;
+        this.trackerMinimum = trackerMinimum;
+    }
+
+    public Kind kind() {
+        return kind;
+    }
+
+    /** True for an asset pack, looked up with {@code AssetModule.getAssetPack(pluginId())}. */
+    public boolean isAssetPack() {
+        return kind == Kind.ASSET_PACK;
+    }
+
+    /** True for a Ryvrook plugin. */
+    public boolean isSuite() {
+        return kind == Kind.SUITE;
+    }
+
+    /**
+     * The oldest TrackerAPI whose records this mod's feats read, {@code 1.2.0} for the eleven mods of 1.9.0 and
+     * {@code 1.3.0} for the three of 1.10.0, or null for a sibling that does not go through TrackerAPI.
+     */
+    public String trackerMinimum() {
+        return trackerMinimum;
     }
 
     /** The plugin group, {@code Ryvrook} for the suite, the author's group for a third party mod. */
@@ -58,7 +130,7 @@ public enum Sibling {
         return pluginName;
     }
 
-    /** {@code group:name}, as the engine's manifest writes it. */
+    /** {@code group:name}, as the engine's manifest writes it, and the asset pack id of an asset pack. */
     public String pluginId() {
         return group + ":" + pluginName;
     }

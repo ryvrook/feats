@@ -42,6 +42,22 @@ public enum Category {
     ENDGAME("Endgame", "Weapon_Sword_Adamantite"),
     /** Alec's Tamework. */
     TAMEWORK("Companions", "Food_Wildmeat_Raw"),
+    // 1.10.0. The three mods TrackerAPI 1.3.0 reads, filled only with that mod and TrackerAPI 1.3.0, then the two
+    // plugins and the asset packs whose feats read the item counters Feats keeps itself. Every icon is a vanilla id.
+    /** Angler's Almanac. */
+    FISHING("Fishing", "Fish_Bluegill_Item"),
+    /** Arcanum. */
+    ARCANUM("Arcanum", "Bench_Arcane"),
+    /** Ymmersive Melodies. */
+    MUSIC("Music", "Prototype_Tool_Guitar_Mana"),
+    /** Modern Storage. */
+    STORAGE("Storage", "Furniture_Village_Crate"),
+    /** Machine Blocks. */
+    MACHINES("Machines", "Bench_Furnace"),
+    /** The Sig's Garden asset pack and its realm. */
+    GARDEN("Lost Garden", "Plant_Flower_Orchid_Pink"),
+    /** Five decoration asset packs, each feat only in while its own pack is loaded. */
+    DECOR("Decor", "Furniture_Tavern_Barrel"),
     /** The Social pack. */
     SOCIAL("Social", "Deco_Kweebec_Plush"),
     /** The Hardcore pack. */
@@ -93,7 +109,24 @@ public enum Category {
             case MMO_SKILL_TREE -> MMO;
             case ENDGAME -> Category.ENDGAME;
             case TAMEWORK -> Category.TAMEWORK;
+            case FISHING -> Category.FISHING;
+            case ARCANUM -> Category.ARCANUM;
+            case MELODIES -> MUSIC;
             default -> null;
+        };
+    }
+
+    /**
+     * The tab a third party sibling's feats sit in, the mod tab of {@link #ofMod} for a mod TrackerAPI reads, or null
+     * for a Ryvrook sibling. The five decoration packs share {@link #DECOR}.
+     */
+    public static Category ofSibling(Sibling sibling) {
+        return switch (sibling) {
+            case STORAGE -> Category.STORAGE;
+            case MACHINES -> Category.MACHINES;
+            case SIGS_GARDEN -> GARDEN;
+            case FANCY_STORAGE, POTION_SHOP, BLAHAJ, INFINITE_WATER, INFINITE_TELEPORTERS -> DECOR;
+            default -> ofMod(sibling);
         };
     }
 }

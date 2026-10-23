@@ -123,6 +123,11 @@ public final class TrackerBridge {
      * touches that class, so Feats still links against TrackerAPI 1.1.x.
      */
     static final String MOD_KINDS_MINIMUM = "1.2.0";
+    /**
+     * The oldest TrackerAPI that publishes the ModTally record {@link TallyKinds} mirrors. Below it the bridge never
+     * touches that class, so Feats still links against TrackerAPI 1.2.x and 1.1.x.
+     */
+    static final String TALLY_KINDS_MINIMUM = "1.3.0";
 
     TrackerBridge(TrackerHost host) {
         this.host = host;
@@ -190,6 +195,7 @@ public final class TrackerBridge {
         // of Feats run on both paths. PortalEntered, because PlayerWorldChanged already gives the portal keys.
         // MoonPhaseChanged, because GameTimeSampled carries the phase with the hour it needs.
         bindModKinds(api);
+        bindTallyKinds(api);
         host.logger().at(Level.INFO).log("Feats is linked to TrackerAPI %s with %d listeners", api.version(),
                 subscriptions.size());
     }
@@ -208,6 +214,23 @@ public final class TrackerBridge {
         } catch (LinkageError e) {
             host.logger().at(Level.WARNING).withCause(e)
                     .log("Feats cannot read the mod records of TrackerAPI %s, so the mod feats stay still", version);
+        }
+    }
+
+    /**
+     * The 1.10.0 tally kind, only on TrackerAPI {@link #TALLY_KINDS_MINIMUM} or newer. The one 1.3.0 type stays inside
+     * {@link TallyKinds}, which is first loaded here.
+     */
+    private void bindTallyKinds(TrackerApi api) {
+        String version = api.version();
+        if (version == null || VersionCompare.below(version, TALLY_KINDS_MINIMUM)) {
+            return;
+        }
+        try {
+            subscriptions.addAll(TallyKinds.install(api, OWNER, tracker));
+        } catch (LinkageError e) {
+            host.logger().at(Level.WARNING).withCause(e)
+                    .log("Feats cannot read the tally records of TrackerAPI %s, so the Fishing, Arcanum and Music bests stay still", version);
         }
     }
 

@@ -360,9 +360,12 @@ public final class FeatsPlugin extends JavaPlugin {
         if (registry.modsNote() != null) {
             getLogger().at(Level.INFO).log("%s", registry.modsNote());
         }
+        if (registry.tallyNote() != null) {
+            getLogger().at(Level.INFO).log("%s", registry.tallyNote());
+        }
         for (Sibling s : siblings) {
-            if (s.isMod() && registry.modsNote() != null) {
-                continue; // the note above already says why the mod feats are out
+            if (registry.modNote(s) != null) {
+                continue; // a note above already says why this mod's feats are out
             }
             if (s != Sibling.DOMINION && s != Sibling.TRACKER_API) {
                 getLogger().at(Level.INFO).log("%s is installed, so its %d feats are in", s.displayName(),

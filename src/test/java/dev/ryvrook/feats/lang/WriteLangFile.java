@@ -21,9 +21,9 @@ public final class WriteLangFile {
     /** The bundled file, relative to the project root. */
     public static final Path FILE = Path.of("src", "main", "resources", "lang", "en-US", LangFiles.FILE_NAME);
 
-    /** A registry with every sibling, every pack and TrackerAPI 1.2.0, so every feat has its lines. */
+    /** A registry with every sibling, every pack and TrackerAPI 1.3.0, so every feat has its lines. */
     public static FeatRegistry fullRegistry() {
-        return new FeatRegistry(EnumSet.allOf(Sibling.class), EnumSet.allOf(Pack.class), FeatRegistry.MODS_MINIMUM);
+        return new FeatRegistry(EnumSet.allOf(Sibling.class), EnumSet.allOf(Pack.class), FeatRegistry.TALLY_MINIMUM);
     }
 
     public static void main(String[] args) throws IOException {

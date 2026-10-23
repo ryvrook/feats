@@ -361,9 +361,16 @@ public final class StatKeys {
     // ---- 1.9.0, the mods TrackerAPI reads. Their counters are mirrored by integration/ModKinds under the
     // binding id TrackerAPI uses, the Sibling.modId values, as <mod>:<stat> and <mod>:<stat>:<id>.
 
-    /** The counter prefixes of the mods TrackerAPI 1.2.0 reads, without the colon. The same as {@code Sibling.modId}. */
+    /** The counter prefixes of the mods TrackerAPI reads, without the colon. The same as {@code Sibling.modId}. */
     public static final Set<String> MOD_PREFIXES = Set.of("rpg", "dungeons", "parries", "relics", "zephyr", "enchant",
-            "vein", "lucky", "mmo", "endgame", "tamework");
+            "vein", "lucky", "mmo", "endgame", "tamework", "fish", "arcanum", "melodies");
+
+    /** 1.10.0, the {@code fish:} prefix of the Angler's Almanac counters, read by {@code model/mods/FishingFeats}. */
+    public static final String FISH_PREFIX = "fish:";
+    /** 1.10.0, the {@code arcanum:} prefix of the Arcanum counters, read by {@code model/mods/ArcanumFeats}. */
+    public static final String ARCANUM_PREFIX = "arcanum:";
+    /** 1.10.0, the {@code melodies:} prefix of the Ymmersive Melodies counters, read by {@code model/mods/MusicFeats}. */
+    public static final String MELODIES_PREFIX = "melodies:";
 
     /** The {@code mmo:} prefix of the MMO Skill Tree counters, read by {@code model/mods/MmoFeats}. */
     public static final String MMO_PREFIX = "mmo:";
@@ -377,7 +384,13 @@ public final class StatKeys {
      * dropped at load would let the next sighting count as new.
      */
     public static final Set<String> MOD_PER_ID_STATS = Set.of("xp", "abilities", "runs", "cleared", "cleared_mode",
-            "failed", "bosses", "items", "procs", "blocks", "drops", "tamed", "bred", "skill_level", "kills");
+            "failed", "bosses", "items", "procs", "blocks", "drops", "tamed", "bred", "skill_level", "kills",
+            // 1.10.0, the per id sums of the three mods of TrackerAPI 1.3.0, fish:caught:<loot>, fish:junk:<item>,
+            // fish:rarity:<rarity>, fish:grade:<grade>, melodies:plays:<song>, melodies:finished:<song> and
+            // melodies:seconds:<instrument>. arcanum:abilities:<spell> and arcanum:failed:<stage> use the stats above.
+            // The markers fish:species:<id>, fish:page:<id>, fish:zone:<id>, arcanum:rune:<id>, melodies:song:<id> and
+            // melodies:instrument:<id> stay out, so they are always kept.
+            "caught", "junk", "rarity", "grade", "plays", "finished", "seconds");
 
     /** True for a per id counter key, see {@link #PER_ID_PREFIXES} and {@link #MOD_PER_ID_STATS}. */
     public static boolean isPerId(String key) {

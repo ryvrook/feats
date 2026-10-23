@@ -168,6 +168,50 @@ public final class FeatsConfig {
                     (c, v, extra) -> c.linkTamework = v,
                     (c, extra) -> c.linkTamework)
             .add()
+            .append(new KeyedCodec<>("LinkAnglersAlmanac", Codec.STRING),
+                    (c, v, extra) -> c.linkAnglersAlmanac = v,
+                    (c, extra) -> c.linkAnglersAlmanac)
+            .add()
+            .append(new KeyedCodec<>("LinkArcanum", Codec.STRING),
+                    (c, v, extra) -> c.linkArcanum = v,
+                    (c, extra) -> c.linkArcanum)
+            .add()
+            .append(new KeyedCodec<>("LinkYmmersiveMelodies", Codec.STRING),
+                    (c, v, extra) -> c.linkYmmersiveMelodies = v,
+                    (c, extra) -> c.linkYmmersiveMelodies)
+            .add()
+            .append(new KeyedCodec<>("LinkModernStorage", Codec.STRING),
+                    (c, v, extra) -> c.linkModernStorage = v,
+                    (c, extra) -> c.linkModernStorage)
+            .add()
+            .append(new KeyedCodec<>("LinkMachineBlocks", Codec.STRING),
+                    (c, v, extra) -> c.linkMachineBlocks = v,
+                    (c, extra) -> c.linkMachineBlocks)
+            .add()
+            .append(new KeyedCodec<>("LinkFancyStorage", Codec.STRING),
+                    (c, v, extra) -> c.linkFancyStorage = v,
+                    (c, extra) -> c.linkFancyStorage)
+            .add()
+            .append(new KeyedCodec<>("LinkPotionShop", Codec.STRING),
+                    (c, v, extra) -> c.linkPotionShop = v,
+                    (c, extra) -> c.linkPotionShop)
+            .add()
+            .append(new KeyedCodec<>("LinkSigsGarden", Codec.STRING),
+                    (c, v, extra) -> c.linkSigsGarden = v,
+                    (c, extra) -> c.linkSigsGarden)
+            .add()
+            .append(new KeyedCodec<>("LinkBlahaj", Codec.STRING),
+                    (c, v, extra) -> c.linkBlahaj = v,
+                    (c, extra) -> c.linkBlahaj)
+            .add()
+            .append(new KeyedCodec<>("LinkInfiniteWater", Codec.STRING),
+                    (c, v, extra) -> c.linkInfiniteWater = v,
+                    (c, extra) -> c.linkInfiniteWater)
+            .add()
+            .append(new KeyedCodec<>("LinkInfiniteTeleporters", Codec.STRING),
+                    (c, v, extra) -> c.linkInfiniteTeleporters = v,
+                    (c, extra) -> c.linkInfiniteTeleporters)
+            .add()
             .append(new KeyedCodec<>("PackSocial", Codec.BOOLEAN),
                     (c, v, extra) -> c.packSocial = v,
                     (c, extra) -> c.packSocial)
@@ -280,6 +324,18 @@ public final class FeatsConfig {
     private String linkMmoSkillTree = "auto";
     private String linkEndgame = "auto";
     private String linkTamework = "auto";
+    // 1.10.0, the three mods of TrackerAPI 1.3.0, the two plugins and the six asset packs.
+    private String linkAnglersAlmanac = "auto";
+    private String linkArcanum = "auto";
+    private String linkYmmersiveMelodies = "auto";
+    private String linkModernStorage = "auto";
+    private String linkMachineBlocks = "auto";
+    private String linkFancyStorage = "auto";
+    private String linkPotionShop = "auto";
+    private String linkSigsGarden = "auto";
+    private String linkBlahaj = "auto";
+    private String linkInfiniteWater = "auto";
+    private String linkInfiniteTeleporters = "auto";
 
     public boolean showToasts() {
         return showToasts;
@@ -407,8 +463,8 @@ public final class FeatsConfig {
      * The link setting for one sibling, {@code auto}, {@code always} or {@code never}. TrackerAPI reads
      * {@link #tracker()}. {@code auto} links when the sibling is installed and new enough, {@code always} does
      * the same and warns at start when it is missing, {@code never} ignores it, so its feats and bindings stay
-     * out. The mods TrackerAPI reads have the {@code Link<Mod>} keys, {@code Sibling.settingKey()} names each.
-     * Read once at setup.
+     * out. The mods TrackerAPI reads, the plugins and the asset packs of 1.10.0 have the {@code Link<Name>} keys,
+     * {@code Sibling.settingKey()} names each. Read once at setup.
      */
     public String link(dev.ryvrook.feats.model.Sibling sibling) {
         String v = switch (sibling) {
@@ -428,6 +484,17 @@ public final class FeatsConfig {
             case MMO_SKILL_TREE -> linkMmoSkillTree;
             case ENDGAME -> linkEndgame;
             case TAMEWORK -> linkTamework;
+            case FISHING -> linkAnglersAlmanac;
+            case ARCANUM -> linkArcanum;
+            case MELODIES -> linkYmmersiveMelodies;
+            case STORAGE -> linkModernStorage;
+            case MACHINES -> linkMachineBlocks;
+            case FANCY_STORAGE -> linkFancyStorage;
+            case POTION_SHOP -> linkPotionShop;
+            case SIGS_GARDEN -> linkSigsGarden;
+            case BLAHAJ -> linkBlahaj;
+            case INFINITE_WATER -> linkInfiniteWater;
+            case INFINITE_TELEPORTERS -> linkInfiniteTeleporters;
         };
         return v == null || v.isBlank() ? "auto" : v.trim().toLowerCase(Locale.ROOT);
     }

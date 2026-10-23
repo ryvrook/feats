@@ -177,9 +177,15 @@ class TrackerBridgeTest {
         assertTrue(api.listeners.containsKey(dev.ryvrook.trackerapi.api.event.EntityDied.class), "relic kills are read back on a kill");
         api.publish(new dev.ryvrook.trackerapi.api.event.ModLevelUp(h(p), "rpg", "player", 4, 5, 50));
         assertEquals(5, progress.get("rpg:level"), "the mirror reaches the tracker");
-        api.version = "1.3.0";
+        api.version = "1.2.1";
         bridge.bind(api);
         assertEquals(34 + ModKinds.KINDS, api.live().size(), "newer than the minimum is fine");
+        assertFalse(api.listeners.containsKey(dev.ryvrook.trackerapi.api.event.ModTally.class), "1.2.x publishes no tally");
+        api.version = TrackerBridge.TALLY_KINDS_MINIMUM;
+        bridge.bind(api);
+        assertEquals(34 + ModKinds.KINDS + TallyKinds.KINDS, api.live().size(), "1.3.0 adds the tally kind");
+        api.publish(new dev.ryvrook.trackerapi.api.event.ModTally(h(p), "fish", "caught", "Legendary_Whale", 1, 0));
+        assertEquals(1, progress.get("fish:caught"), "the tally mirror reaches the tracker");
         bridge.unbind();
         assertEquals(0, api.live().size(), "the mod subscriptions close with the rest");
     }

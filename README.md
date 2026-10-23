@@ -3,8 +3,9 @@
 Achievements for Hytale servers. Feats adds 455 of them, called feats, in eleven tabs worth 20,735 points,
 with an unlock toast, a chat line, an optional top of screen banner for the rarest unlocks and a `/feats` browser that
 shows progress on every one, lifetime statistics and a points leaderboard. Two of the tabs are packs an admin can
-turn off, four more appear with Coinage, Dominion Factions, Chronicle Stats and Atlas, and with TrackerAPI 1.2.0
-one more for each of the eleven mods it reads, up to 641 feats worth 27,745 points. It runs on the server with a small UI pack inside the jar, so players join with an unmodified
+turn off, four more appear with Coinage, Dominion Factions, Chronicle Stats and Atlas, with TrackerAPI one more for
+each of the fourteen mods it reads, and four more for Modern Storage, Machine Blocks and six asset packs, up to 719
+feats worth 30,660 points. It runs on the server with a small UI pack inside the jar, so players join with an unmodified
 client.
 
 ## Requirements
@@ -12,11 +13,11 @@ client.
 Hytale server 0.7.0 release or newer, built against 0.7.1, and Java 25. Feats 1.0.0 is the last version for
 0.6.8, because the Chapter I hooks do not exist there. TrackerAPI 1.0.0, Coinage 1.2.0, Dominion Factions 0.5.1,
 Chronicle Stats 1.5.0, Atlas 1.9.0 and PlaceholderAPI 1.0.8, each that version or newer, are optional, and so are
-SocialBridge and RestAPI, which read Feats.
+SocialBridge and RestAPI, which read Feats. The Fishing, Arcanum and Music tabs need TrackerAPI 1.3.0.
 
 ## Install
 
-Drop `Feats-1.8.1.jar` into `UserData/Mods` for a singleplayer world or into the server's `mods/` folder and
+Drop `Feats-1.10.0.jar` into `UserData/Mods` for a singleplayer world or into the server's `mods/` folder and
 start it. Tracking starts the first time a player joins. Type `/feats`.
 
 To update a running server, swap the jar and run `/plugin reload Ryvrook:Feats`. The engine prints
@@ -62,7 +63,8 @@ players online at once, chunks generated and days since Feats was installed.
 
 The tabs appear in this order, Exploration to Misc, then Factions, Coinage and Chronicle when their mod is
 installed, then one tab per mod TrackerAPI reads while that mod is installed (RPG Leveling, Dungeons, Parries,
-Relics, Zephyr, Enchanting, Vein Mining, Lucky Mining, Skill Tree, Endgame, Companions), then Social, Hardcore,
+Relics, Zephyr, Enchanting, Vein Mining, Lucky Mining, Skill Tree, Endgame, Companions, Fishing, Arcanum, Music),
+then Storage, Machines, Lost Garden and Decor while their mod or asset pack is installed, then Social, Hardcore,
 PvP, Calendar and Grind while their pack is on, then World. A tab with no feats
 in it is not shown.
 
@@ -144,6 +146,9 @@ Languages.
 | `ExportSeconds` | `15` | Leaderboard export check, at least 5. `0` turns the export off |
 | `Tracker` | `"auto"` | Where counts come from. `auto` uses TrackerAPI when present, `always` only TrackerAPI, `never` own hooks. Read at start |
 | `LinkRPGLeveling` and ten more `Link<Mod>` keys | `"auto"` | One per mod TrackerAPI reads (`LinkMajorDungeons`, `LinkPerfectParries`, `LinkWonderWeapons`, `LinkZephyr`, `LinkSimpleEnchantments`, `LinkVeinMining`, `LinkLuckyMining`, `LinkMMOSkillTree`, `LinkEndgame`, `LinkTamework`). `auto` shows the tab while the mod and TrackerAPI 1.2.0 are installed, `always` warns once when the mod is missing, `never` leaves it out. Read at start |
+| `LinkAnglersAlmanac`, `LinkArcanum`, `LinkYmmersiveMelodies` | `"auto"` | The Fishing, Arcanum and Music tabs, the same three values. They need TrackerAPI 1.3.0. Read at start |
+| `LinkModernStorage`, `LinkMachineBlocks` | `"auto"` | The Storage and Machines tabs, the same three values. No TrackerAPI needed. Read at start |
+| `LinkFancyStorage`, `LinkPotionShop`, `LinkSigsGarden`, `LinkBlahaj`, `LinkInfiniteWater`, `LinkInfiniteTeleporters` | `"auto"` | One per asset pack, the same three values. `auto` adds the pack's feats while the pack is loaded. Sig's Garden fills the Lost Garden tab, the other five share the Decor tab and each takes only its own feats out. Read at start |
 | `Coinage` | `"auto"` | The Coinage tab, the cross mod feats and coin rewards. `auto` links when Coinage is installed, `always` also warns at start when it is missing, `never` ignores it. Read at start |
 | `Dominion` | `"auto"` | The Factions tab, same three values. Read at start |
 | `Chronicle` | `"auto"` | The Chronicle tab, same three values. Read at start |
@@ -183,8 +188,8 @@ toast, the big title, the banner, the whole `/feats` page and the replies of the
 distance follow the player's language too. Feats ships English only, and a key a language file leaves out shows
 in English, so an older translation never hides a new feat.
 
-At every start Feats writes its English to `mods/Ryvrook_Feats/lang/Server/Languages/en-US/feats.lang`, 1,281
-keys, 165 for the text around the feats and 1,116 for the names and descriptions of the 558 feats and world
+At every start Feats writes its English to `mods/Ryvrook_Feats/lang/Server/Languages/en-US/feats.lang`, 1,705
+keys, 183 for the text around the feats and 1,522 for the names and descriptions of the 761 feats and world
 records. That file is rewritten from the jar whenever it differs, so do not edit it. The folder also gets a
 `README.txt`, written once, and an empty `Common/` folder the engine needs. It is registered with the engine as
 an asset pack once, at start.
@@ -324,6 +329,17 @@ none of them. `/feats admin status` prints one line per mod with its version and
 | MMO Skill Tree | Skill Tree tab of 20 feats, through TrackerAPI 1.2.0 | `LinkMMOSkillTree` |
 | Endgame and QoL | Endgame tab of 20 feats, through TrackerAPI 1.2.0 | `LinkEndgame` |
 | Alec's Tamework | Companions tab of 8 feats, through TrackerAPI 1.2.0 | `LinkTamework` |
+| Angler's Almanac | Fishing tab of 15 feats, through TrackerAPI 1.3.0 | `LinkAnglersAlmanac` |
+| Arcanum | Arcanum tab of 10 feats, through TrackerAPI 1.3.0 | `LinkArcanum` |
+| Ymmersive Melodies | Music tab of 8 feats, through TrackerAPI 1.3.0 | `LinkYmmersiveMelodies` |
+| Modern Storage | Storage tab of 8 feats, from the counters Feats keeps | `LinkModernStorage` |
+| Machine Blocks | Machines tab of 10 feats, from the counters Feats keeps | `LinkMachineBlocks` |
+| Sig's Garden (asset pack) | Lost Garden tab of 12 feats | `LinkSigsGarden` |
+| Sig's Fancy Storage (asset pack) | 4 feats in the Decor tab | `LinkFancyStorage` |
+| Sig's Potion Shop (asset pack) | 4 feats in the Decor tab | `LinkPotionShop` |
+| Blahaj Plushie (asset pack) | 3 feats in the Decor tab | `LinkBlahaj` |
+| Infinite Water Supply (asset pack) | 2 feats in the Decor tab | `LinkInfiniteWater` |
+| Infinite Teleporters (asset pack) | 2 feats in the Decor tab | `LinkInfiniteTeleporters` |
 | SocialBridge | Unlock posts and Feats on its `/profile` in Discord | `DiscordVia` |
 | RestAPI | Feats routes under `/api/feats` | RestAPI's own |
 | Lullaby | Nothing, the two do not touch | none |
@@ -401,6 +417,24 @@ bosses, trials, companions) and land in the Feats player file under the mod's pr
 unlocks count towards tiers (5, 25, 75 and 150 MMO achievements, 5, 15 and 30 Endgame achievements), and quests,
 bounties, the bestiary and runes have tiers of their own. Each tab has a `Link<Mod>` setting with `auto`, `always`
 and `never`. Without TrackerAPI 1.2.0 the tabs stay out and the log says why.
+
+Since 1.10.0 TrackerAPI 1.3.0 adds three more: Angler's Almanac (Fishing, 15 feats on catches, species, Almanac
+pages and zones, legendary and golden fish and perfect grades), Arcanum (Arcanum, 10 feats on spells cast, runes
+known, energy spent and the largest spell) and Ymmersive Melodies (Music, 8 feats on songs played and finished,
+the 55 songs, the 9 instruments and playing in a band), 33 feats worth 1,265 points, plus the first legendary fish
+and the first full Almanac in the World tab. Their bests and per id counts arrive as TrackerAPI's tally record, so
+on TrackerAPI 1.2.x these three tabs stay out, the log says why, and the eleven tabs above stay in.
+
+**Mods and asset packs counted by Feats itself.** Modern Storage, Machine Blocks and six asset packs have no
+TrackerAPI binding. Their feats read the crafted, placed, obtained, used, kill and portal counters Feats keeps on
+either tracking path, so they need no TrackerAPI. Modern Storage fills the Storage tab (8 feats, the workbench, the
+controller, cables, disk drives, the 64k disk and the infinite range card) and Machine Blocks the Machines tab (10
+feats, from the first crusher to an ultimate crusher and a singularity power core). The asset packs are found among
+the engine's asset packs by their exact `Group:Name` id: Sig's Garden fills the Lost Garden tab (12 feats on the
+realm, its Prisma Phoenix and archmages, tea and Celestium), and Sig's Fancy Storage, Sig's Potion Shop, Blahaj
+Plushie, Infinite Water Supply and Infinite Teleporters share the Decor tab (15 feats, each needing only its own
+pack). These four tabs hold 45 feats worth 1,650 points, plus the first ultimate crusher and the first Prisma
+Phoenix kill in the World tab.
 
 **RestAPI** serves feats, player progress, world records and the points leaderboard under `/api/feats`.
 

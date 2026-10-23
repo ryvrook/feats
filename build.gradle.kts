@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "dev.ryvrook"
-version = "1.9.0"
+version = "1.10.0"
 
 java {
     toolchain {
@@ -32,8 +32,9 @@ repositories {
 }
 
 // Sibling jars Feats compiles against, the oldest version it supports so nothing newer is used by accident.
-// TrackerAPI is the exception since 1.9.0, Feats compiles against 1.2.0 for the mod records in
-// integration/ModKinds and still runs with 1.1.x, where that one class is never loaded.
+// TrackerAPI is the exception since 1.9.0, Feats compiles against 1.3.0 for the mod records in
+// integration/ModKinds (1.2.0) and the tally record in integration/TallyKinds (1.3.0), and still runs with 1.1.x and
+// 1.2.x, where those classes are never loaded.
 // Each is given with -PtrackerApiJar=<path>, -PcoinageJar=<path> or -PatlasJar=<path>, else the sibling checkout next to this one,
 // else the checkout under ~/Projects. Both are optional at runtime, see integration/TrackerBridge and
 // integration/CoinageRewards, the only classes that touch them.
@@ -42,7 +43,7 @@ fun siblingJar(property: String, path: String): String {
     val candidates = listOf("../$path", System.getProperty("user.home") + "/Projects/$path")
     return candidates.firstOrNull { file(it).exists() } ?: candidates.first()
 }
-val trackerApiJar = siblingJar("trackerApiJar", "trackerapi/build/libs/TrackerAPI-1.2.0.jar")
+val trackerApiJar = siblingJar("trackerApiJar", "trackerapi/build/libs/TrackerAPI-1.3.0.jar")
 val coinageJar = siblingJar("coinageJar", "coinage/build/libs/Coinage-api-1.3.0.jar")
 val atlasJar = siblingJar("atlasJar", "atlas/build/libs/Atlas-1.9.0.jar")
 

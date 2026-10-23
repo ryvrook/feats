@@ -273,6 +273,31 @@ unless `Siblings.version(TRACKER_API)` handed to the registry is at least `FeatR
 has a tab in `Category` (`Category.ofMod`), shown only while it has feats, with a vanilla item icon from Assets.zip.
 `/feats admin status` lists each mod with its `Link<Mod>` setting through `SuiteStatus`.
 
+Since 1.10.0 `Sibling` has a `Kind`: `SUITE`, `MOD` (read through TrackerAPI, with `trackerMinimum()` 1.2.0 for the
+eleven mods above and 1.3.0 for Angler's Almanac, Arcanum and Ymmersive Melodies), `PLUGIN` (Modern Storage and
+Machine Blocks, no binding) and `ASSET_PACK` (six asset packs). TrackerAPI 1.3.0 adds the generic record
+`ModTally(header, mod, stat, id, amount, best)`. `integration/TallyKinds` mirrors it like TrackerAPI's sink, `amount`
+to `<mod>:<stat>` and, with an id, `<mod>:<stat>:<id>`, `best` raised into `<mod>:<stat>_best`, through the
+`ModKinds.Sink`. `TrackerBridge.bindTallyKinds` installs it only when `api.version()` is at least
+`TALLY_KINDS_MINIMUM` (1.3.0), and `ModTally` is referenced nowhere else, so Feats still links against 1.2.x and 1.1.x.
+The actions and discoveries of the three mods still arrive as `ModAction` and `ModMilestone` through `ModKinds`.
+`StatKeys.MOD_PER_ID_STATS` gained `caught`, `junk`, `rarity`, `grade`, `plays`, `finished` and `seconds`, the
+markers (`fish:species:<id>`, `fish:page:<id>`, `fish:zone:<id>`, `arcanum:rune:<id>`, `melodies:song:<id>`,
+`melodies:instrument:<id>`) stay out so they are always kept. `FeatRegistry.defineTallyMods` defines the Fishing,
+Arcanum and Music tabs only on TrackerAPI `TALLY_MINIMUM`, else `tallyNote()` says why while the eleven 1.9.0 tabs
+stay in. `modNote(Sibling)` gives the reason for one mod, the plugin skips its "feats are in" line with it.
+
+The plugins and asset packs need no TrackerAPI. `FeatRegistry.defineCounted` defines `StorageFeats`, `MachinesFeats`
+and `GardenFeats` with their own sibling as the section requirement and `DecorFeats` with none, each Decor feat
+naming its pack through `requiring`. Every key they read is a per id key Feats keeps itself (`crafted:`, `placed:`,
+`obtained:`, `use:`, `kill:`, `portal:`), kept because a feat watches it. Each definition class lists its keys in one
+`KEYS` constant. An asset pack is found by `Siblings.installed(Sibling)` through `Siblings.AssetPacks`, which is
+`AssetModule.get().getAssetPack(sibling.pluginId())` in production (the id is the exact, case sensitive
+`Group:Name` of the pack manifest) and a fake in the tests through `Siblings.useAssetPacks`. The lookups by plugin
+name route an asset pack there too, so `present()` and `SuiteStatus` need no case of their own. `Category.ofSibling`
+gives the tab of every third party sibling. `PackFeatsTest` and `TallyKindsTest` cover the seven tabs and the tally
+rules.
+
 ## Server totals
 
 `WorldStore` keeps the totals in a map of `AtomicLong` by key, safe from any thread, and marks itself dirty on a
