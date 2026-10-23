@@ -258,6 +258,17 @@ public final class StatKeys {
     public static final String COINAGE_PREFIX = "coinage:";
     public static final String CHRONICLE_PREFIX = "chronicle:";
     public static final String ATLAS_PREFIX = "atlas:";
+    // 1.9.0, the counter prefixes of the mods TrackerAPI reads, the binding id of each, as integration/ModKinds writes
+    // them and model/mods reads them. One per Sibling.prefix() of the nine sections defined so far.
+    public static final String RPG_PREFIX = "rpg:";
+    public static final String DUNGEONS_PREFIX = "dungeons:";
+    public static final String PARRIES_PREFIX = "parries:";
+    public static final String RELICS_PREFIX = "relics:";
+    public static final String ZEPHYR_PREFIX = "zephyr:";
+    public static final String ENCHANT_PREFIX = "enchant:";
+    public static final String VEIN_PREFIX = "vein:";
+    public static final String LUCKY_PREFIX = "lucky:";
+    public static final String TAMEWORK_PREFIX = "tamework:";
     public static final String DOMINION_UNCLAIMS = DOMINION_PREFIX + "unclaims";
     public static final String DOMINION_JOINED = DOMINION_PREFIX + "joined";
     public static final String DOMINION_KICKED = DOMINION_PREFIX + "kicked";
