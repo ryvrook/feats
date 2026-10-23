@@ -23,7 +23,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** The 1.7.2 feat tables against docs/EXPANSION-PLAN.md, sections 4 to 8 and the totals in section 12. */
 class FeatRegistryTest {
     /** Every sibling and every pack, so every defined feat is in. */
-    private static final FeatRegistry FULL = new FeatRegistry(EnumSet.allOf(Sibling.class), EnumSet.allOf(Pack.class));
+    private static final FeatRegistry FULL = new FeatRegistry(EnumSet.allOf(Sibling.class), EnumSet.allOf(Pack.class),
+            FeatRegistry.MODS_MINIMUM);
     /** A plain server, no sibling and every pack off. */
     private static final FeatRegistry PLAIN = new FeatRegistry();
 
@@ -37,6 +38,35 @@ class FeatRegistryTest {
     @AfterAll
     static void restore() {
         new FeatRegistry(false); // put the shared feat predicates back to the plain list for the other tests
+    }
+
+    // ---- 1.9.0, the mods TrackerAPI reads ----
+
+    @Test
+    void theModFeatsNeedTrackerApi120() {
+        assertNull(FULL.modsNote(), "every sibling with TrackerAPI 1.2.0 defines the mod sections");
+        assertEquals(FeatRegistry.MODS_MINIMUM, FULL.trackerVersion());
+        FeatRegistry noVersion = new FeatRegistry(EnumSet.allOf(Sibling.class), EnumSet.noneOf(Pack.class));
+        assertNotNull(noVersion.modsNote());
+        assertTrue(noVersion.modsNote().contains("1.2.0"), noVersion.modsNote());
+        FeatRegistry old = new FeatRegistry(EnumSet.allOf(Sibling.class), EnumSet.noneOf(Pack.class), "1.1.2");
+        assertTrue(old.modsNote().contains("1.1.2"), old.modsNote());
+        FeatRegistry noTracker = new FeatRegistry(EnumSet.of(Sibling.RPG_LEVELING), EnumSet.noneOf(Pack.class), "1.2.0");
+        assertTrue(noTracker.modsNote().contains("not installed"), noTracker.modsNote());
+        assertNull(new FeatRegistry(EnumSet.of(Sibling.TRACKER_API), EnumSet.noneOf(Pack.class), "1.3.0").modsNote(),
+                "newer than the minimum is fine");
+        for (Sibling mod : Sibling.values()) {
+            if (mod.isMod()) {
+                assertNotNull(Category.ofMod(mod), mod.name());
+                assertTrue(PLAIN.inCategory(Category.ofMod(mod)).isEmpty(), mod + " has no tab on a plain server");
+                for (Feat feat : FULL.inCategory(Category.ofMod(mod))) {
+                    assertEquals(Set.of(mod, Sibling.TRACKER_API), feat.requires(), feat.id());
+                }
+            } else {
+                assertNull(Category.ofMod(mod), mod.name());
+            }
+        }
+        assertTrue(FULL.tabs().containsAll(List.of(Category.EXPLORATION, Category.WORLD)));
     }
 
     // ---- section 4, vanilla ----

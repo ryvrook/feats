@@ -20,6 +20,7 @@ import dev.ryvrook.trackerapi.api.Delivery;
 import dev.ryvrook.trackerapi.api.EventKind;
 import dev.ryvrook.trackerapi.api.Header;
 import dev.ryvrook.trackerapi.api.Journal;
+import dev.ryvrook.trackerapi.api.ModInfo;
 import dev.ryvrook.trackerapi.api.PlayerSnapshot;
 import dev.ryvrook.trackerapi.api.Stats;
 import dev.ryvrook.trackerapi.api.Subscription;
@@ -160,6 +161,27 @@ class TrackerBridgeTest {
         bridge.unbind();
         assertEquals(0, api.live().size());
         bridge.unbind();
+    }
+
+    @Test
+    void theModKindsJoinOnlyOnTrackerApi120() {
+        api.version = "1.1.2";
+        bridge.bind(api);
+        assertEquals(34, bridge.subscriptionCount(), "1.1.x publishes no mod record");
+        api.version = TrackerBridge.MOD_KINDS_MINIMUM;
+        bridge.bind(api);
+        assertEquals(34 + ModKinds.KINDS, bridge.subscriptionCount());
+        assertEquals(34 + ModKinds.KINDS, api.live().size());
+        assertTrue(api.listeners.containsKey(dev.ryvrook.trackerapi.api.event.DungeonRun.class));
+        assertTrue(api.listeners.containsKey(dev.ryvrook.trackerapi.api.event.ModBound.class), "the bound set of the read back bests follows ModBound");
+        assertTrue(api.listeners.containsKey(dev.ryvrook.trackerapi.api.event.EntityDied.class), "relic kills are read back on a kill");
+        api.publish(new dev.ryvrook.trackerapi.api.event.ModLevelUp(h(p), "rpg", "player", 4, 5, 50));
+        assertEquals(5, progress.get("rpg:level"), "the mirror reaches the tracker");
+        api.version = "1.3.0";
+        bridge.bind(api);
+        assertEquals(34 + ModKinds.KINDS, api.live().size(), "newer than the minimum is fine");
+        bridge.unbind();
+        assertEquals(0, api.live().size(), "the mod subscriptions close with the rest");
     }
 
     @Test
@@ -969,8 +991,16 @@ class TrackerBridgeTest {
         }
 
         @Override
+        public List<ModInfo> mods() {
+            return List.of();
+        }
+
+        /** The version the bridge sees. 1.0.0 keeps the 1.9.0 mod kinds out, see {@link ModKindsTest}. */
+        String version = "1.0.0";
+
+        @Override
         public String version() {
-            return "1.0.0";
+            return version;
         }
     }
 

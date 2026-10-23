@@ -49,6 +49,30 @@ class SiblingsTest {
     }
 
     @Test
+    void aModIsFoundByItsOwnGroupAndName() {
+        assertEquals("Zuxaw", Siblings.groupOf("RPGLeveling"));
+        assertEquals("Alechilles", Siblings.groupOf("Alec's Tamework!"));
+        assertEquals("Ryvrook", Siblings.groupOf("SocialBridge"), "a suite plugin that is no sibling stays under Ryvrook");
+        assertEquals("Ryvrook", Siblings.groupOf("ChronicleStats"));
+        assertEquals(Sibling.MMO_SKILL_TREE, Sibling.byPluginName("MMOSkillTree"));
+        assertEquals(Sibling.ENDGAME, Sibling.byModId("endgame"));
+        assertEquals("Config:Endgame&QoL", Sibling.ENDGAME.pluginId());
+        assertEquals("LinkWonderWeapons", Sibling.WONDER_WEAPONS.settingKey());
+        assertEquals("Tracker", Sibling.TRACKER_API.settingKey());
+        for (Sibling s : Sibling.values()) {
+            assertEquals(s.modId() != null, s.isMod(), s.name());
+            assertEquals(s.group().equals(Sibling.GROUP), !s.isMod(), s.name() + " is a third party mod exactly when it is not under Ryvrook");
+            assertEquals(s, Sibling.byPluginName(s.pluginName()), "plugin names are distinct across the groups");
+        }
+        Map<String, String> versions = Map.of("TrackerAPI", "1.2.0", "MajorDungeons", "0.4.14", "VeinMining", "2.4.0");
+        List<String> log = new ArrayList<>();
+        Set<Sibling> present = Siblings.present(versions::containsKey, versions::get, log::add);
+        assertEquals(EnumSet.of(Sibling.TRACKER_API, Sibling.MAJOR_DUNGEONS), present);
+        assertEquals(1, log.size(), log.toString());
+        assertTrue(log.getFirst().contains("VeinMining 2.4.0") && log.getFirst().contains("2.5.0"), log.getFirst());
+    }
+
+    @Test
     void theConfigReadsEachLinkSettingAndDefaultsToAuto() {
         dev.ryvrook.feats.FeatsConfig config = new dev.ryvrook.feats.FeatsConfig();
         for (Sibling s : Sibling.values()) {

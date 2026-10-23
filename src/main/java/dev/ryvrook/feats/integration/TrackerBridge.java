@@ -118,6 +118,11 @@ public final class TrackerBridge {
     static final String DROWNING_CAUSE = "Drowning";
     static final String MINECART = "Minecart";
     static final String ARMOR_SECTION = "Armor";
+    /**
+     * The oldest TrackerAPI that publishes the mod records {@link ModKinds} mirrors. Below it the bridge never
+     * touches that class, so Feats still links against TrackerAPI 1.1.x.
+     */
+    static final String MOD_KINDS_MINIMUM = "1.2.0";
 
     TrackerBridge(TrackerHost host) {
         this.host = host;
@@ -184,8 +189,26 @@ public final class TrackerBridge {
         // Not subscribed. RecipeLearned and PermissionChanged, because the recipe poll and the group listener
         // of Feats run on both paths. PortalEntered, because PlayerWorldChanged already gives the portal keys.
         // MoonPhaseChanged, because GameTimeSampled carries the phase with the hour it needs.
+        bindModKinds(api);
         host.logger().at(Level.INFO).log("Feats is linked to TrackerAPI %s with %d listeners", api.version(),
                 subscriptions.size());
+    }
+
+    /**
+     * The 1.9.0 mod kinds, only on TrackerAPI {@link #MOD_KINDS_MINIMUM} or newer. Every 1.2.0 type stays inside
+     * {@link ModKinds}, which is first loaded here, so an older TrackerAPI never sees a class it lacks.
+     */
+    private void bindModKinds(TrackerApi api) {
+        String version = api.version();
+        if (version == null || VersionCompare.below(version, MOD_KINDS_MINIMUM)) {
+            return;
+        }
+        try {
+            subscriptions.addAll(ModKinds.install(api, OWNER, tracker));
+        } catch (LinkageError e) {
+            host.logger().at(Level.WARNING).withCause(e)
+                    .log("Feats cannot read the mod records of TrackerAPI %s, so the mod feats stay still", version);
+        }
     }
 
     /** Closes every subscription. Safe to call twice. */

@@ -1,5 +1,17 @@
 package dev.ryvrook.feats.model;
 
+import dev.ryvrook.feats.integration.VersionCompare;
+import dev.ryvrook.feats.model.mods.DungeonsFeats;
+import dev.ryvrook.feats.model.mods.EnchantFeats;
+import dev.ryvrook.feats.model.mods.EndgameFeats;
+import dev.ryvrook.feats.model.mods.LuckyFeats;
+import dev.ryvrook.feats.model.mods.MmoFeats;
+import dev.ryvrook.feats.model.mods.ParriesFeats;
+import dev.ryvrook.feats.model.mods.RelicsFeats;
+import dev.ryvrook.feats.model.mods.RpgFeats;
+import dev.ryvrook.feats.model.mods.TameworkFeats;
+import dev.ryvrook.feats.model.mods.VeinFeats;
+import dev.ryvrook.feats.model.mods.ZephyrFeats;
 import dev.ryvrook.feats.stats.StatKeys;
 
 import java.util.ArrayList;
@@ -34,6 +46,13 @@ public final class FeatRegistry {
     /** Feats skipped because a sibling or pack is missing, by id, so a grant of one can say why. */
     private final Map<String, String> skipped = new HashMap<>();
 
+    /** The oldest TrackerAPI that publishes the mod records {@code integration/ModKinds} mirrors. */
+    public static final String MODS_MINIMUM = "1.2.0";
+    /** The TrackerAPI version found at setup, or null when it is not installed. */
+    private final String trackerVersion;
+    /** Why the feats of the mods TrackerAPI reads are out, one line for the log, or null when they are in. */
+    private String modsNote;
+
     /** The built-in feats without the Factions tab, no sibling and no pack. */
     public FeatRegistry() {
         this(EnumSet.noneOf(Sibling.class), EnumSet.noneOf(Pack.class));
@@ -53,8 +72,18 @@ public final class FeatRegistry {
      * not counted. Its counters keep moving and a later registry with it in credits the player at their next join.
      */
     public FeatRegistry(Set<Sibling> present, Set<Pack> packs) {
+        this(present, packs, null);
+    }
+
+    /**
+     * As {@link #FeatRegistry(Set, Set)} with the TrackerAPI version found at setup, null when it is not installed.
+     * The feats of the mods TrackerAPI reads are only defined when it is {@link #MODS_MINIMUM} or newer, see
+     * {@link #modsNote()}.
+     */
+    public FeatRegistry(Set<Sibling> present, Set<Pack> packs, String trackerVersion) {
         this.present = present == null || present.isEmpty() ? EnumSet.noneOf(Sibling.class) : EnumSet.copyOf(present);
         this.packs = packs == null || packs.isEmpty() ? EnumSet.noneOf(Pack.class) : EnumSet.copyOf(packs);
+        this.trackerVersion = trackerVersion;
         for (Category c : Category.values()) {
             byCategory.put(c, new ArrayList<>());
         }
@@ -63,6 +92,7 @@ public final class FeatRegistry {
         defineFactions();
         defineCoinage();
         defineChronicle();
+        defineMods();
         defineWorld();
         for (Map.Entry<String, List<Feat>> e : byAfter.entrySet()) {
             Feat source = byId.get(e.getKey());
@@ -208,6 +238,19 @@ public final class FeatRegistry {
     /** Why a defined feat is not in this registry, such as "pack GRIND is off", or null when it is in or unknown. */
     public String whySkipped(String id) {
         return id == null ? null : skipped.get(id);
+    }
+
+    /**
+     * Why the feats of the mods TrackerAPI reads were left out, one line for the log, or null when they were
+     * defined. They need TrackerAPI {@link #MODS_MINIMUM}, which publishes the mod records.
+     */
+    public String modsNote() {
+        return modsNote;
+    }
+
+    /** The TrackerAPI version this registry was built with, or null. */
+    public String trackerVersion() {
+        return trackerVersion;
     }
 
     /** Every tab that has at least one feat, in display order. */
@@ -1066,6 +1109,135 @@ public final class FeatRegistry {
      * World milestones and server firsts. The Goblin Lab flags are raised for the whole server by the
      * Generator and the three repairable devices, see {@code AugmentBlock.ProgressionKey} in the assets.
      */
+    // ---- the mods TrackerAPI reads, 1.9.0 ---------------------------------------------------------------------
+
+    /**
+     * What a definition class under {@code model/mods} adds feats with. The registry hands one to each
+     * {@code <Mod>Feats.define}, with the mod's {@link Sibling} and {@link Sibling#TRACKER_API} as the section
+     * requirement, so a feat that names no sibling itself gets both. Personal feats go in the mod's tab from
+     * {@link Category#ofMod}, world feats in {@link Category#WORLD} through {@link #first} and {@link #milestone}.
+     * The counters are the {@code <mod>:<stat>} keys {@code integration/ModKinds} mirrors, see docs/DEVELOPMENT.md.
+     */
+    public interface Definer {
+        /** A personal feat on one counter reaching a target. */
+        void feat(String id, String name, String desc, Category cat, Tier tier, String icon, String key, long target);
+
+        /** A hidden personal feat on one counter, shown as ??? until unlocked. */
+        void hidden(String id, String name, String desc, Category cat, Tier tier, String icon, String key, long target);
+
+        /** A personal feat that needs every requirement at once. */
+        void multi(String id, String name, String desc, Category cat, Tier tier, String icon, Requirement... reqs);
+
+        /** A feat built with {@link #of} and decorated with {@code withBanner} or {@code requiring}. */
+        void define(Feat feat);
+
+        /** A server first in the World tab, for the one player who gets there before anyone else. */
+        void first(String id, String name, String desc, Tier tier, String icon, Trigger trigger);
+
+        /** A server milestone in the World tab, reached once for the whole server. */
+        void milestone(String id, String name, String desc, Tier tier, String icon, Trigger trigger);
+
+        /** A personal feat as a value, to decorate before {@link #define}. */
+        static Feat of(String id, String name, String desc, Category cat, Tier tier, String icon, boolean hidden, Requirement... reqs) {
+            return FeatRegistry.of(id, name, desc, cat, tier, icon, hidden, reqs);
+        }
+
+        static Requirement req(String key, long target) {
+            return FeatRegistry.req(key, target);
+        }
+
+        /** Raised the first time anyone unlocks the personal feat, for {@link #first} and {@link #milestone}. */
+        static Trigger after(String featId) {
+            return Trigger.after(featId);
+        }
+
+        /** Raised once a server total in server.json reaches the target, for {@link #milestone}. */
+        static Trigger total(String key, long target) {
+            return Trigger.total(key, target);
+        }
+    }
+
+    /** The registry's own {@link Definer}, every call lands in {@link #add} under the current section. */
+    private final class RegistryDefiner implements Definer {
+        @Override
+        public void feat(String id, String name, String desc, Category cat, Tier tier, String icon, String key, long target) {
+            FeatRegistry.this.feat(id, name, desc, cat, tier, icon, key, target);
+        }
+
+        @Override
+        public void hidden(String id, String name, String desc, Category cat, Tier tier, String icon, String key, long target) {
+            FeatRegistry.this.hidden(id, name, desc, cat, tier, icon, key, target);
+        }
+
+        @Override
+        public void multi(String id, String name, String desc, Category cat, Tier tier, String icon, Requirement... reqs) {
+            FeatRegistry.this.multi(id, name, desc, cat, tier, icon, reqs);
+        }
+
+        @Override
+        public void define(Feat feat) {
+            FeatRegistry.this.define(feat);
+        }
+
+        @Override
+        public void first(String id, String name, String desc, Tier tier, String icon, Trigger trigger) {
+            FeatRegistry.this.first(id, name, desc, tier, icon, trigger);
+        }
+
+        @Override
+        public void milestone(String id, String name, String desc, Tier tier, String icon, Trigger trigger) {
+            FeatRegistry.this.world(id, name, desc, tier, icon, trigger);
+        }
+    }
+
+    /**
+     * The feats of the eleven mods TrackerAPI 1.2.0 reads, one definition class per mod under {@code model/mods}.
+     * Each section requires the mod's sibling and TrackerAPI, and the whole set is left out, with {@link #modsNote()}
+     * set, unless TrackerAPI is present and at least {@link #MODS_MINIMUM}, since an older TrackerAPI publishes
+     * none of the records {@code ModKinds} mirrors and the counters could never move.
+     */
+    private void defineMods() {
+        if (!present.contains(Sibling.TRACKER_API)) {
+            modsNote = "Feats leaves out the feats of the mods TrackerAPI reads, TrackerAPI is not installed or"
+                    + " its Tracker setting is never";
+            return;
+        }
+        if (trackerVersion == null || VersionCompare.below(trackerVersion, MODS_MINIMUM)) {
+            modsNote = "Feats leaves out the feats of the mods TrackerAPI reads, they need TrackerAPI " + MODS_MINIMUM
+                    + " and this server has " + (trackerVersion == null ? "an unknown version" : trackerVersion);
+            return;
+        }
+        Definer d = new RegistryDefiner();
+        section(Sibling.RPG_LEVELING);
+        RpgFeats.define(d);
+        section(Sibling.MAJOR_DUNGEONS);
+        DungeonsFeats.define(d);
+        section(Sibling.PERFECT_PARRIES);
+        ParriesFeats.define(d);
+        section(Sibling.WONDER_WEAPONS);
+        RelicsFeats.define(d);
+        section(Sibling.ZEPHYR);
+        ZephyrFeats.define(d);
+        section(Sibling.SIMPLE_ENCHANTMENTS);
+        EnchantFeats.define(d);
+        section(Sibling.VEIN_MINING);
+        VeinFeats.define(d);
+        section(Sibling.LUCKY_MINING);
+        LuckyFeats.define(d);
+        section(Sibling.MMO_SKILL_TREE);
+        MmoFeats.define(d);
+        section(Sibling.ENDGAME);
+        EndgameFeats.define(d);
+        section(Sibling.TAMEWORK);
+        TameworkFeats.define(d);
+        sectionRequires = Set.of();
+    }
+
+    /** Every feat defined next needs this mod and TrackerAPI. */
+    private void section(Sibling mod) {
+        sectionRequires = EnumSet.of(mod, Sibling.TRACKER_API);
+    }
+
     private void defineWorld() {
         // ---------------- World milestones ----------------
         world("world_power", "Lights On", "Restore power to the Goblin Lab.", SILVER, "GoblinLab_Generator", flag("goblin_lab_power", 1));

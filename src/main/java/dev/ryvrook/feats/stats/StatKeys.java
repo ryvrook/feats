@@ -347,7 +347,23 @@ public final class StatKeys {
             Map.entry(SEAT_PREFIX, SEATS), Map.entry(KILL_KIND_PREFIX, KILL_KINDS),
             Map.entry(MERCHANT_PREFIX, MERCHANTS));
 
-    /** True for a per id counter key, see {@link #PER_ID_PREFIXES}. */
+    // ---- 1.9.0, the mods TrackerAPI reads. Their counters are mirrored by integration/ModKinds under the
+    // binding id TrackerAPI uses, the Sibling.modId values, as <mod>:<stat> and <mod>:<stat>:<id>.
+
+    /** The counter prefixes of the mods TrackerAPI 1.2.0 reads, without the colon. The same as {@code Sibling.modId}. */
+    public static final Set<String> MOD_PREFIXES = Set.of("rpg", "dungeons", "parries", "relics", "zephyr", "enchant",
+            "vein", "lucky", "mmo", "endgame", "tamework");
+
+    /**
+     * The stats under a mod prefix that keep one counter per id, {@code dungeons:cleared:<dungeon>} or
+     * {@code mmo:xp:<skill>}. Like the {@link #PER_ID_PREFIXES} keys they are only kept while a feat watches them.
+     * Every other key with a mod prefix is a total, a best or a discovery marker and is always kept, since a marker
+     * dropped at load would let the next sighting count as new.
+     */
+    public static final Set<String> MOD_PER_ID_STATS = Set.of("xp", "abilities", "runs", "cleared", "cleared_mode",
+            "failed", "bosses", "items", "procs", "blocks", "drops", "tamed", "bred", "skill_level", "kills");
+
+    /** True for a per id counter key, see {@link #PER_ID_PREFIXES} and {@link #MOD_PER_ID_STATS}. */
     public static boolean isPerId(String key) {
         if (key.indexOf(':') < 0) {
             return false; // every per id prefix ends in a colon, so totals skip the prefix loop
@@ -357,7 +373,20 @@ public final class StatKeys {
                 return true;
             }
         }
-        return false;
+        return isModPerId(key);
+    }
+
+    /** True for {@code <mod>:<stat>:<id>} with a mod prefix from {@link #MOD_PREFIXES} and a stat from {@link #MOD_PER_ID_STATS}. */
+    public static boolean isModPerId(String key) {
+        int first = key.indexOf(':');
+        if (first <= 0) {
+            return false;
+        }
+        int second = key.indexOf(':', first + 1);
+        if (second < 0 || second == key.length() - 1) {
+            return false;
+        }
+        return MOD_PREFIXES.contains(key.substring(0, first)) && MOD_PER_ID_STATS.contains(key.substring(first + 1, second));
     }
 
     /** Rows shown on the Stats tab, in order. */

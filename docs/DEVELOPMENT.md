@@ -241,6 +241,38 @@ bindings still check what they need at bind time, such as `AtlasApi.version()` 3
 PlaceholderAPI is found by class name and registered in start. `FeatsExpansion` never names a PlaceholderAPI
 type outside its nested `Hook`.
 
+The mods TrackerAPI reads, since 1.9.0. TrackerAPI 1.2.0 binds to eleven third party mods (RPG Leveling, Major
+Dungeons, Perfect Parries, Wan's Wonder Weapons, Zephyr, Simple Enchantments, Vein Mining, Lucky Mining, MMO Skill
+Tree, Endgame and QoL, Alec's Tamework) and publishes what they do as thirteen generic player records plus `ModBound`,
+each with the binding id in its `mod` field. Feats reads only TrackerAPI, never a class of those mods. Each mod is a
+`Sibling` with its own group, plugin name, minimum version, `Link<Mod>` setting key and `modId`, the binding id and
+counter prefix, and `Siblings` looks a plugin up by group and name (`Siblings.installed(Sibling)`, a bare name resolves
+its group through `Sibling.byPluginName` with Ryvrook as the fallback). `integration/ModKinds` mirrors the records into
+the player file under the keys TrackerAPI's own counter sink writes, `<mod>:<stat>` and `<mod>:<stat>:<id>`
+(`rpg:level`, `dungeons:cleared:Crypt`), the way the `dominion:` counters arrive. Sums go through `increment`, bests
+(`<mod>:level`, `<mod>:skill_level:<track>`, `highest_level`, `largest`, `streak_best`, `companion_level_best`) through
+`raiseTo`, and one time marks (`<mod>:<slot>:<id>`, `<mod>:<category>:<id>`) through `discover` with the plural total
+(`rpg:classes`, `mmo:quests`, `endgame:bestiaries`). Three things differ from the sink. The fastest run has no lowering
+counter in Feats, so completed runs under a time are counted instead (`dungeons:fast_clear` under ten minutes,
+`endgame:fast_trial` under five) with `<mod>:hardcore_clear` and `<mod>:solo_clear` beside them, the max level is the
+flag `<mod>:max_level_reached`, and the distinct kinds the feats need are added as discoveries (`<mod>:boss_types`,
+`<mod>:dungeon_types`, `relics:relic_kinds`, `tamework:species`, `enchant:enchant_kinds`, `zephyr:move_kinds`,
+`<mod>:skill_level_best`). Per id sums under a mod prefix (`StatKeys.MOD_PER_ID_STATS`, such as `xp`, `cleared`,
+`bosses`) are kept only while a feat watches them, every other mod key is a total, a best or a marker and is always
+kept. `TrackerBridge.bind` installs `ModKinds` only when `api.version()` is at least `TrackerBridge.MOD_KINDS_MINIMUM`
+(1.2.0) and closes its subscriptions with the rest on unbind. Every TrackerAPI 1.2.0 type stays inside `ModKinds`, so
+the bridge still loads against 1.1.x, where that class is never touched. `ModKindsTest` feeds one record per kind
+through a recording sink and checks every key.
+
+The mod feats live in `model/mods`, one class per mod with `static void define(FeatRegistry.Definer d)`. `Definer`
+offers `feat`, `hidden`, `multi`, `define(Feat)` for the personal feats and `first` and `milestone` for the World tab,
+with the static helpers `of`, `req`, `after` and `total`, so a definition class never reaches the registry internals.
+`FeatRegistry.defineMods()` sets the section requirement to the mod's `Sibling` plus `TRACKER_API` before each class, so
+a feat exists only while both are installed, and skips the whole set with `modsNote()` set, which the plugin logs,
+unless `Siblings.version(TRACKER_API)` handed to the registry is at least `FeatRegistry.MODS_MINIMUM` (1.2.0). Each mod
+has a tab in `Category` (`Category.ofMod`), shown only while it has feats, with a vanilla item icon from Assets.zip.
+`/feats admin status` lists each mod with its `Link<Mod>` setting through `SuiteStatus`.
+
 ## Server totals
 
 `WorldStore` keeps the totals in a map of `AtomicLong` by key, safe from any thread, and marks itself dirty on a
@@ -359,9 +391,11 @@ export JAVA_HOME=/opt/homebrew/opt/openjdk@25/libexec/openjdk.jdk/Contents/Home
 ```
 
 The tests run without a server. The server jar is only on the test classpath for bson and the logger. Feats
-compiles and tests against `TrackerAPI-1.1.1.jar`, `Coinage-api-1.2.0.jar` and `Atlas-1.9.0.jar` from the sibling
+compiles and tests against `TrackerAPI-1.2.0.jar`, `Coinage-api-1.2.0.jar` and `Atlas-1.9.0.jar` from the sibling
 checkouts, the oldest version of each it needs so nothing newer is used by accident, see `siblingJar` in
-`build.gradle.kts`. Chronicle Stats and Dominion need no jar, and their bindings are tested over fakes.
+`build.gradle.kts`. TrackerAPI 1.2.0 is needed for the mod records `ModKinds` reads, and Feats still runs with 1.1.x
+since that class is only loaded on 1.2.0 or newer. Chronicle Stats and Dominion need no jar, and their bindings are
+tested over fakes.
 
 For a headless boot I copy the jars into a fresh folder under `mods/`, write an empty `permissions.json` and run
 the server with `--auth-mode offline --disable-sentry --bind 127.0.0.1:<port>`, feeding console commands through

@@ -299,7 +299,7 @@ public final class FeatsPlugin extends JavaPlugin {
         siblings = Siblings.present(config()::link);
         boolean factions = siblings.contains(Sibling.DOMINION);
         Set<Pack> packs = config().packs(() -> Hardcore.detect(getLogger()));
-        registry = new FeatRegistry(siblings, packs);
+        registry = new FeatRegistry(siblings, packs, Siblings.version(Sibling.TRACKER_API));
         langPack = new LangPack(this);
         store = new ProgressStore(getDataDirectory(), getLogger());
         world = new WorldStore(getDataDirectory(), getLogger());
@@ -357,7 +357,13 @@ public final class FeatsPlugin extends JavaPlugin {
         if (factions) {
             getLogger().at(Level.INFO).log("Dominion is installed, so the %d Factions feats are in", registry.inCategory(Category.FACTIONS).size());
         }
+        if (registry.modsNote() != null) {
+            getLogger().at(Level.INFO).log("%s", registry.modsNote());
+        }
         for (Sibling s : siblings) {
+            if (s.isMod() && registry.modsNote() != null) {
+                continue; // the note above already says why the mod feats are out
+            }
             if (s != Sibling.DOMINION && s != Sibling.TRACKER_API) {
                 getLogger().at(Level.INFO).log("%s is installed, so its %d feats are in", s.pluginName(),
                         registry.personal().stream().filter(f -> f.requires().contains(s)).count());

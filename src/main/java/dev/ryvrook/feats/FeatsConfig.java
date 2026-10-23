@@ -124,6 +124,50 @@ public final class FeatsConfig {
                     (c, v, extra) -> c.linkAtlas = v,
                     (c, extra) -> c.linkAtlas)
             .add()
+            .append(new KeyedCodec<>("LinkRPGLeveling", Codec.STRING),
+                    (c, v, extra) -> c.linkRpgLeveling = v,
+                    (c, extra) -> c.linkRpgLeveling)
+            .add()
+            .append(new KeyedCodec<>("LinkMajorDungeons", Codec.STRING),
+                    (c, v, extra) -> c.linkMajorDungeons = v,
+                    (c, extra) -> c.linkMajorDungeons)
+            .add()
+            .append(new KeyedCodec<>("LinkPerfectParries", Codec.STRING),
+                    (c, v, extra) -> c.linkPerfectParries = v,
+                    (c, extra) -> c.linkPerfectParries)
+            .add()
+            .append(new KeyedCodec<>("LinkWonderWeapons", Codec.STRING),
+                    (c, v, extra) -> c.linkWonderWeapons = v,
+                    (c, extra) -> c.linkWonderWeapons)
+            .add()
+            .append(new KeyedCodec<>("LinkZephyr", Codec.STRING),
+                    (c, v, extra) -> c.linkZephyr = v,
+                    (c, extra) -> c.linkZephyr)
+            .add()
+            .append(new KeyedCodec<>("LinkSimpleEnchantments", Codec.STRING),
+                    (c, v, extra) -> c.linkSimpleEnchantments = v,
+                    (c, extra) -> c.linkSimpleEnchantments)
+            .add()
+            .append(new KeyedCodec<>("LinkVeinMining", Codec.STRING),
+                    (c, v, extra) -> c.linkVeinMining = v,
+                    (c, extra) -> c.linkVeinMining)
+            .add()
+            .append(new KeyedCodec<>("LinkLuckyMining", Codec.STRING),
+                    (c, v, extra) -> c.linkLuckyMining = v,
+                    (c, extra) -> c.linkLuckyMining)
+            .add()
+            .append(new KeyedCodec<>("LinkMMOSkillTree", Codec.STRING),
+                    (c, v, extra) -> c.linkMmoSkillTree = v,
+                    (c, extra) -> c.linkMmoSkillTree)
+            .add()
+            .append(new KeyedCodec<>("LinkEndgame", Codec.STRING),
+                    (c, v, extra) -> c.linkEndgame = v,
+                    (c, extra) -> c.linkEndgame)
+            .add()
+            .append(new KeyedCodec<>("LinkTamework", Codec.STRING),
+                    (c, v, extra) -> c.linkTamework = v,
+                    (c, extra) -> c.linkTamework)
+            .add()
             .append(new KeyedCodec<>("PackSocial", Codec.BOOLEAN),
                     (c, v, extra) -> c.packSocial = v,
                     (c, extra) -> c.packSocial)
@@ -224,6 +268,18 @@ public final class FeatsConfig {
     private String linkDominion = "auto";
     private String linkChronicle = "auto";
     private String linkAtlas = "auto";
+    // The mods TrackerAPI 1.2.0 reads, see docs/MODS-PLAN.md. Each needs TrackerAPI 1.2.0 as well.
+    private String linkRpgLeveling = "auto";
+    private String linkMajorDungeons = "auto";
+    private String linkPerfectParries = "auto";
+    private String linkWonderWeapons = "auto";
+    private String linkZephyr = "auto";
+    private String linkSimpleEnchantments = "auto";
+    private String linkVeinMining = "auto";
+    private String linkLuckyMining = "auto";
+    private String linkMmoSkillTree = "auto";
+    private String linkEndgame = "auto";
+    private String linkTamework = "auto";
 
     public boolean showToasts() {
         return showToasts;
@@ -351,7 +407,8 @@ public final class FeatsConfig {
      * The link setting for one sibling, {@code auto}, {@code always} or {@code never}. TrackerAPI reads
      * {@link #tracker()}. {@code auto} links when the sibling is installed and new enough, {@code always} does
      * the same and warns at start when it is missing, {@code never} ignores it, so its feats and bindings stay
-     * out. Read once at setup.
+     * out. The mods TrackerAPI reads have the {@code Link<Mod>} keys, {@code Sibling.settingKey()} names each.
+     * Read once at setup.
      */
     public String link(dev.ryvrook.feats.model.Sibling sibling) {
         String v = switch (sibling) {
@@ -360,6 +417,17 @@ public final class FeatsConfig {
             case DOMINION -> linkDominion;
             case CHRONICLE -> linkChronicle;
             case ATLAS -> linkAtlas;
+            case RPG_LEVELING -> linkRpgLeveling;
+            case MAJOR_DUNGEONS -> linkMajorDungeons;
+            case PERFECT_PARRIES -> linkPerfectParries;
+            case WONDER_WEAPONS -> linkWonderWeapons;
+            case ZEPHYR -> linkZephyr;
+            case SIMPLE_ENCHANTMENTS -> linkSimpleEnchantments;
+            case VEIN_MINING -> linkVeinMining;
+            case LUCKY_MINING -> linkLuckyMining;
+            case MMO_SKILL_TREE -> linkMmoSkillTree;
+            case ENDGAME -> linkEndgame;
+            case TAMEWORK -> linkTamework;
         };
         return v == null || v.isBlank() ? "auto" : v.trim().toLowerCase(Locale.ROOT);
     }
