@@ -21,11 +21,14 @@ import dev.ryvrook.trackerapi.api.event.ModChoiceChanged;
 import dev.ryvrook.trackerapi.api.event.ModLevelUp;
 import dev.ryvrook.trackerapi.api.event.ModMilestone;
 import dev.ryvrook.trackerapi.api.event.ModXpGained;
+import dev.ryvrook.trackerapi.api.event.PlayerLeft;
 import dev.ryvrook.trackerapi.api.event.VeinMined;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -46,7 +49,7 @@ import java.util.function.Consumer;
  * ({@code rpg:class:<id>} and {@code rpg:classes}, {@code mmo:quest:<id>} and {@code mmo:quests}). Three things
  * differ from the sink, since Feats has no lowering counter and every requirement is an at least. The fastest run
  * is kept as counts of good runs instead, {@code dungeons:fast_clear} for a completed run under ten minutes,
- * {@code endgame:fast_trial} under five, plus {@code <mod>:hardcore_clear} for the Hardcore mode and
+ * {@code endgame:fast_trial} under three, plus {@code <mod>:hardcore_clear} for the Hardcore mode and
  * {@code <mod>:solo_clear} for a party of one. The max level is a flag, {@code <mod>:max_level_reached} raised to 1.
  * And Feats adds the distinct kinds the feats need, {@code <mod>:boss_type:<id>} with {@code <mod>:boss_types},
  * {@code <mod>:dungeon_type:<id>} with {@code <mod>:dungeon_types} on a clear, {@code relics:relic_kind:<id>} with
@@ -59,11 +62,11 @@ import java.util.function.Consumer;
  */
 final class ModKinds {
     /** The record kinds subscribed, for the listener count the bridge logs. */
-    static final int KINDS = 15;
+    static final int KINDS = 16;
     /** A completed Major Dungeons run under this counts as a fast clear. */
     static final long FAST_CLEAR_MILLIS = 10 * 60_000L;
     /** A completed Endgame trial under this counts as a fast trial. */
-    static final long FAST_TRIAL_MILLIS = 5 * 60_000L;
+    static final long FAST_TRIAL_MILLIS = 3 * 60_000L;
     /** The difficulty name a hardcore clear is counted on, compared ignoring case. */
     static final String HARDCORE_MODE = "Hardcore";
     static final String DUNGEONS = "dungeons";
@@ -218,6 +221,7 @@ final class ModKinds {
         sub(out, api, owner, LuckyDrop.class, this::onLuckyDrop);
         sub(out, api, owner, CompanionChanged.class, this::onCompanionChanged);
         sub(out, api, owner, EntityDied.class, this::onDeath);
+        sub(out, api, owner, PlayerLeft.class, this::onLeft);
         return out;
     }
 
@@ -332,14 +336,91 @@ final class ModKinds {
     void onXpGained(ModXpGained e) {
         UUID p = e.player();
         String mod = e.mod();
-        if (p == null || blank(mod)) {
+        if (p == null || blank(mod) || !(e.amount() > 0)) {
             return;
         }
-        long amount = Math.round(e.amount());
-        if (amount <= 0) {
+        seedBests(p, mod);
+        String total = key(mod, ModKeys.XP);
+        long whole = whole(p, total, e.amount());
+        if (whole > 0) {
+            sink.add(p, total, whole);
+        }
+        String id = isMain(e.track()) ? e.source() : e.track();
+        if (!blank(id)) {
+            String perId = key(mod, ModKeys.XP, id);
+            long part = whole(p, perId, e.amount());
+            if (part > 0) {
+                sink.add(p, perId, part);
+            }
+        }
+    }
+
+    /** The fractions of experience under one point per player and key, carried until they make a whole point, as TrackerAPI does. */
+    private final Map<UUID, Map<String, Double>> xpRemainders = new ConcurrentHashMap<>();
+    /** The players whose mod bests were read back from TrackerAPI this session, per mod. */
+    private final Map<String, Set<UUID>> seeded = new ConcurrentHashMap<>();
+
+    /** The whole points of an amount after adding the remainder kept for this player and key. */
+    long whole(UUID p, String key, double amount) {
+        Map<String, Double> mine = xpRemainders.computeIfAbsent(p, u -> new ConcurrentHashMap<>());
+        double[] out = new double[1];
+        mine.merge(key, amount, Double::sum);
+        mine.computeIfPresent(key, (k, v) -> {
+            // a hair of slack, so 0.6 carried from 12.6 and a 0.4 make a whole point despite binary fractions
+            long w = (long) Math.floor(v + 1e-9);
+            out[0] = w;
+            double rest = v - w;
+            return rest > 1e-9 ? rest : null;
+        });
+        return (long) out[0];
+    }
+
+    /**
+     * The bests TrackerAPI's bindings seed from the mods at a join without a record (the RPG Leveling level and cap,
+     * the MMO skill levels), read back once per player and session on the first experience of that mod, so a
+     * player already at the cap when Feats 1.9.0 arrives is not left out.
+     */
+    void seedBests(UUID p, String mod) {
+        if (!RPG.equals(mod) && !MMO.equals(mod)) {
             return;
         }
-        addId(p, mod, ModKeys.XP, isMain(e.track()) ? e.source() : e.track(), amount);
+        if (!seeded.computeIfAbsent(mod, m -> ConcurrentHashMap.newKeySet()).add(p)) {
+            return;
+        }
+        if (RPG.equals(mod)) {
+            mirror(p, key(RPG, ModKeys.LEVEL));
+            if (reads.get(p, key(RPG, ModKeys.MAX_LEVEL_REACHED, ModKeys.PLAYER_TRACK)) > 0) {
+                sink.raise(p, key(RPG, ModKeys.MAX_LEVEL_REACHED), 1);
+            }
+        } else {
+            String family = key(MMO, ModKeys.SKILL_LEVEL);
+            long best = 0;
+            String prefix = family + ':';
+            for (Map.Entry<String, Long> e : reads.all(p).entrySet()) {
+                if (e.getValue() != null && e.getValue() > 0 && e.getKey().startsWith(prefix)) {
+                    sink.raise(p, e.getKey(), e.getValue());
+                    best = Math.max(best, e.getValue());
+                }
+            }
+            if (best > 0) {
+                sink.raise(p, key(MMO, SKILL_LEVEL_BEST), best);
+            }
+        }
+    }
+
+    static final String RPG = "rpg";
+    static final String MMO = "mmo";
+
+    /** A player who left is forgotten here, the next session reads the bests again. */
+    void onLeft(PlayerLeft e) {
+        UUID p = e.player();
+        if (p == null) {
+            return;
+        }
+        xpRemainders.remove(p);
+        for (Set<UUID> s : seeded.values()) {
+            s.remove(p);
+        }
     }
 
     // ---- picks, abilities, moves and marks ------------------------------------------------------------------

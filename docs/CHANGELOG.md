@@ -3,6 +3,39 @@
 Every notable change to Feats is recorded here. The format follows Keep a Changelog and the project uses
 semantic versioning.
 
+## 1.9.0 - 2026-10-23
+
+Needs the Hytale 0.7.0 release server or newer. The new tabs need TrackerAPI 1.2.0. Updating is a jar swap, the
+eleven `Link<Mod>` keys are written to `Feats.json` with their defaults on the first start.
+
+### For players
+
+- A tab of feats for each of the eleven mods TrackerAPI 1.2.0 reads, shown only while that mod is installed:
+  RPG Leveling (12), Major Dungeons (12), Perfect Parries (8), Wan's Wonder Weapons (8), Zephyr (8), Simple
+  Enchantments (6), Vein Mining (6), Lucky Mining (5), MMO Skill Tree (20), Endgame and QoL (20) and Alec's
+  Tamework (8), 113 feats worth 4,305 points. Levels and the level cap, XP by source, dungeon runs, clears,
+  Hardcore and solo clears, fast clears and every boss, parries and counterattacks with the best streak, relic
+  kills and signature casts, dodges, double jumps, grapples and vanishes, enchantments and their triggers, veins
+  and the largest vein, lucky drops and the longest streak, skill levels up to 100, quests, bounties and the
+  mod's own achievements, Endgame bosses, trials, waves, combos, the bestiary and runes, companions tamed, bred
+  and levelled.
+- Eight World tab entries follow them, server firsts such as the first player at the RPG Leveling level cap, the
+  first Hardcore dungeon clear, the first Endgame frost dragon kill and the first skill at 100 in MMO Skill Tree,
+  and milestones such as the first fifty dungeon clears and every relic used.
+- The MMO Skill Tree and Endgame tabs follow those mods' own progress: achievement unlocks count towards 5, 25,
+  75 and 150 (MMO) and 5, 15 and 30 (Endgame), quests, bounties, bestiary entries and runes have tiers of their
+  own.
+
+### For admins
+
+- `Link<Mod>` settings, one per mod (`LinkRPGLeveling`, `LinkMajorDungeons`, `LinkPerfectParries`,
+  `LinkWonderWeapons`, `LinkZephyr`, `LinkSimpleEnchantments`, `LinkVeinMining`, `LinkLuckyMining`,
+  `LinkMMOSkillTree`, `LinkEndgame`, `LinkTamework`), `auto` by default, `never` leaves a tab out.
+  `/feats admin status` lists each mod. Without TrackerAPI 1.2.0 the tabs stay out and one log line says why.
+- The counts land in the player file under the mod's prefix (`rpg:level`, `dungeons:cleared`, `mmo:achievements`
+  and so on), mirrored from TrackerAPI's events the way the Dominion counters are. Nothing is read from the mods
+  themselves.
+
 ## 1.8.1 - 2026-10-19
 
 Needs the Hytale 0.7.0 release server or newer. No feat was added or removed. Updating is a jar swap. This only

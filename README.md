@@ -3,8 +3,8 @@
 Achievements for Hytale servers. Feats adds 455 of them, called feats, in eleven tabs worth 20,735 points,
 with an unlock toast, a chat line, an optional top of screen banner for the rarest unlocks and a `/feats` browser that
 shows progress on every one, lifetime statistics and a points leaderboard. Two of the tabs are packs an admin can
-turn off, and four more appear with Coinage, Dominion Factions, Chronicle Stats and Atlas, up to 528 feats worth
-23,440 points. It runs on the server with a small UI pack inside the jar, so players join with an unmodified
+turn off, four more appear with Coinage, Dominion Factions, Chronicle Stats and Atlas, and with TrackerAPI 1.2.0
+one more for each of the eleven mods it reads, up to 641 feats worth 27,745 points. It runs on the server with a small UI pack inside the jar, so players join with an unmodified
 client.
 
 ## Requirements
@@ -61,7 +61,9 @@ Nine of the milestones read server totals, blocks broken, creatures and bosses d
 players online at once, chunks generated and days since Feats was installed.
 
 The tabs appear in this order, Exploration to Misc, then Factions, Coinage and Chronicle when their mod is
-installed, then Social, Hardcore, PvP, Calendar and Grind while their pack is on, then World. A tab with no feats
+installed, then one tab per mod TrackerAPI reads while that mod is installed (RPG Leveling, Dungeons, Parries,
+Relics, Zephyr, Enchanting, Vein Mining, Lucky Mining, Skill Tree, Endgame, Companions), then Social, Hardcore,
+PvP, Calendar and Grind while their pack is on, then World. A tab with no feats
 in it is not shown.
 
 ## Commands
@@ -110,7 +112,7 @@ packs and siblings are read at start.
 ## Settings
 
 `Feats.json` sits in the plugin's data folder. `/feats admin reload` applies everything except
-`AutosaveSeconds`, `ExportSeconds`, `Tracker`, the four sibling link keys and the five `Pack` keys, which need a restart or
+`AutosaveSeconds`, `ExportSeconds`, `Tracker`, the fifteen link keys and the five `Pack` keys, which need a restart or
 `/plugin reload Ryvrook:Feats`. The reload reply lists the packs that are on so a change that has not taken
 effect yet is easy to spot. There is no language setting. Each player gets the language their client runs in, see
 Languages.
@@ -141,6 +143,7 @@ Languages.
 | `AutosaveSeconds` | `60` | Save interval for changed players, at least 10 |
 | `ExportSeconds` | `15` | Leaderboard export check, at least 5. `0` turns the export off |
 | `Tracker` | `"auto"` | Where counts come from. `auto` uses TrackerAPI when present, `always` only TrackerAPI, `never` own hooks. Read at start |
+| `LinkRPGLeveling` and ten more `Link<Mod>` keys | `"auto"` | One per mod TrackerAPI reads (`LinkMajorDungeons`, `LinkPerfectParries`, `LinkWonderWeapons`, `LinkZephyr`, `LinkSimpleEnchantments`, `LinkVeinMining`, `LinkLuckyMining`, `LinkMMOSkillTree`, `LinkEndgame`, `LinkTamework`). `auto` shows the tab while the mod and TrackerAPI 1.2.0 are installed, `always` warns once when the mod is missing, `never` leaves it out. Read at start |
 | `Coinage` | `"auto"` | The Coinage tab, the cross mod feats and coin rewards. `auto` links when Coinage is installed, `always` also warns at start when it is missing, `never` ignores it. Read at start |
 | `Dominion` | `"auto"` | The Factions tab, same three values. Read at start |
 | `Chronicle` | `"auto"` | The Chronicle tab, same three values. Read at start |
@@ -310,6 +313,17 @@ none of them. `/feats admin status` prints one line per mod with its version and
 | Dominion Factions | Factions tab of 30 feats, unlocks in faction chat | `Dominion` |
 | Chronicle Stats | Chronicle tab of 6 feats, feats on its player sheet | `Chronicle` |
 | Atlas | Two Exploration feats, the leaderboard panel on the web map | `Atlas` |
+| RPG Leveling | RPG Leveling tab of 12 feats, through TrackerAPI 1.2.0 | `LinkRPGLeveling` |
+| Major Dungeons | Dungeons tab of 12 feats, through TrackerAPI 1.2.0 | `LinkMajorDungeons` |
+| Perfect Parries | Parries tab of 8 feats, through TrackerAPI 1.2.0 | `LinkPerfectParries` |
+| Wan's Wonder Weapons | Relics tab of 8 feats, through TrackerAPI 1.2.0 | `LinkWonderWeapons` |
+| Zephyr | Zephyr tab of 8 feats, through TrackerAPI 1.2.0 | `LinkZephyr` |
+| Simple Enchantments | Enchanting tab of 6 feats, through TrackerAPI 1.2.0 | `LinkSimpleEnchantments` |
+| Vein Mining | Vein Mining tab of 6 feats, through TrackerAPI 1.2.0 | `LinkVeinMining` |
+| Lucky Mining | Lucky Mining tab of 5 feats, through TrackerAPI 1.2.0 | `LinkLuckyMining` |
+| MMO Skill Tree | Skill Tree tab of 20 feats, through TrackerAPI 1.2.0 | `LinkMMOSkillTree` |
+| Endgame and QoL | Endgame tab of 20 feats, through TrackerAPI 1.2.0 | `LinkEndgame` |
+| Alec's Tamework | Companions tab of 8 feats, through TrackerAPI 1.2.0 | `LinkTamework` |
 | SocialBridge | Unlock posts and Feats on its `/profile` in Discord | `DiscordVia` |
 | RestAPI | Feats routes under `/api/feats` | RestAPI's own |
 | Lullaby | Nothing, the two do not touch | none |
@@ -374,6 +388,19 @@ as put in the faction bank. Feats reads the faction facts from Dominion by name,
 its `/profile`. With `DiscordVia` on `auto` Feats stops posting through `DiscordWebhookUrl` while SocialBridge is
 installed, so an unlock is never posted twice. Set `DiscordVia` to `webhook` to keep the webhook as well, or `off`
 for neither from Feats.
+
+**The mods TrackerAPI reads.** With TrackerAPI 1.2.0 or newer installed, Feats also has a tab for each of the
+eleven mods TrackerAPI binds to, shown only while that mod is installed: RPG Leveling, Major Dungeons, Perfect
+Parries, Wan's Wonder Weapons, Zephyr, Simple Enchantments, Vein Mining, Lucky Mining, MMO Skill Tree, Endgame
+and QoL and Alec's Tamework, 113 feats worth 4,305 points in all, plus eight World tab entries such as the first
+player at the RPG Leveling level cap, the first Hardcore dungeon clear, the first Endgame frost dragon kill and
+the first skill at 100 in MMO Skill Tree. The counts come from TrackerAPI's events for those mods (levels, XP,
+dungeon runs and clears, parries, relic kills, dodges, enchantments, veins, lucky drops, skill levels, quests,
+bosses, trials, companions) and land in the Feats player file under the mod's prefix, such as `rpg:level` or
+`dungeons:cleared`. For MMO Skill Tree and Endgame the feats follow the mods' own progress too: their achievement
+unlocks count towards tiers (5, 25, 75 and 150 MMO achievements, 5, 15 and 30 Endgame achievements), and quests,
+bounties, the bestiary and runes have tiers of their own. Each tab has a `Link<Mod>` setting with `auto`, `always`
+and `never`. Without TrackerAPI 1.2.0 the tabs stay out and the log says why.
 
 **RestAPI** serves feats, player progress, world records and the points leaderboard under `/api/feats`.
 
@@ -552,7 +579,8 @@ The TrackerAPI, Coinage and Atlas bindings compile against jars found in sibling
 `atlas` checkouts or under `~/Projects`. Point elsewhere with `-PtrackerApiJar=<path>`, `-PcoinageJar=<path>` and
 `-PatlasJar=<path>`. None is bundled. Chronicle Stats and Dominion are read by name at run time and need no jar.
 
-Every feat is defined in `defineAll()` in `model/FeatRegistry.java`, in display order.
+Every feat is defined in `defineAll()` in `model/FeatRegistry.java`, in display order, and the feats of the mods
+TrackerAPI reads in one class per mod under `model/mods/`, called from `defineMods()`.
 
 ```java
 feat("digger", "Digger", "Break 100 blocks.", MINING, BRONZE, "Tool_Pickaxe_Copper", StatKeys.BLOCKS_BROKEN, 100);

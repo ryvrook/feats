@@ -21,7 +21,7 @@ import static dev.ryvrook.feats.model.Tier.SILVER;
  * endgame:rune:<id> with endgame:runes, endgame:wave:<arena>/<wave> with endgame:waves, endgame:runs and
  * endgame:runs:<dungeon> (dungeon entries), endgame:cleared and endgame:cleared:<arena> (trials completed),
  * endgame:failed and endgame:failed:<arena>, endgame:dungeon_type:<arena> with endgame:dungeon_types,
- * endgame:fast_trial (trials completed under 5 minutes), and the two bests TrackerAPI's binding keeps that the
+ * endgame:fast_trial (trials completed under 3 minutes), and the two bests TrackerAPI's binding keeps that the
  * mirror reads back on every Endgame milestone, endgame:wave_best and endgame:combo_best.
  *
  * <p>The numbers follow Endgame and QoL 6.0.4. A boss kill is keyed by the raw NPC type id, {@code Endgame_Dragon_Frost}
@@ -64,9 +64,9 @@ public final class EndgameFeats {
         // ---- dungeons and trials ----
         d.feat("endgame_dungeon_first", "Dungeon Door", "Enter an Endgame dungeon.", ENDGAME, BRONZE, "Coffer_Key", k("runs"), 1);
         d.feat("endgame_trials_10", "Ten Trials", "Complete 10 trials.", ENDGAME, GOLD, "Weapon_Shield_Cobalt", k("cleared"), 10);
-        d.hidden("endgame_fast_trial", "Quick Trial", "Complete a trial in under 5 minutes.", ENDGAME, GOLD, "Potion_Stamina_Greater", k("fast_trial"), 1);
-        d.feat("endgame_wave_10", "Wave 10", "Clear wave 10 of a trial.", ENDGAME, SILVER, "Weapon_Shield_Iron", k("wave_best"), 10);
-        d.feat("endgame_wave_50", "Wave 50", "Clear wave 50 of a trial.", ENDGAME, PLATINUM, "Armor_Adamantite_Head", k("wave_best"), 50);
+        d.hidden("endgame_fast_trial", "Quick Trial", "Complete a trial in under 3 minutes.", ENDGAME, GOLD, "Potion_Stamina_Greater", k("fast_trial"), 1);
+        d.feat("endgame_every_trial", "Every Trial", "Complete 4 different trials.", ENDGAME, GOLD, "Weapon_Shield_Iron", k("dungeon_types"), 4);
+        d.feat("endgame_trials_25", "Trial Veteran", "Complete 25 trials.", ENDGAME, PLATINUM, "Armor_Adamantite_Head", k("cleared"), 25);
         // ---- the combo meter ----
         d.feat("endgame_combo_25", "Combo 25", "Reach a 25 hit combo.", ENDGAME, BRONZE, "Weapon_Daggers_Void_Crystal", k("combo_best"), 25);
         d.feat("endgame_combo_100", "Combo 100", "Reach a 100 hit combo.", ENDGAME, GOLD, "Weapon_Daggers_Void_Crystal", k("combo_best"), 100);

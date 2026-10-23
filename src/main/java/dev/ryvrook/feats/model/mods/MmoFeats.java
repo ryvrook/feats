@@ -45,9 +45,9 @@ public final class MmoFeats {
         // ---- quests and bounties, counted once per quest id ----
         d.feat("mmo_quest_first", "First Quest", "Complete a quest.", MMO, BRONZE, "Deco_Scroll", k("quests"), 1);
         d.feat("mmo_quests_10", "Quest Log", "Complete 10 different quests.", MMO, SILVER, "Deco_Map", k("quests"), 10);
-        d.feat("mmo_quests_50", "Quest Veteran", "Complete 50 different quests.", MMO, GOLD, "Deco_Book_Pile_Large", k("quests"), 50);
+        d.feat("mmo_quests_15", "Every Quest", "Complete 15 different quests.", MMO, GOLD, "Deco_Book_Pile_Large", k("quests"), 15);
         d.feat("mmo_bounties_5", "Bounty Hunter", "Complete 5 different bounties.", MMO, SILVER, "Weapon_Crossbow_Iron", k("bounties"), 5);
-        d.feat("mmo_bounties_25", "Bounty Board", "Complete 25 different bounties.", MMO, GOLD, "Weapon_Shortbow_Thorium", k("bounties"), 25);
+        d.feat("mmo_bounties_10", "Bounty Board", "Complete 10 different bounties.", MMO, GOLD, "Weapon_Shortbow_Thorium", k("bounties"), 10);
         // ---- classes, one mark per class id ever picked ----
         d.feat("mmo_class_pick", "Class Chosen", "Pick a class.", MMO, BRONZE, "Bench_Abilities", k("classes"), 1);
         d.feat("mmo_class_three", "Three Classes", "Pick 3 different classes.", MMO, SILVER, "Weapon_Sword_Runic", k("classes"), 3);

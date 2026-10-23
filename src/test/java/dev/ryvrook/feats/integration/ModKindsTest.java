@@ -106,12 +106,13 @@ class ModKindsTest {
     }
 
     @Test
-    void experienceIsRoundedAndKeyedBySourceOrSkill() {
+    void experienceIsFlooredWithTheFractionCarriedAndKeyedBySourceOrSkill() {
         kinds.onXpGained(new ModXpGained(h(), "rpg", "player", 12.6, "kill"));
         kinds.onXpGained(new ModXpGained(h(), "mmo", "mining", 3.2, null));
         kinds.onXpGained(new ModXpGained(h(), "rpg", "player", 7, null));
         kinds.onXpGained(new ModXpGained(h(), "rpg", "player", 0.4, "block"));
-        assertEquals(List.of("add rpg:xp 13", "add rpg:xp:kill 13", "add mmo:xp 3", "add mmo:xp:mining 3", "add rpg:xp 7"), writes);
+        assertEquals(List.of("add rpg:xp 12", "add rpg:xp:kill 12", "add mmo:xp 3", "add mmo:xp:mining 3", "add rpg:xp 7", "add rpg:xp 1"), writes,
+                "12.6 keeps 0.6 back, 3.2 keeps 0.2, the 0.4 completes the carried 0.6 on the total but not on its own source");
     }
 
     @Test
@@ -178,12 +179,12 @@ class ModKindsTest {
     }
 
     @Test
-    void anEndgameTrialUnderFiveMinutesIsAFastTrial() {
-        kinds.onDungeonRun(new DungeonRun(h(), "endgame", "Arena_Fire", DungeonRun.Phase.COMPLETED, null, 0, 4 * 60_000L));
+    void anEndgameTrialUnderThreeMinutesIsAFastTrial() {
+        kinds.onDungeonRun(new DungeonRun(h(), "endgame", "Arena_Fire", DungeonRun.Phase.COMPLETED, null, 0, 2 * 60_000L));
         assertEquals(List.of("add endgame:cleared 1", "add endgame:cleared:Arena_Fire 1",
                 "mark endgame:dungeon_type:Arena_Fire endgame:dungeon_types", "add endgame:fast_trial 1"), writes);
         writes.clear();
-        kinds.onDungeonRun(new DungeonRun(h(), "endgame", "Arena_Fire", DungeonRun.Phase.COMPLETED, null, 0, 6 * 60_000L));
+        kinds.onDungeonRun(new DungeonRun(h(), "endgame", "Arena_Fire", DungeonRun.Phase.COMPLETED, null, 0, 4 * 60_000L));
         assertFalse(writes.contains("add endgame:fast_trial 1"), writes.toString());
         assertFalse(writes.contains("add endgame:fast_clear 1"), "the ten minute rule is Major Dungeons only");
         writes.clear();

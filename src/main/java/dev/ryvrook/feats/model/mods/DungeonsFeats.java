@@ -53,7 +53,7 @@ public final class DungeonsFeats {
         d.feat("dungeons_fast", "Fast Clear", "Clear a dungeon in under 10 minutes.", DUNGEONS, GOLD, "Potion_Stamina", P + "fast_clear", 1);
         d.hidden("dungeons_wiped", "Wiped", "Fail a dungeon run.", DUNGEONS, BRONZE, "Deco_Bone_Pile", P + "failed", 1);
 
-        d.first("first_dungeons_hardcore", "Fearless", "Be the first on this server to clear a dungeon in Hardcore mode.",
+        d.first("first_dungeons_hardcore", "Hardcore First", "Be the first on this server to clear a dungeon in Hardcore mode.",
                 PLATINUM, "Weapon_Battleaxe_Doomed", after("dungeons_hardcore"));
         d.milestone("world_dungeons_fifty_clears", "Deep Delvers", "Have a player clear 50 dungeons on this server.",
                 GOLD, "Deco_Treasure", after("dungeons_fifty_clears"));

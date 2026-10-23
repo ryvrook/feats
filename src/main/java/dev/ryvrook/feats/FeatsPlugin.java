@@ -365,7 +365,7 @@ public final class FeatsPlugin extends JavaPlugin {
                 continue; // the note above already says why the mod feats are out
             }
             if (s != Sibling.DOMINION && s != Sibling.TRACKER_API) {
-                getLogger().at(Level.INFO).log("%s is installed, so its %d feats are in", s.pluginName(),
+                getLogger().at(Level.INFO).log("%s is installed, so its %d feats are in", s.displayName(),
                         registry.personal().stream().filter(f -> f.requires().contains(s)).count());
             }
         }

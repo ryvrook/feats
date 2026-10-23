@@ -13,7 +13,7 @@ language pack last.
 
 `model` holds the feat definitions. `FeatRegistry` builds all of them in code from the siblings found at setup
 and the packs that are on. A plain server has 445 personal feats in nine tabs, the default packs make it 455,
-and every pack and sibling 528, with 30 world milestones and server firsts on top. A feat carries `requires`, the
+and every pack and sibling 641 with the eleven mod tabs of TrackerAPI 1.2.0, with 38 world milestones and server firsts on top. A feat carries `requires`, the
 `Sibling` set it needs, `pack`, the `Pack` it sits in, and `banner`. `add` leaves out a feat whose sibling is
 missing or whose pack is off and remembers why, which `whySkipped` hands to the admin grant. `track` holds
 `FeatsTracker`, the one entry point every count goes through, plus `Classify`, which turns a block, item,
@@ -391,8 +391,8 @@ export JAVA_HOME=/opt/homebrew/opt/openjdk@25/libexec/openjdk.jdk/Contents/Home
 ```
 
 The tests run without a server. The server jar is only on the test classpath for bson and the logger. Feats
-compiles and tests against `TrackerAPI-1.2.0.jar`, `Coinage-api-1.2.0.jar` and `Atlas-1.9.0.jar` from the sibling
-checkouts, the oldest version of each it needs so nothing newer is used by accident, see `siblingJar` in
+compiles and tests against `TrackerAPI-1.2.0.jar`, `Coinage-api-1.3.0.jar` (the oldest api jar still built, the
+binding uses only 1.2.0 members) and `Atlas-1.9.0.jar` from the sibling checkouts, see `siblingJar` in
 `build.gradle.kts`. TrackerAPI 1.2.0 is needed for the mod records `ModKinds` reads, and Feats still runs with 1.1.x
 since that class is only loaded on 1.2.0 or newer. Chronicle Stats and Dominion need no jar, and their bindings are
 tested over fakes.
@@ -400,7 +400,7 @@ tested over fakes.
 For a headless boot I copy the jars into a fresh folder under `mods/`, write an empty `permissions.json` and run
 the server with `--auth-mode offline --disable-sentry --bind 127.0.0.1:<port>`, feeding console commands through
 a fifo. TrackerAPI's `docs/DEVELOPMENT.md` has the full recipe. The lines to look for are the tracking path line,
-`Feats loaded 455 feats worth 20735 points, plus 30 world feats` with the default packs, `Packs on: [SOCIAL,
+`Feats loaded 455 feats worth 20735 points, plus 30 world feats` with the default packs (38 world feats with every mod tab), `Packs on: [SOCIAL,
 CALENDAR]`, the Factions line with Dominion, one `<plugin> is installed, so its <n> feats are in` line per other
 sibling and one line per sibling binding that linked. With TrackerAPI the bridge logs `Feats is linked to
 TrackerAPI <version> with 34 listeners`. The boot also logs `Skipping pack at Ryvrook_Feats: missing or invalid
