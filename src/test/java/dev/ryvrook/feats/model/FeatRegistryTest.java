@@ -251,9 +251,10 @@ class FeatRegistryTest {
         assertTrue(new FeatRegistry(true).whySkipped("war_chest").startsWith("needs "), "Coinage is missing");
         assertNull(new FeatRegistry(true).get("war_chest"), "one of the two is missing");
         // Everything on at once. The plan's 512 leaves out the 15 Factions feats from 1.6.0.
-        // MODS_NINE is the nine mod tabs of 1.9.0 from docs/MODS-PLAN.md section 2, see ModFeatsTest.
-        assertEquals(OLD_COUNT + 118 + 18 + 24 + OLD_FACTIONS + 14 + 1 + 6 + 2 + 3 + MODS_NINE, FULL.count());
-        assertEquals(OLD_POINTS + 5_370 + 865 + 720 + OLD_FACTIONS_POINTS + 430 + 10 + 300 + 35 + 175 + MODS_NINE_POINTS, FULL.totalPoints());
+        // The eleven mod tabs of 1.9.0 from docs/MODS-PLAN.md section 2: MODS_NINE from ModFeatsTest, MMO Skill
+        // Tree 20 feats for 725 points and Endgame 20 for 760 from MmoEndgameFeatsTest.
+        assertEquals(OLD_COUNT + 118 + 18 + 24 + OLD_FACTIONS + 14 + 1 + 6 + 2 + 3 + MODS_NINE + 20 + 20, FULL.count());
+        assertEquals(OLD_POINTS + 5_370 + 865 + 720 + OLD_FACTIONS_POINTS + 430 + 10 + 300 + 35 + 175 + MODS_NINE_POINTS + 725 + 760, FULL.totalPoints());
     }
 
     @Test

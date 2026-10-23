@@ -365,6 +365,11 @@ public final class StatKeys {
     public static final Set<String> MOD_PREFIXES = Set.of("rpg", "dungeons", "parries", "relics", "zephyr", "enchant",
             "vein", "lucky", "mmo", "endgame", "tamework");
 
+    /** The {@code mmo:} prefix of the MMO Skill Tree counters, read by {@code model/mods/MmoFeats}. */
+    public static final String MMO_PREFIX = "mmo:";
+    /** The {@code endgame:} prefix of the Endgame and QoL counters, read by {@code model/mods/EndgameFeats}. */
+    public static final String ENDGAME_PREFIX = "endgame:";
+
     /**
      * The stats under a mod prefix that keep one counter per id, {@code dungeons:cleared:<dungeon>} or
      * {@code mmo:xp:<skill>}. Like the {@link #PER_ID_PREFIXES} keys they are only kept while a feat watches them.
