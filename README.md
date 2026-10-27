@@ -17,7 +17,7 @@ SocialBridge and RestAPI, which read Feats. The Fishing, Arcanum and Music tabs 
 
 ## Install
 
-Drop `Feats-1.10.0.jar` into `UserData/Mods` for a singleplayer world or into the server's `mods/` folder and
+Drop `Feats-1.10.1.jar` into `UserData/Mods` for a singleplayer world or into the server's `mods/` folder and
 start it. Tracking starts the first time a player joins. Type `/feats`.
 
 To update a running server, swap the jar and run `/plugin reload Ryvrook:Feats`. The engine prints
@@ -185,8 +185,9 @@ uk-UA and zh-CN, and the engine tells Feats which one a player uses, so there is
 players on the same server read it in different languages. Every feat name and description, the chat lines, the
 toast, the big title, the banner, the whole `/feats` page and the replies of the player commands come from
 `feats.lang` files in `mods/Ryvrook_Feats/lang/Server/Languages/<language>/`. Dates and the decimal of a
-distance follow the player's language too. Feats ships English only, and a key a language file leaves out shows
-in English, so an older translation never hides a new feat.
+distance follow the player's language too. Feats ships English and French (fr-FR), and a key a language file
+leaves out shows in English, so an older translation never hides a new feat. The French covers the text around
+the feats and the vanilla, pack and sibling feats, the mod tabs show in English for now.
 
 At every start Feats writes its English to `mods/Ryvrook_Feats/lang/Server/Languages/en-US/feats.lang`, 1,705
 keys, 183 for the text around the feats and 1,522 for the names and descriptions of the 761 feats and world
@@ -630,6 +631,10 @@ groups such as "any pickaxe" in `track/Classify.java`. After adding a feat or ch
 fails while the file is behind the code. [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) has the rest.
 
 Issues and pull requests are welcome on [GitHub](https://github.com/ryvrook/feats).
+
+## Credits
+
+The French translation (fr-FR) is by Aelryn of La Taverne d’Aelryn.
 
 ## Licence
 

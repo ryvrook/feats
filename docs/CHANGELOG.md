@@ -3,6 +3,21 @@
 Every notable change to Feats is recorded here. The format follows Keep a Changelog and the project uses
 semantic versioning.
 
+## 1.10.1 - 2026-10-27
+
+Updating is a jar swap. No feat was added or removed.
+
+### For players
+
+- Feats ships a French translation (fr-FR) by Aelryn of La Taverne d’Aelryn. Players whose client runs in French see
+  the `/feats` page, chat lines, toasts, banner, command replies and the vanilla, pack and sibling feats in French.
+  The mod tabs added in 1.9.0 and 1.10.0 show in English until the translation covers them.
+
+### For admins
+
+- The French file is written to `lang/Server/Languages/fr-FR/feats.lang` at start with the generated first line, so
+  later releases update it. A server's own `fr-FR/feats.lang` without that line is kept as it is.
+
 ## 1.10.0 - 2026-10-23
 
 Needs the Hytale 0.7.0 release server or newer. The Fishing, Arcanum and Music tabs need TrackerAPI 1.3.0, the other
